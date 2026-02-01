@@ -1,0 +1,221 @@
+# ETSY OAUTH WORKFLOW - CORRECTED VERSION WITH PKCE
+
+## n8n Workflow JSON
+
+```json
+{
+  "name": "Etsy OAuth - Fixed with PKCE",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "auth/etsy/start",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "etsy-start-webhook",
+      "name": "Start Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst user_id = ($json.query.user_id || '').toString().trim();\nif (!user_id) {\n  throw new Error('Missing user_id parameter');\n}\n\n// Generate PKCE code_verifier (128 characters, base64url)\nconst verifierBytes = crypto.randomBytes(96); // 96 bytes = 128 base64url chars\nconst verifier = verifierBytes.toString('base64')\n  .replace(/\\+/g, '-')\n  .replace(/\\//g, '_')\n  .replace(/=+$/g, '');\n\n// Generate code_challenge = SHA256(verifier) as base64url\nconst challengeHash = crypto.createHash('sha256').update(verifier).digest();\nconst challenge = challengeHash.toString('base64')\n  .replace(/\\+/g, '-')\n  .replace(/\\//g, '_')\n  .replace(/=+$/g, '');\n\n// Create state with owner_id and verifier\nconst statePayload = {\n  owner_id: user_id,\n  verifier: verifier,\n  nonce: Math.random().toString(36).substring(2),\n  timestamp: Date.now()\n};\n\nconst stateJson = JSON.stringify(statePayload);\nconst state = Buffer.from(stateJson).toString('base64')\n  .replace(/\\+/g, '-')\n  .replace(/\\//g, '_')\n  .replace(/=+$/g, '');\n\nreturn {\n  json: {\n    state: state,\n    challenge: challenge,\n    verifier: verifier,\n    owner_id: user_id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0],
+      "id": "generate-pkce",
+      "name": "Generate PKCE Challenge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const clientId = $env.ETSY_CLIENT_ID;\nconst redirectUri = $env.ETSY_REDIRECT_URI || 'https://n8n.erenmuhammedortakvps.store/webhook/auth/etsy/callback';\nconst scopes = 'listings_r transactions_r email_r';\nconst state = $json.state;\nconst challenge = $json.challenge;\n\nconst authUrl = 'https://www.etsy.com/oauth/connect?' +\n  `response_type=code&` +\n  `redirect_uri=${encodeURIComponent(redirectUri)}&` +\n  `scope=${encodeURIComponent(scopes)}&` +\n  `client_id=${clientId}&` +\n  `state=${state}&` +\n  `code_challenge=${challenge}&` +\n  `code_challenge_method=S256`;\n\nreturn {\n  json: {\n    auth_url: authUrl\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0],
+      "id": "build-auth-url",
+      "name": "Build Authorization URL"
+    },
+    {
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectURL": "={{$json.auth_url}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [600, 0],
+      "id": "redirect-to-etsy",
+      "name": "Redirect to Etsy"
+    },
+    {
+      "parameters": {
+        "path": "auth/etsy/callback",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "id": "callback-webhook",
+      "name": "Callback Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $json.query || {};\nconst code = query.code;\nconst state = query.state;\n\nif (!code || !state) {\n  throw new Error('Missing code or state parameter');\n}\n\n// Decode state to get owner_id and verifier\nfunction base64UrlToString(input) {\n  const pad = '='.repeat((4 - (input.length % 4)) % 4);\n  const b64 = (input + pad).replace(/-/g, '+').replace(/_/g, '/');\n  return Buffer.from(b64, 'base64').toString('utf8');\n}\n\nlet stateData;\ntry {\n  const decoded = base64UrlToString(state);\n  stateData = JSON.parse(decoded);\n} catch (e) {\n  throw new Error('Invalid state parameter');\n}\n\nif (!stateData.owner_id || !stateData.verifier) {\n  throw new Error('State missing required fields');\n}\n\nreturn {\n  json: {\n    code: code,\n    owner_id: stateData.owner_id,\n    verifier: stateData.verifier\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "id": "decode-state",
+      "name": "Decode State & Extract Verifier"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.etsy.com/v3/public/oauth/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "authorization_code"
+            },
+            {
+              "name": "code",
+              "value": "={{$json.code}}"
+            },
+            {
+              "name": "redirect_uri",
+              "value": "={{$env.ETSY_REDIRECT_URI || 'https://n8n.erenmuhammedortakvps.store/webhook/auth/etsy/callback'}}"
+            },
+            {
+              "name": "client_id",
+              "value": "={{$env.ETSY_CLIENT_ID}}"
+            },
+            {
+              "name": "code_verifier",
+              "value": "={{$json.verifier}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "id": "exchange-token",
+      "name": "Exchange Token with PKCE"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json;\n\nif (!response.access_token) {\n  throw new Error('No access token received from Etsy');\n}\n\nconst expiresIn = response.expires_in || 3600; // Default 1 hour\nconst expiresAt = new Date(Date.now() + (expiresIn * 1000));\n\nreturn {\n  json: {\n    owner_id: $('Decode State & Extract Verifier').item.json.owner_id,\n    access_token: response.access_token,\n    refresh_token: response.refresh_token,\n    user_id: response.user_id,  // This is the Etsy shop_id\n    token_type: response.token_type,\n    expires_at: expiresAt.toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "id": "shape-for-db",
+      "name": "Shape for Database"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.shops\nSET \n  etsy_connected = true,\n  etsy_access_token = '{{$json.access_token}}',\n  etsy_refresh_token = '{{$json.refresh_token}}',\n  etsy_shop_id = '{{$json.user_id}}',\n  etsy_token_expires_at = '{{$json.expires_at}}'::timestamptz,\n  is_active = true,\n  last_token_refresh_at = NOW()\nWHERE owner_id = '{{$json.owner_id}}';\n\n-- If no row was updated, insert new row\nINSERT INTO public.shops (\n  owner_id,\n  etsy_connected,\n  etsy_access_token,\n  etsy_refresh_token,\n  etsy_shop_id,\n  etsy_token_expires_at,\n  is_active,\n  created_at\n)\nSELECT \n  '{{$json.owner_id}}',\n  true,\n  '{{$json.access_token}}',\n  '{{$json.refresh_token}}',\n  '{{$json.user_id}}',\n  '{{$json.expires_at}}'::timestamptz,\n  true,\n  NOW()\nWHERE NOT EXISTS (\n  SELECT 1 FROM public.shops WHERE owner_id = '{{$json.owner_id}}'\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "id": "upsert-etsy",
+      "name": "Upsert Etsy Info",
+      "credentials": {
+        "postgres": {
+          "id": "QyLuD28JpwvMjOqS",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectURL": "={{$env.FRONTEND_URL || 'http://localhost:3000'}}/settings?etsy_connected=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1000, 300],
+      "id": "redirect-success",
+      "name": "Redirect to App"
+    }
+  ],
+  "connections": {
+    "Start Webhook": {
+      "main": [[{"node": "Generate PKCE Challenge", "type": "main", "index": 0}]]
+    },
+    "Generate PKCE Challenge": {
+      "main": [[{"node": "Build Authorization URL", "type": "main", "index": 0}]]
+    },
+    "Build Authorization URL": {
+      "main": [[{"node": "Redirect to Etsy", "type": "main", "index": 0}]]
+    },
+    "Callback Webhook": {
+      "main": [[{"node": "Decode State & Extract Verifier", "type": "main", "index": 0}]]
+    },
+    "Decode State & Extract Verifier": {
+      "main": [[{"node": "Exchange Token with PKCE", "type": "main", "index": 0}]]
+    },
+    "Exchange Token with PKCE": {
+      "main": [[{"node": "Shape for Database", "type": "main", "index": 0}]]
+    },
+    "Shape for Database": {
+      "main": [[{"node": "Upsert Etsy Info", "type": "main", "index": 0}]]
+    },
+    "Upsert Etsy Info": {
+      "main": [[{"node": "Redirect to App", "type": "main", "index": 0}]]
+    }
+  }
+}
+```
+
+## Required Environment Variables
+
+```bash
+ETSY_CLIENT_ID=your_etsy_client_id
+ETSY_REDIRECT_URI=https://n8n.erenmuhammedortakvps.store/webhook/auth/etsy/callback
+FRONTEND_URL=http://localhost:3000
+```
+
+## Database Schema Requirements
+
+```sql
+-- Ensure these columns exist
+ALTER TABLE shops 
+ADD COLUMN IF NOT EXISTS etsy_connected boolean default false,
+ADD COLUMN IF NOT EXISTS etsy_access_token text,
+ADD COLUMN IF NOT EXISTS etsy_refresh_token text,
+ADD COLUMN IF NOT EXISTS etsy_shop_id text,
+ADD COLUMN IF NOT EXISTS etsy_token_expires_at timestamptz,
+ADD COLUMN IF NOT EXISTS last_token_refresh_at timestamptz;
+
+-- Create index for faster lookups
+CREATE INDEX IF NOT EXISTS idx_shops_etsy_id ON shops(etsy_shop_id);
+```
+
+## IMPORTANT NOTES:
+
+1. **PKCE is MANDATORY** - Etsy will reject requests without proper code_challenge
+2. **No client_secret** - PKCE replaces the need for client_secret in token exchange
+3. **user_id is shop_id** - The response.user_id field is what you should use as etsy_shop_id
+4. **Token expiration** - Etsy tokens expire in 1 hour, implement refresh token workflow separately
+
+## Test Checklist:
+- [ ] Environment variables configured
+- [ ] Database columns created
+- [ ] Start flow generates 128-char verifier
+- [ ] code_challenge is SHA-256 hash in base64url
+- [ ] Authorization URL includes code_challenge and code_challenge_method=S256
+- [ ] Token exchange includes code_verifier parameter
+- [ ] Response correctly extracts user_id as shop_id

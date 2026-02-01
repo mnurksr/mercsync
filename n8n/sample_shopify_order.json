@@ -1,0 +1,28 @@
+{
+    "id": 820982911946154508,
+    "email": "musteri@ornek.com",
+    "created_at": "2026-01-24T12:00:00-05:00",
+    "line_items": [
+        {
+            "id": 866550311766439020,
+            "sku": "URUN-001",
+            "quantity": 1,
+            "price": "199.90",
+            "title": "Otomatik Pilot Tişörtü"
+        },
+        {
+            "id": 141249953214522974,
+            "sku": "URUN-002",
+            "quantity": 2,
+            "price": "49.90",
+            "title": "ShopiAuto Sticker Seti"
+        }
+    ],
+    "shipping_address": {
+        "first_name": "Ahmet",
+        "last_name": "Yılmaz",
+        "address1": "Teknoloji Vadisi No:1",
+        "city": "İstanbul",
+        "country_code": "TR"
+    }
+}

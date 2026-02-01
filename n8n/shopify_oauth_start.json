@@ -1,0 +1,76 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "jsCode": "const q = $json.query || {};\n\n// Expected query params from your app:\n// shop: 'example-store' OR 'example-store.myshopify.com'\n// user_id: your Supabase auth user id (owner_id)\n\nlet shop = (q.shop || '').toString().trim();\nconst owner_id = (q.user_id || '').toString().trim();\n\nif (!shop) throw new Error('Missing query param: shop');\nif (!owner_id) throw new Error('Missing query param: user_id');\n\n// Normalize shop to subdomain only (optional)\nshop = shop.replace(/^https?:\\/\\//, '');\nshop = shop.replace(/\\.myshopify\\.com\\/?$/i, '');\nshop = shop.replace(/\\/$/, '');\n\n// Very light validation\nif (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/i.test(shop)) {\n  throw new Error(`Invalid shop value: ${shop}`);\n}\n\n// Build a stronger state payload (callback can decode it)\nconst nonce = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);\nconst payload = {\n  owner_id,\n  nonce,\n  ts: Date.now()\n};\n\nfunction toBase64Url(obj) {\n  const b64 = Buffer.from(JSON.stringify(obj), 'utf8').toString('base64');\n  return b64.replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');\n}\n\nreturn [\n  {\n    json: {\n      shop_subdomain: shop,\n      owner_id,\n      state: toBase64Url(payload)\n    }\n  }\n];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                384,
+                -176
+            ],
+            "id": "a03f5865-34b0-46d5-8107-4614b9ed5f90",
+            "name": "Prepare Start Params"
+        },
+        {
+            "parameters": {
+                "path": "auth/shopify/start",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                160,
+                -176
+            ],
+            "id": "7ec1f8a7-8001-4fae-b651-b492bf95c88d",
+            "name": "Start Webhook1",
+            "webhookId": "9250bee9-cf86-43a8-8f4b-24ca7683b39d"
+        },
+        {
+            "parameters": {
+                "respondWith": "redirect",
+                "redirectURL": "=https://{{$json.shop_subdomain}}.myshopify.com/admin/oauth/authorize?client_id=b8606120d85084dca4978d8ff0706118&scope=read_products,write_orders&redirect_uri=https://n8n.erenmuhammedortakvps.store/webhook/auth/shopify/callback&state={{$json.state}}",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                624,
+                -176
+            ],
+            "id": "835d8e64-39a0-4928-9f47-3742b84cfdc7",
+            "name": "Redirect to Shopify1"
+        }
+    ],
+    "connections": {
+        "Prepare Start Params": {
+            "main": [
+                [
+                    {
+                        "node": "Redirect to Shopify1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Start Webhook1": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Start Params",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "instanceId": "3db9f746081512a9afdb2b4d21419878d90ae63aad85e552d27d2d2415525614"
+    }
+}

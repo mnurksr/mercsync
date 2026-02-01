@@ -1,0 +1,144 @@
+{
+    "name": "Etsy Token Refresher",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "minutes",
+                            "minutesInterval": 55
+                        }
+                    ]
+                }
+            },
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                0,
+                0
+            ],
+            "id": "schedule",
+            "name": "Every 55 Mins"
+        },
+        {
+            "parameters": {
+                "operation": "getAll",
+                "tableId": "shops",
+                "returnAll": true,
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "etsy_connected",
+                            "keyValue": "true"
+                        }
+                    ]
+                }
+            },
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                200,
+                0
+            ],
+            "id": "get-etsy-shops",
+            "name": "Get Etsy Shops",
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CRED_ID",
+                    "name": "Supabase account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.etsy.com/v3/public/oauth/token",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "grant_type",
+                            "value": "refresh_token"
+                        },
+                        {
+                            "name": "client_id",
+                            "value": "={{ $env.ETSY_KEYSTRING }}"
+                        },
+                        {
+                            "name": "refresh_token",
+                            "value": "={{ $json.etsy_refresh_token }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                400,
+                0
+            ],
+            "id": "refresh-token",
+            "name": "Refresh Etsy Token"
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "shops",
+                "updateKey": "id",
+                "columns": "etsy_access_token, etsy_refresh_token",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                600,
+                0
+            ],
+            "id": "save-new-tokens",
+            "name": "Save New Tokens",
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CRED_ID",
+                    "name": "Supabase account"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Every 55 Mins": {
+            "main": [
+                [
+                    {
+                        "node": "Get Etsy Shops",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Etsy Shops": {
+            "main": [
+                [
+                    {
+                        "node": "Refresh Etsy Token",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Refresh Etsy Token": {
+            "main": [
+                [
+                    {
+                        "node": "Save New Tokens",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

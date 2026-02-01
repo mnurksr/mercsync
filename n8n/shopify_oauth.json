@@ -1,0 +1,237 @@
+{
+    "name": "Shopify OAuth - Fixed",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "auth/shopify/start",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                0
+            ],
+            "id": "shopify-start-webhook",
+            "name": "Start Webhook"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract user_id from query parameter\nconst user_id = ($json.query.user_id || '').toString().trim();\nconst shop_domain = ($json.query.shop || '').toString().trim();\n\nif (!user_id) {\n  throw new Error('Missing user_id parameter');\n}\n\nif (!shop_domain) {\n  throw new Error('Missing shop parameter');\n}\n\n// Generate secure random nonce\nconst nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);\n\n// Create state payload\nconst statePayload = {\n  owner_id: user_id,\n  nonce: nonce,\n  timestamp: Date.now()\n};\n\n// Encode state as base64url\nconst stateJson = JSON.stringify(statePayload);\nconst stateBase64 = Buffer.from(stateJson).toString('base64')\n  .replace(/\\+/g, '-')\n  .replace(/\\//g, '_')\n  .replace(/=+$/g, '');\n\n// TODO: Store state+nonce in Redis with 10 min expiration\n// await redis.set(`oauth_state:${stateBase64}`, nonce, 'EX', 600);\n\n// Build authorization URL\nconst clientId = $env.SHOPIFY_CLIENT_ID;\nconst scopes = 'read_products,write_products,read_orders,write_orders,read_inventory,write_inventory';\nconst redirectUri = $env.SHOPIFY_REDIRECT_URI || 'https://n8n.erenmuhammedortakvps.store/webhook/auth/shopify/callback';\n\nconst authUrl = `https://${shop_domain}/admin/oauth/authorize?` +\n  `client_id=${clientId}&` +\n  `scope=${encodeURIComponent(scopes)}&` +\n  `redirect_uri=${encodeURIComponent(redirectUri)}&` +\n  `state=${stateBase64}`;\n\nreturn {\n  json: {\n    auth_url: authUrl,\n    state: stateBase64,\n    shop_domain: shop_domain\n  }\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                200,
+                0
+            ],
+            "id": "generate-auth-url",
+            "name": "Generate Auth URL"
+        },
+        {
+            "parameters": {
+                "respondWith": "redirect",
+                "redirectURL": "={{ $json.auth_url }}",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                400,
+                0
+            ],
+            "id": "redirect-to-shopify",
+            "name": "Redirect to Shopify"
+        },
+        {
+            "parameters": {
+                "path": "auth/shopify/callback",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                300
+            ],
+            "id": "callback-webhook",
+            "name": "Callback Webhook"
+        },
+        {
+            "parameters": {
+                "jsCode": "const crypto = require('crypto');\n\nconst query = $json.query || {};\nconst hmac = query.hmac;\nconst shop = query.shop;\nconst code = query.code;\nconst state = query.state;\n\nif (!hmac || !shop || !code || !state) {\n  throw new Error('Missing required OAuth parameters');\n}\n\n// HMAC Validation\nconst clientSecret = $env.SHOPIFY_CLIENT_SECRET;\n\n// Create a copy without hmac for validation\nconst params = { ...query };\ndelete params.hmac;\n\n// Sort parameters alphabetically and build query string\nconst sortedParams = Object.keys(params)\n  .sort()\n  .map(key => `${key}=${params[key]}`)\n  .join('&');\n\n// Calculate HMAC\nconst calculatedHmac = crypto\n  .createHmac('sha256', clientSecret)\n  .update(sortedParams)\n  .digest('hex');\n\n// Validate HMAC\nif (calculatedHmac !== hmac) {\n  throw new Error('HMAC validation failed - possible CSRF attack');\n}\n\n// TODO: Validate state from Redis\n// const storedNonce = await redis.get(`oauth_state:${state}`);\n// if (!storedNonce) throw new Error('Invalid or expired state');\n// await redis.del(`oauth_state:${state}`);\n\n// Decode state to get owner_id\nfunction base64UrlToString(input) {\n  const pad = '='.repeat((4 - (input.length % 4)) % 4);\n  const b64 = (input + pad).replace(/-/g, '+').replace(/_/g, '/');\n  return Buffer.from(b64, 'base64').toString('utf8');\n}\n\nlet owner_id = null;\ntry {\n  const decoded = base64UrlToString(state);\n  const parsed = JSON.parse(decoded);\n  owner_id = parsed.owner_id;\n} catch (e) {\n  throw new Error('Invalid state parameter');\n}\n\nreturn {\n  json: {\n    shop_domain: shop,\n    code: code,\n    owner_id: owner_id,\n    hmac_validated: true\n  }\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                200,
+                300
+            ],
+            "id": "validate-and-prepare",
+            "name": "Validate HMAC & Prepare"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://{{$json.shop_domain}}/admin/oauth/access_token",
+                "sendBody": true,
+                "contentType": "form-urlencoded",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "client_id",
+                            "value": "={{$env.SHOPIFY_CLIENT_ID}}"
+                        },
+                        {
+                            "name": "client_secret",
+                            "value": "={{$env.SHOPIFY_CLIENT_SECRET}}"
+                        },
+                        {
+                            "name": "code",
+                            "value": "={{$json.code}}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                400,
+                300
+            ],
+            "id": "exchange-code",
+            "name": "Exchange Code for Token"
+        },
+        {
+            "parameters": {
+                "jsCode": "const token = $json.access_token;\nconst scope = $json.scope;\n\nif (!token) {\n  throw new Error('No access_token returned from Shopify');\n}\n\n// Optional: Verify scopes\nconst requestedScopes = ['read_products', 'write_products', 'read_orders', 'write_orders', 'read_inventory', 'write_inventory'];\nconst grantedScopes = scope ? scope.split(',') : [];\n\nconst allGranted = requestedScopes.every(s => grantedScopes.includes(s));\nif (!allGranted) {\n  console.warn('Not all requested scopes were granted:', grantedScopes);\n}\n\nreturn {\n  json: {\n    shop_domain: $('Validate HMAC & Prepare').item.json.shop_domain,\n    owner_id: $('Validate HMAC & Prepare').item.json.owner_id,\n    access_token: token,\n    granted_scopes: scope,\n    is_active: true\n  }\n};"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                600,
+                300
+            ],
+            "id": "shape-for-db",
+            "name": "Shape for Database"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO public.shops (\n  shop_domain, \n  access_token, \n  owner_id, \n  is_active,\n  plan_type,\n  created_at\n)\nVALUES (\n  '{{$json.shop_domain}}', \n  '{{$json.access_token}}', \n  '{{$json.owner_id}}', \n  {{$json.is_active}},\n  'basic',\n  NOW()\n)\nON CONFLICT (shop_domain)\nDO UPDATE SET \n  access_token = EXCLUDED.access_token, \n  owner_id = EXCLUDED.owner_id, \n  is_active = EXCLUDED.is_active,\n  last_token_refresh_at = NOW();",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2,
+            "position": [
+                800,
+                300
+            ],
+            "id": "upsert-shop",
+            "name": "Upsert Shop (Postgres)",
+            "credentials": {
+                "postgres": {
+                    "id": "QyLuD28JpwvMjOqS",
+                    "name": "Postgres account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "redirect",
+                "redirectURL": "={{$env.FRONTEND_URL || 'http://localhost:3000'}}/settings?shopify_connected=true",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                1000,
+                300
+            ],
+            "id": "redirect-to-app",
+            "name": "Redirect to App"
+        }
+    ],
+    "connections": {
+        "Start Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Auth URL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Auth URL": {
+            "main": [
+                [
+                    {
+                        "node": "Redirect to Shopify",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Callback Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Validate HMAC & Prepare",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Validate HMAC & Prepare": {
+            "main": [
+                [
+                    {
+                        "node": "Exchange Code for Token",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Exchange Code for Token": {
+            "main": [
+                [
+                    {
+                        "node": "Shape for Database",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Shape for Database": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert Shop (Postgres)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upsert Shop (Postgres)": {
+            "main": [
+                [
+                    {
+                        "node": "Redirect to App",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

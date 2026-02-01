@@ -1,0 +1,104 @@
+{
+    "name": "Etsy Auth Start",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "auth/etsy/start",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                0,
+                0
+            ],
+            "id": "webhook-start",
+            "name": "Start Webhook"
+        },
+        {
+            "parameters": {
+                "jsCode": "const crypto = require('crypto');\n\n// 1. Generate PKCE Verifier\nfunction base64URLEncode(str) {\n  return str.toString('base64')\n    .replace(/\\+/g, '-')\n    .replace(/\\//g, '_')\n    .replace(/=/g, '');\n}\n\nfunction sha256(buffer) {\n  return crypto.createHash('sha256').update(buffer).digest();\n}\n\nconst verifier = base64URLEncode(crypto.randomBytes(32));\nconst challenge = base64URLEncode(sha256(verifier));\nconst state = Math.random().toString(36).substring(7);\nconst user_id = $json.query.user_id;\n\nreturn [\n  {\n    json: {\n      verifier,\n      challenge,\n      state,\n      user_id,\n      client_id: $env.ETSY_KEYSTRING\n    }\n  }\n];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                200,
+                0
+            ],
+            "id": "generate-pkce",
+            "name": "Generate PKCE"
+        },
+        {
+            "parameters": {
+                "tableId": "shops",
+                "operation": "upsert",
+                "columns": "owner_id, oauth_verifier, shop_domain",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                400,
+                0
+            ],
+            "id": "save-verifier",
+            "name": "Save Verifier",
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CRED_ID",
+                    "name": "Supabase account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "url": "=https://www.etsy.com/oauth/connect?response_type=code&redirect_uri={{ $env.N8N_WEBHOOK_URL }}/auth/etsy/callback&scope=listings_r%20listings_w&client_id={{ $json.client_id }}&state={{ $json.state }}&code_challenge={{ $json.challenge }}&code_challenge_method=S256",
+                "statusCode": 302
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                600,
+                0
+            ],
+            "id": "redirect-etsy",
+            "name": "Redirect to Etsy"
+        }
+    ],
+    "connections": {
+        "Start Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Generate PKCE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate PKCE": {
+            "main": [
+                [
+                    {
+                        "node": "Save Verifier",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save Verifier": {
+            "main": [
+                [
+                    {
+                        "node": "Redirect to Etsy",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

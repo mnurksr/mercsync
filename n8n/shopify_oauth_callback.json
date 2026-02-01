@@ -1,0 +1,172 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "jsCode": "// Expected query params from Shopify:\n// shop, code, state, hmac, timestamp (etc.)\n\nconst q = $json.query || {};\nconst shop = (q.shop || '').toString().trim();\nconst code = (q.code || '').toString().trim();\nconst state = (q.state || '').toString().trim();\n\n// You should validate HMAC + state in production.\n// Here we only parse 'state' to get owner_id (your app should set it).\n// Recommended: state = base64url(JSON.stringify({ owner_id, nonce }))\n\nfunction base64UrlToString(input) {\n  const pad = '='.repeat((4 - (input.length % 4)) % 4);\n  const b64 = (input + pad).replace(/-/g, '+').replace(/_/g, '/');\n  return Buffer.from(b64, 'base64').toString('utf8');\n}\n\nlet owner_id = null;\ntry {\n  if (state) {\n    const decoded = base64UrlToString(state);\n    const parsed = JSON.parse(decoded);\n    owner_id = parsed.owner_id || null;\n  }\n} catch (e) {\n  // If state is not base64url-json, fallback: use it directly\n  owner_id = owner_id || state || null;\n}\n\nreturn [\n  {\n    json: {\n      shop_domain: shop,\n      code,\n      owner_id,\n      raw_query: q\n    }\n  }\n];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                640,
+                192
+            ],
+            "id": "5b3e35ca-e5de-45f5-83ab-c0a1b0062511",
+            "name": "Prepare Input"
+        },
+        {
+            "parameters": {
+                "jsCode": "const token = $json.access_token;\nif (!token) {\n  throw new Error('No access_token returned from Shopify.');\n}\n\nreturn [\n  {\n    json: {\n      shop_domain: $('Prepare Input').item.json.shop_domain,\n      owner_id: $('Prepare Input').item.json.owner_id,\n      access_token: token,\n      is_active: true\n    }\n  }\n];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1072,
+                192
+            ],
+            "id": "a0439b8c-7ea8-419e-93d5-28fbe75ea141",
+            "name": "Shape for DB"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO public.shops (shop_domain, access_token, owner_id, is_active)\nVALUES ({{$json.shop_domain}}, {{$json.access_token}}, {{$json.owner_id}}, {{$json.is_active}})\nON CONFLICT (shop_domain)\nDO UPDATE SET\n  access_token = EXCLUDED.access_token,\n  owner_id = EXCLUDED.owner_id,\n  is_active = EXCLUDED.is_active;",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2,
+            "position": [
+                1296,
+                192
+            ],
+            "id": "4180290f-f9cb-464c-8adb-dcd38ed957dd",
+            "name": "Upsert Shop (Postgres)",
+            "credentials": {
+                "postgres": {
+                    "id": "QyLuD28JpwvMjOqS",
+                    "name": "Postgres account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "path": "auth/shopify/callback",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                432,
+                192
+            ],
+            "id": "48552b31-e36a-4c68-83ed-04f9ad731e96",
+            "name": "Callback Webhook1",
+            "webhookId": "855bb981-3276-41be-b68c-7710a59efec6"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://{{$json.shop_domain}}/admin/oauth/access_token",
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "client_id",
+                            "value": "={{$env.SHOPIFY_CLIENT_ID}}"
+                        },
+                        {
+                            "name": "client_secret",
+                            "value": "={{$env.SHOPIFY_CLIENT_SECRET}}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                864,
+                192
+            ],
+            "id": "d5f6666c-efb3-4617-8e6f-8fe3de482434",
+            "name": "Exchange Code1"
+        },
+        {
+            "parameters": {
+                "respondWith": "redirect",
+                "redirectURL": "http://localhost:3000/settings",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                1520,
+                192
+            ],
+            "id": "ca5162cd-567d-44d2-8531-3ff584c10937",
+            "name": "Redirect to App1"
+        }
+    ],
+    "connections": {
+        "Prepare Input": {
+            "main": [
+                [
+                    {
+                        "node": "Exchange Code1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Shape for DB": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert Shop (Postgres)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Upsert Shop (Postgres)": {
+            "main": [
+                [
+                    {
+                        "node": "Redirect to App1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Callback Webhook1": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Exchange Code1": {
+            "main": [
+                [
+                    {
+                        "node": "Shape for DB",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "3db9f746081512a9afdb2b4d21419878d90ae63aad85e552d27d2d2415525614"
+    }
+}
