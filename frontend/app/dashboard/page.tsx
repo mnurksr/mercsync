@@ -4,6 +4,7 @@ import RealtimeInventory from '@/components/RealtimeInventory';
 import { LayoutDashboard, LogOut, Settings, Bell, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function Dashboard() {
     const { supabase } = useAuth();
@@ -27,11 +28,14 @@ export default function Dashboard() {
                 </div>
 
                 <nav className="p-4 space-y-1 flex-1">
-                    <a href="#" className="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-xl font-medium">
+                    <Link href="/dashboard" className="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-xl font-medium">
                         <LayoutDashboard className="w-5 h-5" />
                         Dashboard
-                    </a>
-                    {/* Additional links can go here */}
+                    </Link>
+                    <Link href="/settings" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-colors">
+                        <Settings className="w-5 h-5" />
+                        Integrations
+                    </Link>
                 </nav>
 
                 <div className="p-4 border-t border-gray-100">
