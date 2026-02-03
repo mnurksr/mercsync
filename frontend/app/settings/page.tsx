@@ -52,7 +52,7 @@ export default function IntegrationsPage() {
 
     const handleConnect = (platform: string) => {
         // n8n Webhook Start URLs
-        const BASE_WEBHOOK = 'https://n8n.erenmuhammedortakvps.store/webhook/auth';
+        const BASE_WEBHOOK = 'https://api.mercsync.com/webhook/auth';
         let authUrl = '';
 
         if (platform === 'shopify') {
@@ -145,7 +145,7 @@ export default function IntegrationsPage() {
                     <button
                         onClick={() => handleConnect(platform)}
                         className={`w-full text-white font-bold py-2 rounded-md transition-colors ${platform === 'shopify' ? 'bg-green-600 hover:bg-green-700' :
-                                'bg-orange-600 hover:bg-orange-700'
+                            'bg-orange-600 hover:bg-orange-700'
                             }`}
                     >
                         {platform === 'shopify' ? 'Mağazayı Bağla' : `${name} Bağla`}

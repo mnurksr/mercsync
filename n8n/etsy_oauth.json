@@ -31,7 +31,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const clientId = $env.ETSY_CLIENT_ID;\nconst redirectUri = $env.ETSY_REDIRECT_URI || 'https://n8n.erenmuhammedortakvps.store/webhook/auth/etsy/callback';\nconst scopes = 'listings_r transactions_r email_r';\nconst state = $json.state;\nconst challenge = $json.challenge;\n\nconst authUrl = 'https://www.etsy.com/oauth/connect?' +\n  `response_type=code&` +\n  `redirect_uri=${encodeURIComponent(redirectUri)}&` +\n  `scope=${encodeURIComponent(scopes)}&` +\n  `client_id=${clientId}&` +\n  `state=${state}&` +\n  `code_challenge=${challenge}&` +\n  `code_challenge_method=S256`;\n\nreturn {\n  json: {\n    auth_url: authUrl\n  }\n};"
+                "jsCode": "const clientId = $env.ETSY_CLIENT_ID;\nconst redirectUri = $env.ETSY_REDIRECT_URI || 'https://api.mercsync.com/webhook/auth/etsy/callback';\nconst scopes = 'listings_r transactions_r email_r';\nconst state = $json.state;\nconst challenge = $json.challenge;\n\nconst authUrl = 'https://www.etsy.com/oauth/connect?' +\n  `response_type=code&` +\n  `redirect_uri=${encodeURIComponent(redirectUri)}&` +\n  `scope=${encodeURIComponent(scopes)}&` +\n  `client_id=${clientId}&` +\n  `state=${state}&` +\n  `code_challenge=${challenge}&` +\n  `code_challenge_method=S256`;\n\nreturn {\n  json: {\n    auth_url: authUrl\n  }\n};"
             },
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
@@ -103,7 +103,7 @@
                         },
                         {
                             "name": "redirect_uri",
-                            "value": "={{$env.ETSY_REDIRECT_URI || 'https://n8n.erenmuhammedortakvps.store/webhook/auth/etsy/callback'}}"
+                            "value": "={{$env.ETSY_REDIRECT_URI || 'https://api.mercsync.com/webhook/auth/etsy/callback'}}"
                         },
                         {
                             "name": "client_id",

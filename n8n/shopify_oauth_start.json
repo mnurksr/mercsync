@@ -32,7 +32,7 @@
         {
             "parameters": {
                 "respondWith": "redirect",
-                "redirectURL": "=https://{{$json.shop_subdomain}}.myshopify.com/admin/oauth/authorize?client_id=b8606120d85084dca4978d8ff0706118&scope=read_products,write_orders&redirect_uri=https://n8n.erenmuhammedortakvps.store/webhook/auth/shopify/callback&state={{$json.state}}",
+                "redirectURL": "=https://{{$json.shop_subdomain}}.myshopify.com/admin/oauth/authorize?client_id=b8606120d85084dca4978d8ff0706118&scope=read_products,write_orders&redirect_uri=https://api.mercsync.com/webhook/auth/shopify/callback&state={{$json.state}}",
                 "options": {}
             },
             "type": "n8n-nodes-base.respondToWebhook",
