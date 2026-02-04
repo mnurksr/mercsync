@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Box, Zap, Globe2, BarChart3 } from 'lucide-react';
+import { ArrowRight, Box, Zap, Globe2, ShieldCheck, ScanBarcode, Activity } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -61,63 +61,33 @@ export default function LandingPage() {
               Learn More
             </a>
           </div>
+        </div>
 
-          {/* Hero Image / Dashboard Preview */}
-          <div className="mt-16 relative mx-auto max-w-5xl">
-            <div className="absolute -inset-1 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl blur opacity-30"></div>
-            <div className="relative bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden aspect-[16/9] bg-gray-50 flex flex-col">
-              {/* Mock Browser Header */}
-              <div className="h-8 bg-gray-100 border-b border-gray-200 flex items-center px-4 gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                <div className="w-3 h-3 rounded-full bg-green-400"></div>
-              </div>
+        {/* How MercSync Works */}
+        <div className="mt-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">How MercSync Works</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Secure, server-side synchronization logic designed for stability.
+            </p>
+          </div>
 
-              {/* Mock Dashboard Content */}
-              <div className="flex-1 p-6 flex gap-6">
-                {/* Sidebar */}
-                <div className="w-48 bg-gray-50 rounded-lg border border-gray-100 hidden sm:block p-4 space-y-3">
-                  <div className="h-8 bg-blue-100 rounded w-3/4 mb-4"></div>
-                  <div className="h-6 bg-gray-200 rounded w-full"></div>
-                  <div className="h-6 bg-gray-200 rounded w-full"></div>
-                  <div className="h-6 bg-gray-200 rounded w-5/6"></div>
-                </div>
-
-                {/* Main Area */}
-                <div className="flex-1 space-y-6">
-                  {/* Stats Header */}
-                  <div className="flex gap-4">
-                    <div className="flex-1 h-24 bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
-                      <div className="h-4 bg-gray-100 rounded w-1/2 mb-2"></div>
-                      <div className="h-8 bg-blue-50 rounded w-1/3"></div>
-                    </div>
-                    <div className="flex-1 h-24 bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
-                      <div className="h-4 bg-gray-100 rounded w-1/2 mb-2"></div>
-                      <div className="h-8 bg-green-50 rounded w-1/3"></div>
-                    </div>
-                    <div className="flex-1 h-24 bg-white rounded-lg border border-gray-100 p-4 shadow-sm">
-                      <div className="h-4 bg-gray-100 rounded w-1/2 mb-2"></div>
-                      <div className="h-8 bg-yellow-50 rounded w-1/3"></div>
-                    </div>
-                  </div>
-
-                  {/* Table Mock */}
-                  <div className="bg-white rounded-lg border border-gray-100 shadow-sm flex-1 p-4 space-y-3">
-                    <div className="flex justify-between mb-4">
-                      <div className="h-6 bg-gray-100 rounded w-1/4"></div>
-                      <div className="h-6 bg-green-100 rounded w-16"></div>
-                    </div>
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="flex gap-4 items-center">
-                        <div className="h-8 w-8 bg-gray-100 rounded"></div>
-                        <div className="flex-1 h-4 bg-gray-50 rounded"></div>
-                        <div className="w-20 h-4 bg-gray-50 rounded"></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            <FeatureCard
+              icon={<ShieldCheck className="w-6 h-6 text-blue-600" />}
+              title="1. Connect Securely"
+              description="Link your Shopify and Etsy accounts using official OAuth 2.0 protocols. We never see or store your login credentials."
+            />
+            <FeatureCard
+              icon={<ScanBarcode className="w-6 h-6 text-indigo-600" />}
+              title="2. Smart SKU Mapping"
+              description="MercSync automatically detects matching products between platforms using SKUs. No manual linking required."
+            />
+            <FeatureCard
+              icon={<Activity className="w-6 h-6 text-green-600" />}
+              title="3. Real-Time Webhooks"
+              description="When a sale occurs on Shopify, we instantly catch the webhook and update your Etsy inventory within seconds to prevent overselling."
+            />
           </div>
         </div>
 
