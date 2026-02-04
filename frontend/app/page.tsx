@@ -39,12 +39,11 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-gray-900 mb-6 max-w-4xl mx-auto leading-tight">
-            Automate Your E-commerce <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Operations</span>
+            Real-Time Inventory Sync for <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Shopify & Etsy Sellers</span>
           </h1>
 
           <p className="text-lg text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Manage your Shopify and Etsy stores from a single place.
-            Smart solution for inventory tracking, order synchronization, and more.
+            Stop overselling. Automatically synchronize stock levels and orders between your Shopify store and Etsy shop in milliseconds. No more manual CSV uploads.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -52,7 +51,7 @@ export default function LandingPage() {
               href="/login"
               className="group px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center gap-2"
             >
-              Start Now
+              Connect Your Stores
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
             <a
