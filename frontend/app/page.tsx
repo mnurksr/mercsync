@@ -144,18 +144,18 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8">
             <FeatureCard
               icon={<Zap className="w-6 h-6 text-yellow-500" />}
-              title="Instant Sync"
-              description="Your inventory and order data updates between marketplaces in milliseconds."
+              title="2-Way Inventory Sync"
+              description="When a sale happens on Shopify, MercSync automatically updates your Etsy inventory quantity to prevent double-selling."
             />
             <FeatureCard
               icon={<Box className="w-6 h-6 text-blue-500" />}
-              title="Central Management"
-              description="Control your products and inventory across all platforms from a single panel."
+              title="Order Synchronization"
+              description="Automatically pull Etsy orders into your Shopify dashboard for centralized fulfillment and tracking."
             />
             <FeatureCard
               icon={<Globe2 className="w-6 h-6 text-green-500" />}
-              title="Global Scale"
-              description="Fully compatible with worldwide marketplaces and logistics networks."
+              title="SKU Mapping"
+              description="Intelligently link your products between platforms using SKUs, titles, or manual mapping rules"
             />
           </div>
         </div>
