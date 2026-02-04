@@ -15,23 +15,56 @@ export default function TermsPage() {
                 <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-8">Terms of Service</h1>
 
                 <div className="prose prose-blue max-w-none text-gray-600 leading-relaxed">
-                    <p className="mb-4"><strong>Effective Date: February 03, 2026</strong></p>
-                    <p className="mb-4">By installing or using MercSync, you agree to these Terms.</p>
+                    <p className="mb-4"><strong>Effective Date: February 4, 2026</strong></p>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. Service Scope</h2>
-                    <p className="mb-4">MercSync provides automation tools for Shopify and Etsy. Our service is strictly a data connector between your store and your external systems.</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. ACCEPTANCE OF TERMS</h2>
+                    <p className="mb-4">This Terms of Service ("Agreement") constitutes a binding contract between MercSync ("we", "us", or "our"), located in Istanbul, Turkiye, and you ("Customer" or "you"). By installing or using the MercSync application (the "Service"), you agree to be bound by these terms.</p>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">2. Billing & Price Transparency</h2>
-                    <p className="mb-4">In accordance with Shopify's 2026 Billing Transparency Requirements, we will provide you with at least 30 days' advance notice before implementing any price changes to your current subscription plan.</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">2. SERVICE DESCRIPTION</h2>
+                    <p className="mb-4">MercSync is an automation software designed to synchronize inventory, orders, and product data between e-commerce platforms, specifically Shopify and Etsy.</p>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">3. API Usage & Data Integrity</h2>
-                    <p className="mb-4">We access your data via Shopify's official APIs and follow all security protocols, including HTTPS encryption and secure credential management. You are responsible for ensuring the accuracy of the external systems (ERP/Accounting) you connect.</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">3. ETSY DISCLAIMER & COMPLIANCE (CRITICAL)</h2>
+                    <ul className="list-disc pl-5 mb-4 space-y-2">
+                        <li><strong>Independent Service:</strong> The term 'Etsy' is a trademark of Etsy, Inc. This Application uses the Etsy API but is not endorsed or certified by Etsy, Inc. MercSync is an independent service provider.</li>
+                        <li><strong>Platform Rules:</strong> You agree to use MercSync in full compliance with Etsy’s Terms of Use, House Rules, and Prohibited Items Policy. You are solely responsible for the content and products you list on your connected shops.</li>
+                    </ul>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. Limitation of Liability</h2>
-                    <p className="mb-4">MercSync shall not be liable for any indirect or consequential damages, including loss of profits or data, resulting from the use of the Service. We do not guarantee 100% uptime but strive for maximum stability.</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. LICENSE & RESTRICTIONS</h2>
+                    <p className="mb-4">We grant you a limited, non-exclusive, non-transferable right to use the Service for your internal business operations. You shall not:</p>
+                    <ul className="list-disc pl-5 mb-4 space-y-2">
+                        <li>Reverse engineer, decompile, or attempt to derive the source code of the Service.</li>
+                        <li>Use the Service to build a competitive product.</li>
+                        <li>Use the Service for any illegal activity or to violate the rights of others.</li>
+                    </ul>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">5. Compliance</h2>
-                    <p className="mb-4">You agree to use this Service only for lawful purposes and in compliance with all applicable privacy laws (GDPR, CCPA, etc.) and Shopify's API Terms.</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">5. FEES AND PAYMENTS</h2>
+                    <ul className="list-disc pl-5 mb-4 space-y-2">
+                        <li><strong>Shopify Billing:</strong> All fees for the Service are billed through the Shopify Billing API. You agree to pay the fees applicable to your selected subscription plan.</li>
+                        <li><strong>Refunds:</strong> As we offer a free trial period for evaluation, fees paid are generally non-refundable, subject to Shopify's refund policies.</li>
+                    </ul>
+
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">6. DATA & PRIVACY</h2>
+                    <p className="mb-4">Your use of the Service is also governed by our Privacy Policy. You acknowledge that MercSync acts as a data processor for your inventory and order data. We retain Etsy-related data only as long as necessary to perform the synchronization, in compliance with Etsy's 24-hour data retention rules.</p>
+
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. SERVICE AVAILABILITY & WARRANTY DISCLAIMER</h2>
+                    <p className="mb-4 uppercase font-semibold">THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE". WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED OR ERROR-FREE. WE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.</p>
+                    <p className="mb-4">Note: Since we rely on third-party APIs (Shopify & Etsy), we cannot guarantee 100% uptime if those platforms experience outages.</p>
+
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">8. LIMITATION OF LIABILITY</h2>
+                    <p className="mb-4 uppercase font-semibold">TO THE MAXIMUM EXTENT PERMITTED BY LAW, MERCSYNC SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOSS OF PROFITS, SALES, OR DATA, ARISING FROM YOUR USE OF THE SERVICE.</p>
+
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">9. INDEMNIFICATION</h2>
+                    <p className="mb-4">You agree to indemnify and hold harmless MercSync and its founders from any claims, damages, or expenses arising from your violation of this Agreement or your misuse of the Service (e.g., listing prohibited items on Etsy).</p>
+
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">10. GOVERNING LAW</h2>
+                    <p className="mb-4">This Agreement shall be governed by the laws of the Republic of Turkiye. Any disputes arising from this Agreement shall be resolved exclusively in the competent courts of Istanbul (Caglayan).</p>
+
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">11. CONTACT US</h2>
+                    <p className="mb-4">For any legal notices or support inquiries, please contact us at:</p>
+                    <p className="mb-4">
+                        Email: info@mercsync.com<br />
+                        Address: Basak Mahallesi, Ordu Caddesi No:2, Istanbul, Turkiye.
+                    </p>
                 </div>
             </div>
         </div>
