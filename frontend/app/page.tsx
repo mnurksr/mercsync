@@ -171,6 +171,9 @@ export default function LandingPage() {
           </div>
           <div className="text-sm text-gray-500">
             &copy; {new Date().getFullYear()} MercSync. All rights reserved.
+            <p className="mt-2 text-xs text-gray-400">
+              The term 'Etsy' is a trademark of Etsy, Inc. This Application uses Etsy's API, but is not endorsed or certified by Etsy.
+            </p>
           </div>
           <div className="flex gap-6">
             <Link href="/privacy" className="text-gray-400 hover:text-gray-900 transition-colors text-sm">Privacy Policy</Link>
