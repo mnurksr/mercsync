@@ -33,8 +33,8 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         let updatedFiles: UploadedFile[] = [...files];
 
         for (const file of newFiles) {
-            if (updatedFiles.length >= 2) {
-                setError('Maximum 2 files allowed.');
+            if (updatedFiles.length >= 3) {
+                setError('Maximum 3 files allowed.');
                 break;
             }
             if (file.size > 3 * 1024 * 1024) {
@@ -75,8 +75,8 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
     };
 
     const handleUpload = async () => {
-        if (files.length !== 2) {
-            setError('Please upload exactly 2 files (Shopify & Etsy).');
+        if (files.length !== 3) {
+            setError('Please upload exactly 3 files.');
             return;
         }
 
@@ -85,18 +85,14 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
 
         const formData = new FormData();
 
-        // Intelligent Mapping based on detected type, fallback to order
-        const shopifyFile = files.find(f => f.type === 'shopify') || files[0];
-        const etsyFile = files.find(f => f.type === 'etsy') || files[1];
-
-        // If both happen to be the same file due to fallback logic above (e.g. both unknown), ensure we send distinct files
-        if (shopifyFile.id === etsyFile.id) {
-            formData.append('shopify_csv', files[0].file);
-            formData.append('etsy_csv', files[1].file);
-        } else {
-            formData.append('shopify_csv', shopifyFile.file);
-            formData.append('etsy_csv', etsyFile.file);
-        }
+        // Append ALL files to FormData
+        files.forEach((fileObj, index) => {
+            // Determine key based on type: 'shopify' -> 'shopify_csv', 'etsy' -> 'etsy_csv'
+            // If valid type, use that key (allows multiple files with same key for array handling on backend)
+            // If unknown, use generic 'file_X'
+            const key = fileObj.type ? `${fileObj.type}_csv` : `file_${index}`;
+            formData.append(key, fileObj.file);
+        });
 
         try {
             const response = await fetch('https://api.mercsync.com/webhook/match-products', {
@@ -116,7 +112,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                 if (errorData.missing_platforms && Array.isArray(errorData.missing_platforms) && errorData.missing_platforms.length > 0) {
                     const missing = errorData.missing_platforms.map((p: string) => p.toLowerCase());
                     setFiles(prev => prev.filter(f => {
-                        const fType = f.type || (f.id === shopifyFile.id ? 'shopify' : 'etsy');
+                        const fType = f.type || 'unknown';
                         return !missing.includes(fType);
                     }));
                 } else if (errorData.clear_all_files) {
@@ -164,7 +160,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         processFiles(Array.from(e.dataTransfer.files));
     };
 
-    const isReady = files.length === 2;
+    const isReady = files.length === 3;
 
     return (
         <div className="w-full max-w-2xl mx-auto">
@@ -202,7 +198,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 mb-1">Drag & Drop files</h3>
                     <p className="text-xs text-gray-400 mb-4">
-                        Max 2 files, 3MB each
+                        Max 3 files, 3MB each
                     </p>
                 </div>
 
