@@ -238,7 +238,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
             </div>
 
             {/* Layout Grid */}
-            <div className="grid grid-cols-4 gap-8 items-start h-[calc(100vh-180px)]">
+            <div className="grid grid-cols-4 gap-8 items-start h-[calc(100vh-220px)] min-h-[500px]">
 
                 {/* Left Sidebar: Shopify */}
                 <div className="col-span-1 h-full flex flex-col">
@@ -256,7 +256,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                             <SearchBar value={shopifyFilter} onChange={setShopifyFilter} placeholder="Search shopify..." />
                         </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overscroll-contain">
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overscroll-contain pb-4">
                             <AnimatePresence mode="popLayout">
                                 {shopifyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(shopifyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(shopifyFilter.toLowerCase()))
@@ -273,7 +273,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
 
                 {/* Center Column: Matches */}
                 <div className="col-span-2 h-full flex flex-col">
-                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar overscroll-contain pb-10 px-1">
+                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar overscroll-contain pb-24 px-1">
                         <AnimatePresence mode="popLayout">
                             {matchedPairs.map((pair, i) => (
                                 <motion.div
