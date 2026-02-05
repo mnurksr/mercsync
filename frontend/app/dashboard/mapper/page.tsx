@@ -27,29 +27,39 @@ export default function StockMapperWizard() {
     });
 
     const handleUploadSuccess = (data: any) => {
-        // Assume API returns the correct structure, or default to empty
-        // Mocking the structure if the previous step's mock data doesn't match perfectly
-        // But let's assume the component will handle what it gets.
-        // If data is just an array (old mock), we transform it for the demo.
-        let structuredData = data;
+        // n8n returns an array with a single object containing the lists
+        // Output format: [ { matched: [...], unmatched_shopify: [...], unmatched_etsy: [...] } ]
 
-        if (Array.isArray(data)) {
-            // Transform legacy mock data to new structure for demo purposes if API returns old format
-            structuredData = {
-                matched: data.filter((m: any) => m.status === 'matched').map((m: any) => ({
-                    pair_id: `pair-${m.id}`,
-                    shopify: { id: `s-${m.id}`, title: m.shopify, sku: m.sku, price: 25.00 },
-                    etsy: { id: `e-${m.id}`, title: m.etsy, sku: m.sku, price: 25.00 }
-                })),
-                unmatched_shopify: data.filter((m: any) => m.status === 'unmatched').map((m: any) => ({
-                    id: `s-${m.id}`, title: m.shopify, sku: m.sku, price: 30.00
-                })),
-                unmatched_etsy: [
-                    { id: 'e-99', title: 'Vintage Leather Wallet', sku: 'WLT-old', price: 45.00 }
-                ]
-            };
-        }
+        const payload = Array.isArray(data) ? data[0] : data;
 
+        // Helper to normalize product data for MatchingDesk
+        const normalizeShopify = (item: any) => ({
+            id: item.source_id,
+            title: item.product_name,
+            sku: item.sku_code,
+            price: item.price,
+            image: '' // Add image mapping if available in future
+        });
+
+        const normalizeEtsy = (item: any) => ({
+            id: item.source_id,
+            title: item.product_name,
+            sku: item.sku_code,
+            price: item.price,
+            image: ''
+        });
+
+        const structuredData = {
+            matched: (payload.matched || []).map((m: any) => ({
+                pair_id: m.pair_id,
+                shopify: normalizeShopify(m.shopify),
+                etsy: normalizeEtsy(m.etsy)
+            })),
+            unmatched_shopify: (payload.unmatched_shopify || []).map(normalizeShopify),
+            unmatched_etsy: (payload.unmatched_etsy || []).map(normalizeEtsy)
+        };
+
+        console.log('Processed Mapper Data:', structuredData);
         setMapperData(structuredData);
         setStep(2);
     };
