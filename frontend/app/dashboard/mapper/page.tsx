@@ -70,8 +70,8 @@ export default function StockMapperWizard() {
     const handleSaveMatches = async (matches: any[]) => {
         setIsLoading(true);
         try {
-            // Send FULL MATCH DATA (original fields) to confirmed-matches webhook as requested
-            const response = await fetch('https://api.mercsync.com/webhook/confirmed-matches', {
+            // Send FULL MATCH DATA (original fields) via local proxy to avoid CORS
+            const response = await fetch('/api/save-matches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 // User requested strictly the "matched array". Using { matches } wrapper for safety, 
@@ -79,7 +79,10 @@ export default function StockMapperWizard() {
                 body: JSON.stringify({ matches })
             });
 
-            if (!response.ok) throw new Error('Failed to save matches');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to save matches');
+            }
 
             // Calculate stats for report (using the full matched array length)
             const totalMatches = matches.length;
