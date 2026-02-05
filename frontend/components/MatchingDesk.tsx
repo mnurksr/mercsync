@@ -146,7 +146,6 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
     const ProductCard = ({ product, type, isDraggable = true, index = 0 }: { product: Product, type: 'shopify' | 'etsy', isDraggable?: boolean, index?: number }) => {
         const isShopify = type === 'shopify';
         const accentColor = isShopify ? 'bg-emerald-500' : 'bg-orange-500';
-        const ringColor = isShopify ? 'ring-emerald-500/10' : 'ring-orange-500/10';
         const glowColor = isShopify ? 'rgba(16, 185, 129, 0.4)' : 'rgba(249, 115, 22, 0.4)';
         const badgeBg = isShopify ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700';
 
@@ -159,12 +158,6 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 transition={{ duration: 0.3, delay: index * 0.05 }}
                 draggable={isDraggable}
                 onDragStart={(e) => {
-                    // Manual drag start for data transfer, visual is handled by framer?? 
-                    // No, Framer drag is different. We mix HTML5 drag for logic with Framer for visual cues.
-                    // Actually standard DnD is needed for dropping between separate lists easily without complex setup.
-                    // We'll just use onDragStart for data and Framer for hover/active visuals.
-                    // Note: 'whileDrag' prop in Framer only works if we use motion dragging system, which conflicts with HTML5 DnD.
-                    // So we stick to whileHover and whileTap.
                     if (isDraggable) handleDragStart(e as any, type, product);
                 }}
                 onDragOver={(e) => e.preventDefault()}
@@ -197,11 +190,11 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
 
                 <div className="flex-1 min-w-0 flex flex-col justify-center h-full">
                     <h4 className="text-xs font-semibold text-gray-900 truncate pr-4 leading-tight mb-1" title={product.title}>
-                        {product.title}
+                        {product.title || 'Unknown Product'}
                     </h4>
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                            {product.sku}
+                            {product.sku || 'No SKU'}
                         </span>
                         <span className="text-[10px] font-bold text-gray-700">
                             ${product.price}
@@ -266,7 +259,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overscroll-contain">
                             <AnimatePresence>
                                 {shopifyPool
-                                    .filter(p => p.title.toLowerCase().includes(shopifyFilter.toLowerCase()) || p.sku.includes(shopifyFilter))
+                                    .filter(p => (p.title || '').toLowerCase().includes(shopifyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(shopifyFilter.toLowerCase()))
                                     .map((product, i) => (
                                         <ProductCard key={product.id} product={product} type="shopify" index={i} />
                                     ))}
@@ -345,7 +338,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         <div className="flex-1 overflow-y-auto space-y-2 pl-1 custom-scrollbar overscroll-contain">
                             <AnimatePresence>
                                 {etsyPool
-                                    .filter(p => p.title.toLowerCase().includes(etsyFilter.toLowerCase()) || p.sku.includes(etsyFilter))
+                                    .filter(p => (p.title || '').toLowerCase().includes(etsyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(etsyFilter.toLowerCase()))
                                     .map((product, i) => (
                                         <ProductCard key={product.id} product={product} type="etsy" index={i} />
                                     ))}
