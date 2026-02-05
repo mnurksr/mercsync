@@ -106,31 +106,39 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
 
             const data = await response.json();
 
-            // Check for specific error format (Array with error object)
-            // Example: [{ "success": false, "error": "...", "missing_platforms": ["Shopify"] }]
+            // 1. Strict Error Handling (Explicit Failure Response)
             if (Array.isArray(data) && data.length > 0 && data[0].success === false) {
                 const errorData = data[0];
                 console.error("Upload Error:", errorData);
 
                 setError(errorData.error || 'Upload failed due to platform validation.');
 
-                // Smart Partial Clearing based on missing_platforms
                 if (errorData.missing_platforms && Array.isArray(errorData.missing_platforms) && errorData.missing_platforms.length > 0) {
                     const missing = errorData.missing_platforms.map((p: string) => p.toLowerCase());
-
-                    // Keep files that are NOT in the missing list
                     setFiles(prev => prev.filter(f => {
-                        // Robust check: check actual type or inferred type
                         const fType = f.type || (f.id === shopifyFile.id ? 'shopify' : 'etsy');
                         return !missing.includes(fType);
                     }));
                 } else if (errorData.clear_all_files) {
-                    // Fallback to clearing all if no specific platform mentioned but flag is set
                     setFiles([]);
                 }
-
                 setIsLoading(false);
-                return; // CRITICAL: Stop execution here so onSuccess is NOT called
+                return;
+            }
+
+            // 2. Strict Success Validation (Must match expected schema)
+            const payload = Array.isArray(data) ? data[0] : data;
+            const isValidResponse = payload &&
+                Array.isArray(payload.matched) &&
+                Array.isArray(payload.unmatched_shopify) &&
+                Array.isArray(payload.unmatched_etsy) &&
+                payload.summary;
+
+            if (!isValidResponse) {
+                console.error("Invalid Response Structure:", data);
+                setError('Invalid response from server. Please check your input files.');
+                setIsLoading(false);
+                return; // STOP: Do not open the matching desk
             }
 
             if (!response.ok) throw new Error('Upload failed');
@@ -216,13 +224,13 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                             className={`bg-white rounded-xl border p-2 pr-4 shadow-sm flex items-center gap-4 transition-colors ${file.type === 'shopify' ? 'border-green-200 bg-green-50/30' :
-                                    file.type === 'etsy' ? 'border-orange-200 bg-orange-50/30' :
-                                        'border-gray-200'
+                                file.type === 'etsy' ? 'border-orange-200 bg-orange-50/30' :
+                                    'border-gray-200'
                                 }`}
                         >
                             {/* Visual Indicator - Gesture Only */}
                             <div className={`w-14 h-14 rounded-lg flex items-center justify-center shrink-0 transition-colors ${file.type === 'shopify' ? 'bg-green-100 text-green-600' :
-                                    file.type === 'etsy' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
+                                file.type === 'etsy' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
                                 }`}>
                                 {file.type === 'shopify' ? <ShoppingBag className="w-6 h-6" /> :
                                     file.type === 'etsy' ? <Store className="w-6 h-6" /> :
