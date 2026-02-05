@@ -35,6 +35,15 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
     const [etsyPool, setEtsyPool] = useState<Product[]>(initialData.unmatched_etsy || []);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Sync state if initialData changes (e.g. re-upload)
+    const [prevInitialData, setPrevInitialData] = useState(initialData);
+    if (initialData !== prevInitialData) {
+        setMatchedPairs(initialData.matched || []);
+        setShopifyPool(initialData.unmatched_shopify || []);
+        setEtsyPool(initialData.unmatched_etsy || []);
+        setPrevInitialData(initialData);
+    }
+
     // Filter states
     const [shopifyFilter, setShopifyFilter] = useState('');
     const [etsyFilter, setEtsyFilter] = useState('');
