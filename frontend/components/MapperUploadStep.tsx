@@ -1,26 +1,26 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
-import { Upload, X, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, ShoppingBag, Store } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Upload, X, FileSpreadsheet, Loader2, AlertCircle, ShoppingBag, Store, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MapperUploadStepProps {
     onSuccess: (data: any) => void;
 }
 
+type PlatformType = 'shopify' | 'etsy' | null;
+
+interface UploadedFile {
+    id: string;
+    file: File;
+    type: PlatformType;
+}
+
 export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
-    const [files, setFiles] = useState<{ file: File; type: 'shopify' | 'etsy' | 'unknown' }[]>([]);
+    const [files, setFiles] = useState<UploadedFile[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // Platform detection heuristic
-    const detectPlatform = (filename: string): 'shopify' | 'etsy' | 'unknown' => {
-        const lower = filename.toLowerCase();
-        if (lower.includes('shopify') || lower.includes('product_export')) return 'shopify';
-        if (lower.includes('etsy')) return 'etsy';
-        return 'unknown';
-    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -30,71 +30,57 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
 
     const processFiles = (newFiles: File[]) => {
         setError(null);
-
-        let validFiles: { file: File; type: 'shopify' | 'etsy' | 'unknown' }[] = [...files];
+        let updatedFiles: UploadedFile[] = [...files];
 
         for (const file of newFiles) {
-            // Check Limits
-            if (validFiles.length >= 2) {
-                setError('maximum 2 files allowed.');
+            if (updatedFiles.length >= 2) {
+                setError('Maximum 2 files allowed.');
                 break;
             }
-            // Check Size (3MB)
             if (file.size > 3 * 1024 * 1024) {
                 setError(`${file.name} is too large (max 3MB).`);
                 continue;
             }
-            // Check Type
             if (!file.name.endsWith('.csv')) {
                 setError('Only CSV files are allowed.');
                 continue;
             }
 
-            // Detect & Add
-            const type = detectPlatform(file.name);
-            validFiles.push({ file, type });
+            updatedFiles.push({
+                id: Math.random().toString(36).substr(2, 9),
+                file,
+                type: null // Start as unassigned
+            });
         }
-
-        // Auto-assign types if we have 2 files and they are ambiguous
-        if (validFiles.length === 2) {
-            const hasShopify = validFiles.some(f => f.type === 'shopify');
-            const hasEtsy = validFiles.some(f => f.type === 'etsy');
-
-            // If we're missing explicit types, try to infer by slot
-            if (!hasShopify && !hasEtsy) {
-                validFiles[0].type = 'shopify';
-                validFiles[1].type = 'etsy';
-            } else if (!hasShopify && hasEtsy) {
-                validFiles.find(f => f.type === 'unknown')!.type = 'shopify';
-            } else if (hasShopify && !hasEtsy) {
-                validFiles.find(f => f.type === 'unknown')!.type = 'etsy';
-            }
-        }
-
-        setFiles(validFiles);
-        // Reset input
+        setFiles(updatedFiles);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const removeFile = (index: number) => {
-        setFiles(prev => prev.filter((_, i) => i !== index));
+    const updateFileType = (id: string, type: PlatformType) => {
+        setFiles(prev => prev.map(f => f.id === id ? { ...f, type } : f));
+        setError(null);
+    };
+
+    const removeFile = (id: string) => {
+        setFiles(prev => prev.filter(f => f.id !== id));
         setError(null);
     };
 
     const handleUpload = async () => {
-        if (files.length !== 2) return;
+        const shopifyFile = files.find(f => f.type === 'shopify');
+        const etsyFile = files.find(f => f.type === 'etsy');
+
+        if (!shopifyFile || !etsyFile) {
+            setError('Please assign one file as Shopify and one as Etsy.');
+            return;
+        }
 
         setIsLoading(true);
         setError(null);
 
         const formData = new FormData();
-
-        // Find specific files or fallback to index
-        const shopifyFile = files.find(f => f.type === 'shopify')?.file || files[0].file;
-        const etsyFile = files.find(f => f.type === 'etsy')?.file || files[1].file;
-
-        formData.append('shopify_csv', shopifyFile);
-        formData.append('etsy_csv', etsyFile);
+        formData.append('shopify_csv', shopifyFile.file);
+        formData.append('etsy_csv', etsyFile.file);
 
         try {
             const response = await fetch('https://api.mercsync.com/webhook/match-products', {
@@ -105,14 +91,12 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
             if (!response.ok) throw new Error('Upload failed');
 
             const data = await response.json();
-
-            // Artificial delay for "premium feel" if response is too fast
-            await new Promise(r => setTimeout(r, 800));
-
+            // Artificial delay for premium feel
+            await new Promise(r => setTimeout(r, 1000));
             onSuccess(data);
         } catch (err) {
             console.error(err);
-            setError('Failed to analyze files. Please check compatibility.');
+            setError('Failed to analyze files. Please ensure you uploaded the correct formats.');
         } finally {
             setIsLoading(false);
         }
@@ -128,19 +112,24 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         processFiles(Array.from(e.dataTransfer.files));
     };
 
+    // Validation state
+    const hasShopify = files.some(f => f.type === 'shopify');
+    const hasEtsy = files.some(f => f.type === 'etsy');
+    const isReady = hasShopify && hasEtsy && files.length === 2;
+
     return (
         <div className="w-full max-w-2xl mx-auto">
             <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Inventory Files</h2>
-                <p className="text-gray-500 text-sm">Upload your Shopify and Etsy CSV exports to start matching.</p>
+                <p className="text-gray-500 text-sm">Upload your CSV exports and assign them to the correct store.</p>
             </div>
 
             {/* Drop Zone */}
             <motion.div
                 layout
                 className={`
-                    relative border-2 border-dashed rounded-3xl p-10 text-center transition-all duration-300
-                    flex flex-col items-center justify-center min-h-[250px]
+                    relative border-2 border-dashed rounded-3xl p-8 text-center transition-all duration-300
+                    flex flex-col items-center justify-center min-h-[200px]
                     ${isDragging ? 'border-blue-500 bg-blue-50/50 scale-[1.02]' : 'border-gray-200 bg-white hover:border-gray-300'}
                     ${error ? 'border-red-300 bg-red-50/30' : ''}
                 `}
@@ -158,60 +147,41 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                     ref={fileInputRef}
                 />
 
-                <AnimatePresence>
-                    {files.length < 2 ? (
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            className="flex flex-col items-center pointer-events-none"
-                        >
-                            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6 shadow-sm ring-8 ring-blue-50/50">
-                                <Upload className="w-10 h-10" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Drag & Drop files here</h3>
-                            <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto leading-relaxed">
-                                Support .csv files up to 3MB. <br />
-                                <span className="text-xs text-gray-400">Required: 1 Shopify Export, 1 Etsy Export</span>
-                            </p>
-                            <label
-                                htmlFor="file-upload"
-                                className="pointer-events-auto px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-sm cursor-pointer"
-                            >
-                                Select Files
-                            </label>
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="flex flex-col items-center"
-                        >
-                            <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-4 shadow-sm ring-8 ring-green-50/50">
-                                <CheckCircle className="w-10 h-10" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900">Ready to Analyze</h3>
-                            <p className="text-sm text-gray-500 mt-2">All files loaded successfully.</p>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                <div className="pointer-events-none">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-4 mx-auto shadow-sm">
+                        <Upload className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">Drag & Drop files</h3>
+                    <p className="text-xs text-gray-400 mb-4">
+                        Max 2 files, 3MB each
+                    </p>
+                </div>
 
+                <label
+                    htmlFor="file-upload"
+                    className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-semibold rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all text-sm cursor-pointer z-10"
+                >
+                    Select Files
+                </label>
             </motion.div>
 
-            {/* File List */}
+            {/* File List with Manual Assignment */}
             <div className="mt-8 space-y-3">
                 <AnimatePresence>
-                    {files.map((file, index) => (
+                    {files.map((file) => (
                         <motion.div
-                            key={`${file.file.name}-${index}`}
+                            key={file.id}
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                            className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm flex items-center gap-4 group hover:shadow-md transition-shadow"
+                            className={`bg-white rounded-xl border p-2 pr-4 shadow-sm flex items-center gap-4 transition-colors ${file.type === 'shopify' ? 'border-green-200 bg-green-50/30' :
+                                    file.type === 'etsy' ? 'border-orange-200 bg-orange-50/30' :
+                                        'border-gray-200'
+                                }`}
                         >
-                            {/* Icon based on Type */}
-                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${file.type === 'shopify' ? 'bg-green-50 text-green-600' :
-                                    file.type === 'etsy' ? 'bg-orange-50 text-orange-600' : 'bg-gray-100 text-gray-500'
+                            {/* Visual Indicator */}
+                            <div className={`w-14 h-14 rounded-lg flex items-center justify-center shrink-0 transition-colors ${file.type === 'shopify' ? 'bg-green-100 text-green-600' :
+                                    file.type === 'etsy' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
                                 }`}>
                                 {file.type === 'shopify' ? <ShoppingBag className="w-6 h-6" /> :
                                     file.type === 'etsy' ? <Store className="w-6 h-6" /> :
@@ -220,21 +190,36 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
 
                             <div className="flex-1 min-w-0">
                                 <h4 className="text-sm font-semibold text-gray-900 truncate">{file.file.name}</h4>
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
-                                    <span className="uppercase font-bold tracking-wider text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
-                                        {(file.file.size / 1024 / 1024).toFixed(2)} MB
-                                    </span>
-                                    <span>•</span>
-                                    <span className={`capitalize font-medium ${file.type === 'shopify' ? 'text-green-600' :
-                                            file.type === 'etsy' ? 'text-orange-600' : 'text-gray-400'
-                                        }`}>
-                                        {file.type === 'unknown' ? 'Unknown Source' : `${file.type} Export`}
+                                <div className="flex items-center gap-3 mt-1.5">
+                                    {/* Type Selection Buttons */}
+                                    <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                        <button
+                                            onClick={() => updateFileType(file.id, 'shopify')}
+                                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${file.type === 'shopify'
+                                                    ? 'bg-white text-green-700 shadow-sm'
+                                                    : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                        >
+                                            Shopify
+                                        </button>
+                                        <button
+                                            onClick={() => updateFileType(file.id, 'etsy')}
+                                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${file.type === 'etsy'
+                                                    ? 'bg-white text-orange-700 shadow-sm'
+                                                    : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                        >
+                                            Etsy
+                                        </button>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 font-mono">
+                                        {(file.file.size / 1024).toFixed(0)}KB
                                     </span>
                                 </div>
                             </div>
 
                             <button
-                                onClick={() => removeFile(index)}
+                                onClick={() => removeFile(file.id)}
                                 className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                             >
                                 <X className="w-5 h-5" />
@@ -244,13 +229,11 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                 </AnimatePresence>
             </div>
 
-            {/* Error Message */}
+            {/* Error & Instructions */}
             <AnimatePresence>
                 {error && (
                     <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
+                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                         className="mt-4 p-4 bg-red-50 rounded-xl flex items-start gap-3 text-red-700"
                     >
                         <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -263,7 +246,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
             <motion.div className="mt-8" layout>
                 <button
                     onClick={handleUpload}
-                    disabled={isLoading || files.length !== 2}
+                    disabled={isLoading || !isReady}
                     className="w-full py-4 bg-gray-900 hover:bg-black text-white rounded-2xl font-bold text-lg shadow-xl shadow-gray-200 disabled:opacity-50 disabled:shadow-none hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-3"
                 >
                     {isLoading ? (
@@ -275,6 +258,11 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                         'Start Mapping'
                     )}
                 </button>
+                {!isLoading && !isReady && files.length > 0 && (
+                    <p className="text-center text-xs text-gray-400 mt-3 animate-pulse">
+                        Please assign exactly one Shopify and one Etsy file.
+                    </p>
+                )}
             </motion.div>
 
         </div>
