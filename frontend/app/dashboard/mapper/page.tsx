@@ -38,7 +38,7 @@ export default function StockMapperWizard() {
             title: item.product_name,
             sku: item.sku_code,
             price: item.price,
-            image: '' // Add image mapping if available in future
+            image: item.image || '' // Map image from API
         });
 
         const normalizeEtsy = (item: any) => ({
@@ -46,7 +46,7 @@ export default function StockMapperWizard() {
             title: item.product_name,
             sku: item.sku_code,
             price: item.price,
-            image: ''
+            image: item.image || '' // Map image from API
         });
 
         const structuredData = {
