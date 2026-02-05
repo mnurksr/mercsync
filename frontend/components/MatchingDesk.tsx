@@ -13,6 +13,7 @@ interface Product {
     sku: string;
     price: string | number;
     image?: string;
+    [key: string]: any;
 }
 
 interface MatchPair {
@@ -27,7 +28,7 @@ interface MatchingDeskProps {
         unmatched_shopify: Product[];
         unmatched_etsy: Product[];
     };
-    onSave: (matches: { shopify_id: string | number; etsy_id: string | number }[]) => void;
+    onSave: (matches: MatchPair[]) => void;
     onBack: () => void;
 }
 
@@ -71,11 +72,8 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
 
     const handleSaveClick = async () => {
         setIsSaving(true);
-        const payload = matchedPairs.map(p => ({
-            shopify_id: p.shopify.id,
-            etsy_id: p.etsy.id
-        }));
-        await onSave(payload);
+        // Pass the FULL matched pairs array to preserve all original CSV data
+        await onSave(matchedPairs);
         setIsSaving(false);
     };
 

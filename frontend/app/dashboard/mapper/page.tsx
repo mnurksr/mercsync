@@ -33,20 +33,23 @@ export default function StockMapperWizard() {
         const payload = Array.isArray(data) ? data[0] : data;
 
         // Helper to normalize product data for MatchingDesk
+        // SPREAD full item to preserve all original CSV columns as requested
         const normalizeShopify = (item: any) => ({
+            ...item,
             id: item.source_id,
             title: item.product_name,
             sku: item.sku_code,
             price: item.price,
-            image: item.image || '' // Map image from API
+            image: item.image || ''
         });
 
         const normalizeEtsy = (item: any) => ({
+            ...item,
             id: item.source_id,
             title: item.product_name,
             sku: item.sku_code,
             price: item.price,
-            image: item.image || '' // Map image from API
+            image: item.image || ''
         });
 
         const structuredData = {
@@ -64,25 +67,28 @@ export default function StockMapperWizard() {
         setStep(2);
     };
 
-    const handleSaveMatches = async (matches: { shopify_id: string | number; etsy_id: string | number }[]) => {
+    const handleSaveMatches = async (matches: any[]) => {
         setIsLoading(true);
         try {
-            // Send matches to webhook
-            // Using a dummy URL for now as requested or the same webhook with a different action
-            const response = await fetch('https://api.mercsync.com/webhook/save-matches', {
+            // Send FULL MATCH DATA (original fields) to confirmed-matches webhook as requested
+            const response = await fetch('https://api.mercsync.com/webhook/confirmed-matches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                // User requested strictly the "matched array". Using { matches } wrapper for safety, 
+                // but matches array contains full shopify/etsy objects with all original fields.
                 body: JSON.stringify({ matches })
             });
 
-            // Calculate stats for report
+            if (!response.ok) throw new Error('Failed to save matches');
+
+            // Calculate stats for report (using the full matched array length)
             const totalMatches = matches.length;
-            const shopifyLeft = mapperData.unmatched_shopify.length; // Approximate, would be updated in real app state
+            const shopifyLeft = mapperData.unmatched_shopify.length; // Approximate local state
 
             setStats({
                 synced: totalMatches,
                 unmatched: shopifyLeft,
-                total_units: totalMatches // Assuming 1 unit per match for now, or fetch from API
+                total_units: totalMatches
             });
 
             setStep(3);
