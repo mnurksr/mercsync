@@ -46,12 +46,12 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                 continue;
             }
 
-            // Smart Detection Logic
+            // Smart Detection Logic (Visual Gesture Only)
             let detectedType: PlatformType = null;
             const lowerName = file.name.toLowerCase();
-            if (lowerName.includes('etsylistingsdownload')) {
+            if (lowerName.includes('etsy')) {
                 detectedType = 'etsy';
-            } else if (lowerName.includes('product_export')) {
+            } else if (lowerName.includes('shopify') || lowerName.includes('product_export')) {
                 detectedType = 'shopify';
             }
 
@@ -65,22 +65,14 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const updateFileType = (id: string, type: PlatformType) => {
-        setFiles(prev => prev.map(f => f.id === id ? { ...f, type } : f));
-        setError(null);
-    };
-
     const removeFile = (id: string) => {
         setFiles(prev => prev.filter(f => f.id !== id));
         setError(null);
     };
 
     const handleUpload = async () => {
-        const shopifyFile = files.find(f => f.type === 'shopify');
-        const etsyFile = files.find(f => f.type === 'etsy');
-
-        if (!shopifyFile || !etsyFile) {
-            setError('Please ensure exactly one Shopify and one Etsy file are detected or selected.');
+        if (files.length !== 2) {
+            setError('Please upload exactly 2 files (Shopify & Etsy).');
             return;
         }
 
@@ -88,8 +80,20 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         setError(null);
 
         const formData = new FormData();
-        formData.append('shopify_csv', shopifyFile.file);
-        formData.append('etsy_csv', etsyFile.file);
+
+        // Intelligent Mapping based on detected type, fallback to order
+        const shopifyFile = files.find(f => f.type === 'shopify') || files[0];
+        const etsyFile = files.find(f => f.type === 'etsy') || files[1];
+
+        // If both happen to be the same file due to fallback logic above (e.g. both unknown), ensure we send distinct files
+        // This is a basic heuristic. Ideally n8n handles the keys.
+        if (shopifyFile.id === etsyFile.id) {
+            formData.append('shopify_csv', files[0].file);
+            formData.append('etsy_csv', files[1].file);
+        } else {
+            formData.append('shopify_csv', shopifyFile.file);
+            formData.append('etsy_csv', etsyFile.file);
+        }
 
         try {
             const response = await fetch('https://api.mercsync.com/webhook/match-products', {
@@ -100,7 +104,8 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
             if (!response.ok) throw new Error('Upload failed');
 
             const data = await response.json();
-            await new Promise(r => setTimeout(r, 1000));
+            // Artificial delay for premium feel
+            await new Promise(r => setTimeout(r, 1500));
             onSuccess(data);
         } catch (err) {
             console.error(err);
@@ -120,17 +125,16 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         processFiles(Array.from(e.dataTransfer.files));
     };
 
-    const hasShopify = files.some(f => f.type === 'shopify');
-    const hasEtsy = files.some(f => f.type === 'etsy');
-    const isReady = hasShopify && hasEtsy && files.length === 2;
+    const isReady = files.length === 2;
 
     return (
         <div className="w-full max-w-2xl mx-auto">
             <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Inventory Files</h2>
-                <p className="text-gray-500 text-sm">Upload your <b>product_export</b> (Shopify) and <b>EtsyListingsDownload</b> (Etsy) files.</p>
+                <p className="text-gray-500 text-sm">Upload your <b>product_export</b> and <b>EtsyListingsDownload</b> files.</p>
             </div>
 
+            {/* Drop Zone */}
             <motion.div
                 layout
                 className={`
@@ -171,6 +175,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                 </label>
             </motion.div>
 
+            {/* File List */}
             <div className="mt-8 space-y-3">
                 <AnimatePresence>
                     {files.map((file) => (
@@ -184,6 +189,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                                         'border-gray-200'
                                 }`}
                         >
+                            {/* Visual Indicator - Gesture Only */}
                             <div className={`w-14 h-14 rounded-lg flex items-center justify-center shrink-0 transition-colors ${file.type === 'shopify' ? 'bg-green-100 text-green-600' :
                                     file.type === 'etsy' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
                                 }`}>
@@ -195,29 +201,18 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                             <div className="flex-1 min-w-0">
                                 <h4 className="text-sm font-semibold text-gray-900 truncate">{file.file.name}</h4>
                                 <div className="flex items-center gap-3 mt-1.5">
+                                    {/* Gesture Badges */}
                                     {file.type ? (
                                         <div className="flex items-center gap-1.5">
                                             <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wide flex items-center gap-1 ${file.type === 'shopify' ? 'bg-white text-green-700 shadow-sm' : 'bg-white text-orange-700 shadow-sm'
                                                 }`}>
-                                                {file.type === 'shopify' ? 'Shopify Detected' : 'Etsy Detected'}
-                                                <CheckCircle className="w-3 h-3" />
+                                                {file.type === 'shopify' ? 'Shopify' : 'Etsy'}
                                             </span>
                                         </div>
                                     ) : (
-                                        <div className="flex bg-gray-100 p-0.5 rounded-lg">
-                                            <button
-                                                onClick={() => updateFileType(file.id, 'shopify')}
-                                                className="px-3 py-1 text-[10px] font-bold text-gray-500 hover:text-gray-700 rounded-md transition-all"
-                                            >
-                                                Shopify
-                                            </button>
-                                            <button
-                                                onClick={() => updateFileType(file.id, 'etsy')}
-                                                className="px-3 py-1 text-[10px] font-bold text-gray-500 hover:text-gray-700 rounded-md transition-all"
-                                            >
-                                                Etsy
-                                            </button>
-                                        </div>
+                                        <span className="text-[10px] text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-full">
+                                            Ready to Upload
+                                        </span>
                                     )}
                                     <span className="text-[10px] text-gray-400 font-mono ml-auto">
                                         {(file.file.size / 1024).toFixed(0)}KB
@@ -263,11 +258,6 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                         'Start Mapping'
                     )}
                 </button>
-                {!isLoading && !isReady && files.length > 0 && (
-                    <p className="text-center text-xs text-gray-400 mt-3 animate-pulse">
-                        Please ensure exactly one Shopify and one Etsy file are detected or assigned.
-                    </p>
-                )}
             </motion.div>
         </div>
     );

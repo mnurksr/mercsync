@@ -282,16 +282,18 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    transition={{ type: "spring", stiffness: 200, damping: 25 }}
                                     className="relative group bg-white p-2 rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all flex items-center gap-2 z-0 hover:z-10"
                                 >
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 w-0">
                                         <ProductCard product={pair.shopify} type="shopify" isDraggable={false} />
                                     </div>
 
-                                    <AnimatedConnector />
+                                    <div className="shrink-0 -mx-2 z-10 w-16">
+                                        <AnimatedConnector />
+                                    </div>
 
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 w-0">
                                         <ProductCard product={pair.etsy} type="etsy" isDraggable={false} />
                                     </div>
 

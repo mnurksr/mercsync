@@ -81,20 +81,15 @@ export default function StockMapperWizard() {
 
             setStats({
                 synced: totalMatches,
-                unmatched: shopifyLeft, // Just a placeholder stat
-                total_units: totalMatches * 15 // Mock stock count
+                unmatched: shopifyLeft,
+                total_units: totalMatches // Assuming 1 unit per match for now, or fetch from API
             });
 
             setStep(3);
         } catch (error) {
             console.error('Failed to save matches', error);
-            // Proceed anyway for demo
-            setStats({
-                synced: matches.length,
-                unmatched: 5,
-                total_units: 1450
-            });
-            setStep(3);
+            // Don't show success screen on error
+            alert('Failed to save matches. Please try again.');
         } finally {
             setIsLoading(false);
         }
