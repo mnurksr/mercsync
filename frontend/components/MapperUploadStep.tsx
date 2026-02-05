@@ -49,9 +49,13 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
             // Smart Detection Logic (Visual Gesture Only)
             let detectedType: PlatformType = null;
             const lowerName = file.name.toLowerCase();
+
+            // Etsy detection: simple 'etsy' check
             if (lowerName.includes('etsy')) {
                 detectedType = 'etsy';
-            } else if (lowerName.includes('shopify') || lowerName.includes('product_export')) {
+            }
+            // Shopify detection: check for 'export' anywhere in the name as requested
+            else if (lowerName.includes('export')) {
                 detectedType = 'shopify';
             }
 
@@ -86,7 +90,6 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         const etsyFile = files.find(f => f.type === 'etsy') || files[1];
 
         // If both happen to be the same file due to fallback logic above (e.g. both unknown), ensure we send distinct files
-        // This is a basic heuristic. Ideally n8n handles the keys.
         if (shopifyFile.id === etsyFile.id) {
             formData.append('shopify_csv', files[0].file);
             formData.append('etsy_csv', files[1].file);
@@ -101,9 +104,25 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                 body: formData,
             });
 
+            const data = await response.json();
+
+            // Check for specific error format (Array with error object)
+            // Example: [{ "success": false, "error": "...", "clear_all_files": true }]
+            if (Array.isArray(data) && data.length > 0 && data[0].success === false) {
+                const errorData = data[0];
+                console.error("Upload Error:", errorData);
+
+                setError(errorData.error || 'Upload failed due to platform validation.');
+
+                if (errorData.clear_all_files) {
+                    setFiles([]);
+                }
+                setIsLoading(false);
+                return;
+            }
+
             if (!response.ok) throw new Error('Upload failed');
 
-            const data = await response.json();
             // Artificial delay for premium feel
             await new Promise(r => setTimeout(r, 1500));
             onSuccess(data);
@@ -235,7 +254,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                 {error && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                        className="mt-4 p-4 bg-red-50 rounded-xl flex items-start gap-3 text-red-700"
+                        className="mt-4 p-4 bg-red-50 rounded-xl flex items-start gap-3 text-red-700 border border-red-100 shadow-sm"
                     >
                         <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                         <div className="text-sm font-medium">{error}</div>
