@@ -107,18 +107,30 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
             const data = await response.json();
 
             // Check for specific error format (Array with error object)
-            // Example: [{ "success": false, "error": "...", "clear_all_files": true }]
+            // Example: [{ "success": false, "error": "...", "missing_platforms": ["Shopify"] }]
             if (Array.isArray(data) && data.length > 0 && data[0].success === false) {
                 const errorData = data[0];
                 console.error("Upload Error:", errorData);
 
                 setError(errorData.error || 'Upload failed due to platform validation.');
 
-                if (errorData.clear_all_files) {
+                // Smart Partial Clearing based on missing_platforms
+                if (errorData.missing_platforms && Array.isArray(errorData.missing_platforms) && errorData.missing_platforms.length > 0) {
+                    const missing = errorData.missing_platforms.map((p: string) => p.toLowerCase());
+
+                    // Keep files that are NOT in the missing list
+                    setFiles(prev => prev.filter(f => {
+                        // Robust check: check actual type or inferred type
+                        const fType = f.type || (f.id === shopifyFile.id ? 'shopify' : 'etsy');
+                        return !missing.includes(fType);
+                    }));
+                } else if (errorData.clear_all_files) {
+                    // Fallback to clearing all if no specific platform mentioned but flag is set
                     setFiles([]);
                 }
+
                 setIsLoading(false);
-                return;
+                return; // CRITICAL: Stop execution here so onSuccess is NOT called
             }
 
             if (!response.ok) throw new Error('Upload failed');
