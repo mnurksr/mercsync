@@ -36,6 +36,10 @@ export default function Dashboard() {
                         <Settings className="w-5 h-5" />
                         Integrations
                     </Link>
+                    <Link href="/dashboard/mapper" className="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-xl font-medium transition-colors">
+                        <div className="w-5 h-5 flex items-center justify-center">⚡️</div>
+                        Inventory Mapper
+                    </Link>
                 </nav>
 
                 <div className="p-4 border-t border-gray-100">
