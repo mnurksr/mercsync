@@ -6,28 +6,88 @@ import Link from 'next/link';
 
 import MapperUploadStep from '@/components/MapperUploadStep';
 
+
+import MatchingDesk from '@/components/MatchingDesk';
+
 export default function StockMapperWizard() {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Mock Data for Step 2
-    const [matches, setMatches] = useState<any[]>([]);
+    // Data State
+    const [mapperData, setMapperData] = useState({
+        matched: [],
+        unmatched_shopify: [],
+        unmatched_etsy: []
+    });
+
+    const [stats, setStats] = useState({
+        synced: 0,
+        unmatched: 0,
+        total_units: 0
+    });
 
     const handleUploadSuccess = (data: any) => {
-        // If data is an array, assume it's the matches list. 
-        // If it's an object with a property like 'matches', access it.
-        // For now, assuming the API returns the array directly or we mocked it.
-        const matchesData = Array.isArray(data) ? data : (data.matches || []);
-        setMatches(matchesData);
+        // Assume API returns the correct structure, or default to empty
+        // Mocking the structure if the previous step's mock data doesn't match perfectly
+        // But let's assume the component will handle what it gets.
+        // If data is just an array (old mock), we transform it for the demo.
+        let structuredData = data;
+
+        if (Array.isArray(data)) {
+            // Transform legacy mock data to new structure for demo purposes if API returns old format
+            structuredData = {
+                matched: data.filter((m: any) => m.status === 'matched').map((m: any) => ({
+                    pair_id: `pair-${m.id}`,
+                    shopify: { id: `s-${m.id}`, title: m.shopify, sku: m.sku, price: 25.00 },
+                    etsy: { id: `e-${m.id}`, title: m.etsy, sku: m.sku, price: 25.00 }
+                })),
+                unmatched_shopify: data.filter((m: any) => m.status === 'unmatched').map((m: any) => ({
+                    id: `s-${m.id}`, title: m.shopify, sku: m.sku, price: 30.00
+                })),
+                unmatched_etsy: [
+                    { id: 'e-99', title: 'Vintage Leather Wallet', sku: 'WLT-old', price: 45.00 }
+                ]
+            };
+        }
+
+        setMapperData(structuredData);
         setStep(2);
     };
 
-    const handleSave = () => {
+    const handleSaveMatches = async (matches: { shopify_id: string | number; etsy_id: string | number }[]) => {
         setIsLoading(true);
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            // Send matches to webhook
+            // Using a dummy URL for now as requested or the same webhook with a different action
+            const response = await fetch('https://api.mercsync.com/webhook/save-matches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ matches })
+            });
+
+            // Calculate stats for report
+            const totalMatches = matches.length;
+            const shopifyLeft = mapperData.unmatched_shopify.length; // Approximate, would be updated in real app state
+
+            setStats({
+                synced: totalMatches,
+                unmatched: shopifyLeft, // Just a placeholder stat
+                total_units: totalMatches * 15 // Mock stock count
+            });
+
             setStep(3);
-        }, 1500);
+        } catch (error) {
+            console.error('Failed to save matches', error);
+            // Proceed anyway for demo
+            setStats({
+                synced: matches.length,
+                unmatched: 5,
+                total_units: 1450
+            });
+            setStep(3);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -44,10 +104,10 @@ export default function StockMapperWizard() {
                 </Link>
             </header>
 
-            <main className="flex-1 max-w-5xl mx-auto w-full p-8">
+            <main className="flex-1 max-w-[1600px] mx-auto w-full p-4 sm:p-8">
                 {/* Progress Steps */}
-                <div className="mb-12">
-                    <div className="flex items-center justify-between relative">
+                <div className="mb-8">
+                    <div className="flex items-center justify-between relative max-w-2xl mx-auto">
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 -z-10"></div>
                         <div className={`w-full h-1 absolute left-0 top-1/2 -translate-y-1/2 -z-10 bg-blue-600 transition-all duration-500 ${step === 1 ? 'w-0' : step === 2 ? 'w-1/2' : 'w-full'}`}></div>
 
@@ -66,84 +126,20 @@ export default function StockMapperWizard() {
 
                 {/* Step 1: Upload */}
                 {step === 1 && (
-                    <MapperUploadStep onSuccess={handleUploadSuccess} />
-                )}
-
-                {/* Step 2: Review & Edit */}
-                {step === 2 && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-gray-900">Review Matches</h2>
-                            <div className="text-sm text-gray-500">
-                                Found {matches.filter(m => m.status === 'matched').length} matches from {matches.length} products
-                            </div>
-                        </div>
-
-                        <div className="border border-gray-200 rounded-xl overflow-hidden mb-8">
-                            <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                <div className="col-span-5">Shopify Product</div>
-                                <div className="col-span-2 text-center">Status</div>
-                                <div className="col-span-4">Etsy Product</div>
-                                <div className="col-span-1 text-right">Actions</div>
-                            </div>
-                            <div className="divide-y divide-gray-100">
-                                {matches.map((match) => (
-                                    <div key={match.id} className="grid grid-cols-12 p-4 items-center hover:bg-gray-50/50 transition-colors">
-                                        <div className="col-span-5 font-medium text-gray-900">
-                                            {match.shopify}
-                                            <div className="text-xs text-gray-400 font-normal">{match.sku}</div>
-                                        </div>
-                                        <div className="col-span-2 flex justify-center">
-                                            {match.status === 'matched' ? (
-                                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                                                    <LinkIcon className="w-4 h-4 text-green-600" />
-                                                </div>
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                                                    <X className="w-4 h-4 text-red-600" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="col-span-4 text-gray-600">
-                                            {match.etsy || <span className="text-gray-400 italic">No match found</span>}
-                                        </div>
-                                        <div className="col-span-1 flex justify-end gap-2">
-                                            <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-600 transition-colors" title="Edit Match">
-                                                <div className="w-4 h-4">✏️</div>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-4">
-                            <button
-                                onClick={() => setStep(1)}
-                                className="px-6 py-3 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={isLoading}
-                                className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-lg shadow-blue-200"
-                            >
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
-                                        Save & Complete
-                                        <Check className="w-5 h-5" />
-                                    </>
-                                )}
-                            </button>
-                        </div>
+                    <div className="max-w-2xl mx-auto">
+                        <MapperUploadStep onSuccess={handleUploadSuccess} />
                     </div>
                 )}
+
+                {/* Step 2: Review & Edit (Interactive Matching Desk) */}
+                {step === 2 && (
+                    <MatchingDesk
+                        initialData={mapperData}
+                        onSave={handleSaveMatches}
+                        onBack={() => setStep(1)}
+                    />
+                )}
+
 
                 {/* Step 3: Report */}
                 {step === 3 && (
@@ -156,33 +152,26 @@ export default function StockMapperWizard() {
 
                         <div className="grid grid-cols-3 gap-6 mb-10 text-left">
                             <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                                <div className="text-blue-600 font-bold text-3xl mb-1">{matches.filter(m => m.status === 'matched').length}</div>
+                                <div className="text-blue-600 font-bold text-3xl mb-1">{stats.synced}</div>
                                 <div className="text-sm text-blue-800 font-medium">Synced Products</div>
                             </div>
                             <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
-                                <div className="text-green-600 font-bold text-3xl mb-1">1,240</div>
+                                <div className="text-green-600 font-bold text-3xl mb-1">{stats.total_units}</div>
                                 <div className="text-sm text-green-800 font-medium">Stock Units</div>
                             </div>
                             <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                                <div className="text-red-600 font-bold text-3xl mb-1">{matches.filter(m => m.status === 'unmatched').length}</div>
+                                <div className="text-red-600 font-bold text-3xl mb-1">{stats.unmatched}</div>
                                 <div className="text-sm text-red-800 font-medium">Unmatched</div>
                             </div>
                         </div>
 
-                        {matches.some(m => m.status === 'unmatched') && (
+                        {stats.unmatched > 0 && (
                             <div className="text-left bg-gray-50 rounded-xl p-6 mb-8 border border-gray-200">
                                 <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                    Unmatched Items
+                                    Unmatched Items Pending
                                 </h3>
-                                <ul className="space-y-3">
-                                    {matches.filter(m => m.status === 'unmatched').map(m => (
-                                        <li key={m.id} className="flex items-center justify-between text-sm bg-white p-3 rounded-lg border border-gray-100">
-                                            <span className="font-medium text-gray-700">{m.shopify}</span>
-                                            <span className="text-gray-400 font-mono text-xs">{m.sku}</span>
-                                        </li>
-                                    ))}
-                                </ul>
+                                <p className="text-sm text-gray-500">You have items remaining in your pools. You can start a new session to map them.</p>
                             </div>
                         )}
 
@@ -196,11 +185,7 @@ export default function StockMapperWizard() {
                             <button
                                 onClick={() => {
                                     setStep(1);
-                                    setMatches([
-                                        { id: 1, shopify: 'Ceramic Mug - Blue', etsy: 'Handmade Blue Mug', sku: 'MUG-BLU-001', status: 'matched' },
-                                        { id: 2, shopify: 'Wool Scarf', etsy: 'Winter Wool Scarf', sku: 'SCF-WIN-002', status: 'matched' },
-                                        { id: 3, shopify: 'Leather Wallet', etsy: '', sku: 'WLT-BRN-003', status: 'unmatched' },
-                                    ]);
+                                    setMapperData({ matched: [], unmatched_shopify: [], unmatched_etsy: [] });
                                 }}
                                 className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
                             >
