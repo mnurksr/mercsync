@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import {
-    GripVertical, X, Save, Link as LinkIcon, Search,
-    Loader2, Unlink, Layers
+    GripVertical, X, Save, Search, Loader2, Link as LinkIcon
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Types ---
 interface Product {
@@ -42,7 +42,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
     const [shopifyFilter, setShopifyFilter] = useState('');
     const [etsyFilter, setEtsyFilter] = useState('');
 
-    // Sync Props
+    // State Sync
     const [prevInitialData, setPrevInitialData] = useState(initialData);
     if (initialData !== prevInitialData) {
         setMatchedPairs(initialData.matched || []);
@@ -116,28 +116,76 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
         </div>
     );
 
-    const ProductCard = ({ product, type, isDraggable = true }: { product: Product, type: 'shopify' | 'etsy', isDraggable?: boolean }) => {
+    // Animated Connector Line
+    const AnimatedConnector = () => (
+        <div className="flex flex-col items-center justify-center w-16 relative overflow-visible">
+            <svg width="60" height="20" viewBox="0 0 60 20" className="absolute top-1/2 -translate-y-1/2 pointer-events-none">
+                <motion.path
+                    d="M 0 10 C 20 10, 40 10, 60 10"
+                    fill="transparent"
+                    stroke="url(#gradient-line)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    initial={{ strokeDasharray: "5, 5", strokeDashoffset: 0 }}
+                    animate={{ strokeDashoffset: -20 }}
+                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                />
+                <defs>
+                    <linearGradient id="gradient-line" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#10B981" />
+                        <stop offset="100%" stopColor="#F97316" />
+                    </linearGradient>
+                </defs>
+            </svg>
+            <div className="w-6 h-6 rounded-full bg-white border border-gray-200 z-10 flex items-center justify-center shadow-sm">
+                <LinkIcon className="w-3 h-3 text-gray-400" />
+            </div>
+        </div>
+    );
+
+    const ProductCard = ({ product, type, isDraggable = true, index = 0 }: { product: Product, type: 'shopify' | 'etsy', isDraggable?: boolean, index?: number }) => {
         const isShopify = type === 'shopify';
         const accentColor = isShopify ? 'bg-emerald-500' : 'bg-orange-500';
+        const ringColor = isShopify ? 'ring-emerald-500/10' : 'ring-orange-500/10';
+        const glowColor = isShopify ? 'rgba(16, 185, 129, 0.4)' : 'rgba(249, 115, 22, 0.4)';
         const badgeBg = isShopify ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700';
 
         return (
-            <div
+            <motion.div
+                layout
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3, delay: index * 0.05 }}
                 draggable={isDraggable}
-                onDragStart={(e) => isDraggable && handleDragStart(e, type, product)}
+                onDragStart={(e) => {
+                    // Manual drag start for data transfer, visual is handled by framer?? 
+                    // No, Framer drag is different. We mix HTML5 drag for logic with Framer for visual cues.
+                    // Actually standard DnD is needed for dropping between separate lists easily without complex setup.
+                    // We'll just use onDragStart for data and Framer for hover/active visuals.
+                    // Note: 'whileDrag' prop in Framer only works if we use motion dragging system, which conflicts with HTML5 DnD.
+                    // So we stick to whileHover and whileTap.
+                    if (isDraggable) handleDragStart(e as any, type, product);
+                }}
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => isDraggable && handleDropOnProduct(e, product, type)}
+                onDrop={(e) => isDraggable && handleDropOnProduct(e as any, product, type)}
+                whileHover={{
+                    scale: 1.02,
+                    boxShadow: `0 4px 20px -5px ${glowColor}`,
+                    borderColor: 'transparent'
+                }}
+                whileTap={{ scale: 0.98 }}
                 className={`
-                    group relative bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm transition-all duration-200 h-20
-                    ${isDraggable ? 'cursor-grab active:cursor-grabbing hover:border-gray-300 hover:shadow-md' : ''}
-                    flex items-center gap-3 overflow-hidden select-none
+                    group relative bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm h-20
+                    ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}
+                    flex items-center gap-3 overflow-hidden select-none will-change-transform z-0 hover:z-10
                 `}
             >
                 {isDraggable && (
                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor} opacity-0 group-hover:opacity-100 transition-opacity`} />
                 )}
 
-                <div className="relative w-12 h-full rounded-md bg-gray-50 shrink-0 overflow-hidden ring-1 ring-black/5">
+                <div className="relative w-12 h-full rounded-lg bg-gray-50 shrink-0 overflow-hidden ring-1 ring-black/5">
                     {product.image ? (
                         <img src={product.image} alt={product.title} className="w-full h-full object-cover" />
                     ) : (
@@ -164,14 +212,14 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 {isDraggable && (
                     <GripVertical className="w-3.5 h-3.5 text-gray-300 absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all" />
                 )}
-            </div>
+            </motion.div>
         );
     };
 
     return (
-        <div className="flex flex-col gap-8 w-full font-sans max-h-screen overflow-hidden">
+        <div className="flex flex-col gap-6 w-full font-sans max-h-screen overflow-hidden">
 
-            {/* Page Header (No box container) */}
+            {/* Page Header */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-6 shrink-0">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Matches Review</h1>
@@ -196,7 +244,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 </div>
             </div>
 
-            {/* Layout Grid - Full page flow */}
+            {/* Layout Grid */}
             <div className="grid grid-cols-4 gap-8 items-start h-[calc(100vh-180px)]">
 
                 {/* Left Sidebar: Shopify - Sticky */}
@@ -216,11 +264,13 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overscroll-contain">
-                            {shopifyPool
-                                .filter(p => p.title.toLowerCase().includes(shopifyFilter.toLowerCase()) || p.sku.includes(shopifyFilter))
-                                .map(product => (
-                                    <ProductCard key={product.id} product={product} type="shopify" />
-                                ))}
+                            <AnimatePresence>
+                                {shopifyPool
+                                    .filter(p => p.title.toLowerCase().includes(shopifyFilter.toLowerCase()) || p.sku.includes(shopifyFilter))
+                                    .map((product, i) => (
+                                        <ProductCard key={product.id} product={product} type="shopify" index={i} />
+                                    ))}
+                            </AnimatePresence>
                             {shopifyPool.length === 0 && (
                                 <div className="text-center py-10 text-xs text-gray-400">No items found</div>
                             )}
@@ -228,12 +278,43 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                     </div>
                 </div>
 
-                {/* Center Column: Matches - Flows with page */}
+                {/* Center Column: Matches */}
                 <div className="col-span-2 h-full flex flex-col">
                     <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar overscroll-contain pb-10">
-                        {matchedPairs.length === 0 ? (
+                        <AnimatePresence>
+                            {matchedPairs.map((pair, i) => (
+                                <motion.div
+                                    key={pair.pair_id}
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    layout
+                                    className="relative group bg-white p-2 rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all flex items-center gap-2 z-0 hover:z-10"
+                                >
+                                    <div className="flex-1">
+                                        <ProductCard product={pair.shopify} type="shopify" isDraggable={false} />
+                                    </div>
+
+                                    <AnimatedConnector />
+
+                                    <div className="flex-1">
+                                        <ProductCard product={pair.etsy} type="etsy" isDraggable={false} />
+                                    </div>
+
+                                    <button
+                                        onClick={() => breakMatch(pair)}
+                                        className="absolute -right-2 -top-2 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-full p-1.5 shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20 hover:scale-110"
+                                        title="Unlink"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+
+                        {matchedPairs.length === 0 && (
                             <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center h-full flex flex-col items-center justify-center">
-                                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                                     <LinkIcon className="w-8 h-8 text-blue-400" />
                                 </div>
                                 <h3 className="text-gray-900 font-bold mb-2">No Matches Created Yet</h3>
@@ -241,42 +322,11 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                                     Drag items from the left (Shopify) and right (Etsy) panels here to link them together.
                                 </p>
                             </div>
-                        ) : (
-                            matchedPairs.map((pair) => (
-                                <div key={pair.pair_id} className="relative group bg-white p-2 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex items-center gap-4">
-                                    {/* Shopify Item */}
-                                    <div className="flex-1">
-                                        <ProductCard product={pair.shopify} type="shopify" isDraggable={false} />
-                                    </div>
-
-                                    {/* Link Icon */}
-                                    <div className="flex flex-col items-center justify-center">
-                                        <div className="w-8 h-8 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center relative">
-                                            <div className="absolute inset-x-0 top-1/2 h-0.5 w-16 bg-gray-200 -z-10 -translate-x-1/2 left-1/2"></div>
-                                            <LinkIcon className="w-3.5 h-3.5 text-blue-400" />
-                                        </div>
-                                    </div>
-
-                                    {/* Etsy Item */}
-                                    <div className="flex-1">
-                                        <ProductCard product={pair.etsy} type="etsy" isDraggable={false} />
-                                    </div>
-
-                                    {/* Unmatch Action (Absolute) */}
-                                    <button
-                                        onClick={() => breakMatch(pair)}
-                                        className="absolute -right-2 -top-2 bg-white text-gray-400 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-full p-1.5 shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10"
-                                        title="Unlink"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            ))
                         )}
                     </div>
                 </div>
 
-                {/* Right Sidebar: Etsy - Sticky */}
+                {/* Right Sidebar: Etsy */}
                 <div className="col-span-1 h-full flex flex-col">
                     <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-gray-200/50 shadow-sm flex flex-col h-full">
                         <div className="flex items-center justify-between mb-4 shrink-0">
@@ -293,11 +343,13 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-2 pl-1 custom-scrollbar overscroll-contain">
-                            {etsyPool
-                                .filter(p => p.title.toLowerCase().includes(etsyFilter.toLowerCase()) || p.sku.includes(etsyFilter))
-                                .map(product => (
-                                    <ProductCard key={product.id} product={product} type="etsy" />
-                                ))}
+                            <AnimatePresence>
+                                {etsyPool
+                                    .filter(p => p.title.toLowerCase().includes(etsyFilter.toLowerCase()) || p.sku.includes(etsyFilter))
+                                    .map((product, i) => (
+                                        <ProductCard key={product.id} product={product} type="etsy" index={i} />
+                                    ))}
+                            </AnimatePresence>
                             {etsyPool.length === 0 && (
                                 <div className="text-center py-10 text-xs text-gray-400">No items found</div>
                             )}
@@ -306,22 +358,6 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 </div>
 
             </div>
-
-            <style jsx global>{`
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 4px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background-color: #E5E7EB;
-                    border-radius: 20px;
-                }
-                .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-                    background-color: #D1D5DB;
-                }
-            `}</style>
         </div>
     );
 }
