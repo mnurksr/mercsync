@@ -118,7 +118,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
 
     // Animated Connector Line
     const AnimatedConnector = () => (
-        <div className="flex flex-col items-center justify-center w-16 relative overflow-visible">
+        <div className="flex flex-col items-center justify-center w-16 relative overflow-visible shrink-0 mx-2">
             <svg width="60" height="20" viewBox="0 0 60 20" className="absolute top-1/2 -translate-y-1/2 pointer-events-none">
                 <motion.path
                     d="M 0 10 C 20 10, 40 10, 60 10"
@@ -171,7 +171,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 className={`
                     group relative bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm h-20
                     ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}
-                    flex items-center gap-3 overflow-hidden select-none will-change-transform z-0 hover:z-10
+                    flex items-center gap-3 overflow-hidden select-none will-change-transform z-0 hover:z-10 w-full
                 `}
             >
                 {isDraggable && (
@@ -240,7 +240,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
             {/* Layout Grid */}
             <div className="grid grid-cols-4 gap-8 items-start h-[calc(100vh-180px)]">
 
-                {/* Left Sidebar: Shopify - Sticky */}
+                {/* Left Sidebar: Shopify */}
                 <div className="col-span-1 h-full flex flex-col">
                     <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-gray-200/50 shadow-sm flex flex-col h-full">
                         <div className="flex items-center justify-between mb-4 shrink-0">
@@ -257,7 +257,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overscroll-contain">
-                            <AnimatePresence>
+                            <AnimatePresence mode="popLayout">
                                 {shopifyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(shopifyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(shopifyFilter.toLowerCase()))
                                     .map((product, i) => (
@@ -273,24 +273,25 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
 
                 {/* Center Column: Matches */}
                 <div className="col-span-2 h-full flex flex-col">
-                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar overscroll-contain pb-10">
-                        <AnimatePresence>
+                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar overscroll-contain pb-10 px-1">
+                        <AnimatePresence mode="popLayout">
                             {matchedPairs.map((pair, i) => (
                                 <motion.div
                                     key={pair.pair_id}
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.9 }}
                                     layout
+                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                     className="relative group bg-white p-2 rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all flex items-center gap-2 z-0 hover:z-10"
                                 >
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <ProductCard product={pair.shopify} type="shopify" isDraggable={false} />
                                     </div>
 
                                     <AnimatedConnector />
 
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <ProductCard product={pair.etsy} type="etsy" isDraggable={false} />
                                     </div>
 
@@ -336,7 +337,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         </div>
 
                         <div className="flex-1 overflow-y-auto space-y-2 pl-1 custom-scrollbar overscroll-contain">
-                            <AnimatePresence>
+                            <AnimatePresence mode="popLayout">
                                 {etsyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(etsyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(etsyFilter.toLowerCase()))
                                     .map((product, i) => (
