@@ -210,10 +210,9 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
     };
 
     return (
-        <div className="flex flex-col gap-6 w-full font-sans max-h-screen overflow-hidden">
-
+        <div className="flex flex-col gap-6 w-full h-full font-sans">
             {/* Page Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-6 shrink-0">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4 shrink-0">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Matches Review</h1>
                     <p className="text-sm text-gray-500 mt-1">
@@ -237,12 +236,12 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 </div>
             </div>
 
-            {/* Layout Grid */}
-            <div className="grid grid-cols-4 gap-8 items-start h-[calc(100vh-220px)] min-h-[500px]">
+            {/* Layout Grid - Flex-1 to fill remaining vertical space */}
+            <div className="flex-1 min-h-0 grid grid-cols-4 gap-8">
 
                 {/* Left Sidebar: Shopify */}
-                <div className="col-span-1 h-full flex flex-col">
-                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-gray-200/50 shadow-sm flex flex-col h-full">
+                <div className="col-span-1 h-full flex flex-col min-h-0">
+                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-gray-200/50 shadow-sm flex flex-col h-full min-h-0">
                         <div className="flex items-center justify-between mb-4 shrink-0">
                             <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -256,7 +255,8 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                             <SearchBar value={shopifyFilter} onChange={setShopifyFilter} placeholder="Search shopify..." />
                         </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overscroll-contain pb-4">
+                        {/* Scrollable List */}
+                        <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pr-1 custom-scrollbar pb-6 overscroll-contain">
                             <AnimatePresence mode="popLayout">
                                 {shopifyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(shopifyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(shopifyFilter.toLowerCase()))
@@ -272,8 +272,9 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 </div>
 
                 {/* Center Column: Matches */}
-                <div className="col-span-2 h-full flex flex-col">
-                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar overscroll-contain pb-24 px-1">
+                <div className="col-span-2 h-full flex flex-col min-h-0">
+                    {/* Scrollable Center */}
+                    <div className="flex-1 overflow-y-auto min-h-0 space-y-3 custom-scrollbar pb-24 px-1 overscroll-contain">
                         <AnimatePresence mode="popLayout">
                             {matchedPairs.map((pair, i) => (
                                 <motion.div
@@ -309,7 +310,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                         </AnimatePresence>
 
                         {matchedPairs.length === 0 && (
-                            <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center h-full flex flex-col items-center justify-center">
+                            <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center h-full flex flex-col items-center justify-center min-h-[400px]">
                                 <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                                     <LinkIcon className="w-8 h-8 text-blue-400" />
                                 </div>
@@ -323,8 +324,8 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                 </div>
 
                 {/* Right Sidebar: Etsy */}
-                <div className="col-span-1 h-full flex flex-col">
-                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-gray-200/50 shadow-sm flex flex-col h-full">
+                <div className="col-span-1 h-full flex flex-col min-h-0">
+                    <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-gray-200/50 shadow-sm flex flex-col h-full min-h-0">
                         <div className="flex items-center justify-between mb-4 shrink-0">
                             <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-orange-500"></span>
@@ -338,7 +339,8 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                             <SearchBar value={etsyFilter} onChange={setEtsyFilter} placeholder="Search etsy..." />
                         </div>
 
-                        <div className="flex-1 overflow-y-auto space-y-2 pl-1 custom-scrollbar overscroll-contain">
+                        {/* Scrollable List */}
+                        <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pl-1 custom-scrollbar pb-6 overscroll-contain">
                             <AnimatePresence mode="popLayout">
                                 {etsyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(etsyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(etsyFilter.toLowerCase()))

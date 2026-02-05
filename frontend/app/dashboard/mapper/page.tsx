@@ -96,9 +96,9 @@ export default function StockMapperWizard() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+        <div className="h-screen bg-gray-50 flex flex-col font-sans overflow-hidden">
             {/* Header - Simplified for Wizard */}
-            <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 sticky top-0 z-10">
+            <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0 z-20">
                 <div className="flex items-center gap-2">
                     <Link href="/dashboard" className="text-xl font-bold tracking-tight text-blue-600">MercSync</Link>
                     <span className="text-gray-300">|</span>
@@ -109,9 +109,9 @@ export default function StockMapperWizard() {
                 </Link>
             </header>
 
-            <main className="flex-1 max-w-[1600px] mx-auto w-full p-4 sm:p-8">
+            <main className="flex-1 flex flex-col min-h-0 w-full max-w-[1600px] mx-auto p-4 sm:p-8">
                 {/* Progress Steps */}
-                <div className="mb-8">
+                <div className="mb-6 shrink-0">
                     <div className="flex items-center justify-between relative max-w-2xl mx-auto">
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 -z-10"></div>
                         <div className={`w-full h-1 absolute left-0 top-1/2 -translate-y-1/2 -z-10 bg-blue-600 transition-all duration-500 ${step === 1 ? 'w-0' : step === 2 ? 'w-1/2' : 'w-full'}`}></div>
@@ -129,76 +129,80 @@ export default function StockMapperWizard() {
                     </div>
                 </div>
 
-                {/* Step 1: Upload */}
-                {step === 1 && (
-                    <div className="max-w-2xl mx-auto">
-                        <MapperUploadStep onSuccess={handleUploadSuccess} />
-                    </div>
-                )}
-
-                {/* Step 2: Review & Edit (Interactive Matching Desk) */}
-                {step === 2 && (
-                    <MatchingDesk
-                        initialData={mapperData}
-                        onSave={handleSaveMatches}
-                        onBack={() => setStep(1)}
-                    />
-                )}
-
-
-                {/* Step 3: Report */}
-                {step === 3 && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 max-w-2xl mx-auto text-center">
-                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Check className="w-10 h-10 text-green-600" />
+                {/* Content Container - Flex-1 to take remaining space */}
+                <div className="flex-1 min-h-0 flex flex-col relative">
+                    {/* Step 1: Upload */}
+                    {step === 1 && (
+                        <div className="max-w-2xl mx-auto w-full overflow-y-auto custom-scrollbar py-4">
+                            <MapperUploadStep onSuccess={handleUploadSuccess} />
                         </div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Sync Complete!</h2>
-                        <p className="text-gray-500 mb-10">Your inventory has been successfully mapped and synchronized.</p>
+                    )}
 
-                        <div className="grid grid-cols-3 gap-6 mb-10 text-left">
-                            <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                                <div className="text-blue-600 font-bold text-3xl mb-1">{stats.synced}</div>
-                                <div className="text-sm text-blue-800 font-medium">Synced Products</div>
-                            </div>
-                            <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
-                                <div className="text-green-600 font-bold text-3xl mb-1">{stats.total_units}</div>
-                                <div className="text-sm text-green-800 font-medium">Stock Units</div>
-                            </div>
-                            <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                                <div className="text-red-600 font-bold text-3xl mb-1">{stats.unmatched}</div>
-                                <div className="text-sm text-red-800 font-medium">Unmatched</div>
+                    {/* Step 2: Review & Edit (Interactive Matching Desk) */}
+                    {step === 2 && (
+                        <MatchingDesk
+                            initialData={mapperData}
+                            onSave={handleSaveMatches}
+                            onBack={() => setStep(1)}
+                        />
+                    )}
+
+                    {/* Step 3: Report */}
+                    {step === 3 && (
+                        <div className="h-full overflow-y-auto custom-scrollbar">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 max-w-2xl mx-auto text-center my-auto">
+                                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <Check className="w-10 h-10 text-green-600" />
+                                </div>
+                                <h2 className="text-3xl font-bold text-gray-900 mb-2">Sync Complete!</h2>
+                                <p className="text-gray-500 mb-10">Your inventory has been successfully mapped and synchronized.</p>
+
+                                <div className="grid grid-cols-3 gap-6 mb-10 text-left">
+                                    <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                                        <div className="text-blue-600 font-bold text-3xl mb-1">{stats.synced}</div>
+                                        <div className="text-sm text-blue-800 font-medium">Synced Products</div>
+                                    </div>
+                                    <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+                                        <div className="text-green-600 font-bold text-3xl mb-1">{stats.total_units}</div>
+                                        <div className="text-sm text-green-800 font-medium">Stock Units</div>
+                                    </div>
+                                    <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
+                                        <div className="text-red-600 font-bold text-3xl mb-1">{stats.unmatched}</div>
+                                        <div className="text-sm text-red-800 font-medium">Unmatched</div>
+                                    </div>
+                                </div>
+
+                                {stats.unmatched > 0 && (
+                                    <div className="text-left bg-gray-50 rounded-xl p-6 mb-8 border border-gray-200">
+                                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                            Unmatched Items Pending
+                                        </h3>
+                                        <p className="text-sm text-gray-500">You have items remaining in your pools. You can start a new session to map them.</p>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-4 justify-center">
+                                    <Link
+                                        href="/dashboard"
+                                        className="px-8 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                                    >
+                                        Return to Dashboard
+                                    </Link>
+                                    <button
+                                        onClick={() => {
+                                            setStep(1);
+                                            setMapperData({ matched: [], unmatched_shopify: [], unmatched_etsy: [] });
+                                        }}
+                                        className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                                    >
+                                        New Mapping
+                                    </button>
+                                </div>
                             </div>
                         </div>
-
-                        {stats.unmatched > 0 && (
-                            <div className="text-left bg-gray-50 rounded-xl p-6 mb-8 border border-gray-200">
-                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                    Unmatched Items Pending
-                                </h3>
-                                <p className="text-sm text-gray-500">You have items remaining in your pools. You can start a new session to map them.</p>
-                            </div>
-                        )}
-
-                        <div className="flex gap-4 justify-center">
-                            <Link
-                                href="/dashboard"
-                                className="px-8 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
-                            >
-                                Return to Dashboard
-                            </Link>
-                            <button
-                                onClick={() => {
-                                    setStep(1);
-                                    setMapperData({ matched: [], unmatched_shopify: [], unmatched_etsy: [] });
-                                }}
-                                className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
-                            >
-                                New Mapping
-                            </button>
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </main>
         </div>
     );
