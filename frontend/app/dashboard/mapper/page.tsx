@@ -95,10 +95,10 @@ export default function StockMapperWizard() {
             });
 
             setStep(3);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to save matches', error);
-            // Don't show success screen on error
-            alert('Failed to save matches. Please try again.');
+            // Show specific error message from server/proxy
+            alert(`Failed to save matches: ${error.message || 'Unknown error'}`);
         } finally {
             setIsLoading(false);
         }
