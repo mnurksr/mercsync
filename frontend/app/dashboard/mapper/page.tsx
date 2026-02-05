@@ -4,24 +4,22 @@ import { useState } from 'react';
 import { Upload, ArrowRight, Check, X, Link as LinkIcon, FileSpreadsheet, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
+import MapperUploadStep from '@/components/MapperUploadStep';
+
 export default function StockMapperWizard() {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
 
     // Mock Data for Step 2
-    const [matches, setMatches] = useState([
-        { id: 1, shopify: 'Ceramic Mug - Blue', etsy: 'Handmade Blue Mug', sku: 'MUG-BLU-001', status: 'matched' },
-        { id: 2, shopify: 'Wool Scarf', etsy: 'Winter Wool Scarf', sku: 'SCF-WIN-002', status: 'matched' },
-        { id: 3, shopify: 'Leather Wallet', etsy: '', sku: 'WLT-BRN-003', status: 'unmatched' },
-    ]);
+    const [matches, setMatches] = useState<any[]>([]);
 
-    const handleUpload = () => {
-        setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsLoading(false);
-            setStep(2);
-        }, 2000);
+    const handleUploadSuccess = (data: any) => {
+        // If data is an array, assume it's the matches list. 
+        // If it's an object with a property like 'matches', access it.
+        // For now, assuming the API returns the array directly or we mocked it.
+        const matchesData = Array.isArray(data) ? data : (data.matches || []);
+        setMatches(matchesData);
+        setStep(2);
     };
 
     const handleSave = () => {
@@ -68,56 +66,7 @@ export default function StockMapperWizard() {
 
                 {/* Step 1: Upload */}
                 {step === 1 && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 max-w-2xl mx-auto text-center">
-                        <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                            <Upload className="w-8 h-8 text-blue-600" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Inventory Files</h2>
-                        <p className="text-gray-500 mb-8">Upload your product exports from Shopify and Etsy to start the mapping process.</p>
-
-                        <div className="grid gap-4 mb-8">
-                            <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 hover:border-blue-400 transition-colors cursor-pointer group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                        <FileSpreadsheet className="w-5 h-5 text-green-600" />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Shopify Export</h3>
-                                        <p className="text-xs text-gray-400">.csv format</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 hover:border-blue-400 transition-colors cursor-pointer group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                                        <FileSpreadsheet className="w-5 h-5 text-orange-600" />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Etsy Export</h3>
-                                        <p className="text-xs text-gray-400">.csv format</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={handleUpload}
-                            disabled={isLoading}
-                            className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-200 disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            {isLoading ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Analyzing Files...
-                                </>
-                            ) : (
-                                <>
-                                    Start Mapping
-                                    <ArrowRight className="w-5 h-5" />
-                                </>
-                            )}
-                        </button>
-                    </div>
+                    <MapperUploadStep onSuccess={handleUploadSuccess} />
                 )}
 
                 {/* Step 2: Review & Edit */}
