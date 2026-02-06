@@ -223,7 +223,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                             <div className="text-orange-500 mb-1">
                                 <Store className="w-6 h-6 mx-auto opacity-80" />
                             </div>
-                            <div className="text-4xl font-black text-gray-900 tracking-tight">
+                            <div className={`text-4xl font-black ${item.etsy_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'} tracking-tight`}>
                                 {etsy.stock}
                             </div>
                             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Stock</div>
