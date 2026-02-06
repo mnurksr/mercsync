@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Upload, ArrowRight, Check, X, Link as LinkIcon, FileSpreadsheet, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/components/AuthProvider';
+import { useRouter } from 'next/navigation';
 
 import MapperUploadStep from '@/components/MapperUploadStep';
 import MatchingDesk from '@/components/MatchingDesk';
@@ -11,6 +13,11 @@ import MapperReportStep, { MapperAnalysisResponse } from '@/components/MapperRep
 export default function StockMapperWizard() {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+
+    const { user } = useAuth();
+    const router = useRouter();
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [pendingMatches, setPendingMatches] = useState<any[] | null>(null);
 
     // Data State
     const [mapperData, setMapperData] = useState({
@@ -62,7 +69,34 @@ export default function StockMapperWizard() {
         setStep(2);
     };
 
+    // Restore state if user logs in after being prompted
+    useEffect(() => {
+        if (user) {
+            const savedMatches = localStorage.getItem('mercsync_pending_matches');
+            if (savedMatches) {
+                try {
+                    const matches = JSON.parse(savedMatches);
+                    // Clear storage to prevent infinite loops or stale data later
+                    localStorage.removeItem('mercsync_pending_matches');
+                    // Automatically trigger the save/analysis
+                    handleSaveMatches(matches);
+                } catch (e) {
+                    console.error("Failed to parse pending matches", e);
+                }
+            }
+        }
+    }, [user]);
+
     const handleSaveMatches = async (matches: any[]) => {
+        // Auth Gate: Check if user is logged in
+        if (!user) {
+            // Save state to localStorage
+            localStorage.setItem('mercsync_pending_matches', JSON.stringify(matches));
+            setPendingMatches(matches);
+            setShowAuthModal(true);
+            return;
+        }
+
         setIsLoading(true);
         try {
             // Send FULL MATCH DATA (original fields) via local proxy to avoid CORS
@@ -98,7 +132,7 @@ export default function StockMapperWizard() {
     };
 
     return (
-        <div className="h-screen bg-gray-50 flex flex-col font-sans overflow-hidden">
+        <div className="h-screen bg-gray-50 flex flex-col font-sans overflow-hidden relative">
             {/* Header - Simplified for Wizard */}
             <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0 z-20">
                 <div className="flex items-center gap-2">
@@ -164,6 +198,38 @@ export default function StockMapperWizard() {
                     )}
                 </div>
             </main>
+
+            {/* Auth Gate Modal */}
+            {showAuthModal && (
+                <div className="absolute inset-0 z-50 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center border border-gray-100">
+                        <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <LinkIcon className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-2">Save & Analyze Results</h3>
+                        <p className="text-gray-500 mb-8 leading-relaxed">
+                            To view your detailed Crisis Analysis report and sync your products, please sign in or create a free account. Your work has been saved.
+                        </p>
+                        <div className="space-y-3">
+                            <Link
+                                href="/login?redirect=/dashboard/mapper"
+                                className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-600/20"
+                            >
+                                Sign In to View Results
+                            </Link>
+                            <Link
+                                href="/login?flow=register&redirect=/dashboard/mapper"
+                                className="block w-full bg-white hover:bg-gray-50 text-gray-900 font-bold py-3.5 rounded-xl border border-gray-200 transition-all"
+                            >
+                                Create Free Account
+                            </Link>
+                        </div>
+                        <p className="mt-6 text-xs text-gray-400">
+                            By continuing, you agree to our Terms of Service and Privacy Policy.
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

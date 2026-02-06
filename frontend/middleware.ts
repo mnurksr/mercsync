@@ -60,7 +60,8 @@ export async function middleware(request: NextRequest) {
     const isPublicRoute = request.nextUrl.pathname === '/' ||
         request.nextUrl.pathname.startsWith('/login') ||
         request.nextUrl.pathname.startsWith('/privacy') ||
-        request.nextUrl.pathname.startsWith('/terms')
+        request.nextUrl.pathname.startsWith('/terms') ||
+        request.nextUrl.pathname.startsWith('/dashboard/mapper')
 
     // If user is not signed in and visits a protected route, redirect to login
     if (!session && !isPublicRoute) {
