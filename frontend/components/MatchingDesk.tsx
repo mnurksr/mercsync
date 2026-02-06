@@ -259,7 +259,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                                 {shopifyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(shopifyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(shopifyFilter.toLowerCase()))
                                     .map((product, i) => (
-                                        <ProductCard key={product.id} product={product} type="shopify" index={i} />
+                                        <ProductCard key={`${product.id}-${i}`} product={product} type="shopify" index={i} />
                                     ))}
                             </AnimatePresence>
                             {shopifyPool.length === 0 && (
@@ -343,7 +343,7 @@ export default function MatchingDesk({ initialData, onSave, onBack }: MatchingDe
                                 {etsyPool
                                     .filter(p => (p.title || '').toLowerCase().includes(etsyFilter.toLowerCase()) || (p.sku || '').toLowerCase().includes(etsyFilter.toLowerCase()))
                                     .map((product, i) => (
-                                        <ProductCard key={product.id} product={product} type="etsy" index={i} />
+                                        <ProductCard key={`${product.id}-${i}`} product={product} type="etsy" index={i} />
                                     ))}
                             </AnimatePresence>
                             {etsyPool.length === 0 && (
