@@ -172,7 +172,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
         >
             <div className="flex flex-col xl:flex-row h-full">
 
-                {/* Left: Product Info (Shopify Context) */}
+                {/* Left: Product Info (Shopify) */}
                 <div className="p-8 xl:w-[28%] bg-white border-b xl:border-b-0 xl:border-r border-gray-100 flex flex-col md:flex-row xl:flex-col items-center xl:items-start text-center xl:text-left gap-6 hover:bg-gray-50/50 transition-colors">
                     <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500">
                         <img src={shopify.image_url} alt="Shopify Product" className="w-full h-full object-cover" />
@@ -195,7 +195,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                     </div>
                 </div>
 
-                {/* Center: Inventory Comparison Heatmap */}
+                {/* Center: Inventory Comparison */}
                 <div className="flex-1 p-8 flex flex-col justify-center bg-gradient-to-b from-white to-gray-50/30">
                     <div className="flex items-center justify-center md:justify-around gap-8 mb-8 relative">
                         {/* Connecting Line */}
@@ -237,11 +237,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
 
                     {/* Risk Highlight */}
                     {item.shopify_oversell_units > 0 && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="bg-red-50 rounded-2xl p-4 border border-red-100 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 shadow-sm mx-auto max-w-lg"
-                        >
+                        <div className="bg-red-50 rounded-2xl p-4 border border-red-100 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 shadow-sm mx-auto max-w-lg">
                             <div className="p-2 bg-red-100 rounded-lg shrink-0">
                                 <TrendingDown className="w-5 h-5 text-red-600" />
                             </div>
@@ -253,54 +249,47 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                                     <span className="font-black text-red-600">${item.shopify_loss_risk.toLocaleString()}</span> Potential Loss
                                 </div>
                             </div>
-                        </motion.div>
+                        </div>
                     )}
                 </div>
 
-                {/* Right: Action Center (With Etsy Context) */}
-                <div className="xl:w-[28%] bg-slate-900 text-slate-300 relative overflow-hidden flex flex-col">
-                    {/* Background Glow */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3"></div>
-
-                    {/* Etsy Context Section - Requested by User */}
-                    <div className="flex-1 p-8 border-b border-slate-800">
-                        <div className="flex items-center gap-2 mb-4 opacity-70">
-                            <Store className="w-4 h-4 text-orange-400" />
-                            <span className="text-xs font-bold uppercase tracking-widest text-orange-400">Target Source (Etsy)</span>
-                        </div>
-
-                        <div className="flex gap-4 items-start">
-                            <div className="w-16 h-16 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
-                                <img src={etsy.image_url} alt="Etsy Source" className="w-full h-full object-cover opacity-80" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium text-slate-200 line-clamp-2 leading-snug mb-1" title={etsy.product_name}>
-                                    {etsy.product_name}
-                                </p>
-                                <p className="text-xs font-mono text-slate-500">
-                                    {etsy.sku_code || 'NO-SKU'}
-                                </p>
-                            </div>
+                {/* Right: Target Context (Etsy) - Symmetrical Light Theme */}
+                <div className="p-8 xl:w-[28%] bg-white border-t xl:border-t-0 xl:border-l border-gray-100 flex flex-col items-center xl:items-start text-center xl:text-left gap-6 hover:bg-gray-50/50 transition-colors">
+                    <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500 order-1">
+                        <img src={etsy.image_url} alt="Etsy Product" className="w-full h-full object-cover" />
+                        <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
+                            <Store className="w-3 h-3" /> Etsy (Target)
                         </div>
                     </div>
 
-                    {/* Action Button Section */}
-                    <div className="p-8 bg-slate-900/50 backdrop-blur-sm relative z-10">
-                        <div className="mb-4">
-                            <div className="text-[10px] text-blue-400 uppercase tracking-widest font-bold mb-1">Recommended Action</div>
-                            <div className="text-sm font-medium text-white leading-snug">
-                                Sync inventory to prevent overselling
-                            </div>
+                    <div className="order-2 w-full">
+                        <h4 className="font-bold text-gray-900 text-lg leading-tight mb-2">
+                            {etsy.product_name}
+                        </h4>
+                        <div className="flex flex-wrap gap-2 justify-center xl:justify-start mb-4">
+                            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
+                                {etsy.sku_code || 'NO-SKU'}
+                            </span>
+                            <span className="text-xs font-bold text-orange-700 bg-orange-50 px-2 py-1 rounded-md border border-orange-100">
+                                ${etsy.price}
+                            </span>
                         </div>
 
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-all group-active"
-                        >
-                            <Zap className="w-5 h-5 fill-white" />
-                            <span className="truncate">{item.quick_action}</span>
-                        </motion.button>
+                        {/* Recommendation Alert Box (Replaces Button) */}
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-left w-full relative overflow-hidden group/alert">
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                            <div className="flex items-start gap-3">
+                                <div className="p-1.5 bg-blue-100 rounded-full shrink-0 text-blue-600 mt-0.5">
+                                    <Zap className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                    <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Recommendation</div>
+                                    <div className="text-sm font-bold text-blue-900 leading-snug">
+                                        {item.quick_action}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
