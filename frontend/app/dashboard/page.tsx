@@ -70,6 +70,23 @@ export default function Dashboard() {
 
                 <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-8">
 
+                    {/* CTA: Inventory Mapper */}
+                    <Link href="/dashboard/mapper" className="block group">
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 sm:p-8 shadow-lg shadow-blue-500/20 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 hover:shadow-xl hover:scale-[1.01] transition-all">
+                            <div>
+                                <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                                    <span>⚡️</span> Start Stock Mapping
+                                </h2>
+                                <p className="text-blue-100 max-w-xl text-sm sm:text-base">
+                                    Upload your inventory files to detect overselling risks and sync your stores automatically.
+                                </p>
+                            </div>
+                            <div className="bg-white/10 backdrop-blur-sm border border-white/20 px-6 py-3 rounded-xl font-bold flex items-center gap-2 group-hover:bg-white group-hover:text-blue-600 transition-colors shrink-0">
+                                Launch Wizard <ChevronDown className="w-5 h-5 -rotate-90" />
+                            </div>
+                        </div>
+                    </Link>
+
                     {/* Stats Section */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
