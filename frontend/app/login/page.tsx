@@ -2,13 +2,15 @@
 
 import { useAuth } from '@/components/AuthProvider';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, CheckCircle2, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AuthPage() {
     const { supabase } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const redirectUrl = searchParams.get('redirect') || '/dashboard';
 
     const [isLogin, setIsLogin] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
@@ -35,11 +37,14 @@ export default function AuthPage() {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
-                router.push('/dashboard');
+                router.push(redirectUrl);
             } else {
                 const { error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
                 setSuccessMsg('Registration successful! Please check your email for the verification link.');
+                // For registration, we might want to keep them here or redirect depending on email verification settings.
+                // Assuming email verification is required or flow is different, but for now we keep as is or can redirect too if auto-login logic exists (Supabase auto-logins on signup usually unless configured otherwise). 
+                // Let's stick to showing success message for signup.
             }
         } catch (error: any) {
             setErrorMsg(error.message || 'An error occurred.');
