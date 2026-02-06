@@ -130,7 +130,7 @@ export default function MapperReportStep({ data, onRestart }: { data: MapperAnal
                 <motion.div variants={itemVariants} className="flex items-center justify-between px-2 border-b border-gray-100 pb-4">
                     <h3 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                         Action Required
-                        <span className="bg-gray-900 text-white text-base py-1 px-4 rounded-full font-medium">{analysis.length} Items</span>
+                        <span className="bg-gray-900 text-white text-base py-1 px-4 rounded-full font-medium">{dashboard_metrics.products_at_risk} Items</span>
                     </h3>
                 </motion.div>
 
