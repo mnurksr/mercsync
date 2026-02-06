@@ -5,9 +5,8 @@ import { Upload, ArrowRight, Check, X, Link as LinkIcon, FileSpreadsheet, Loader
 import Link from 'next/link';
 
 import MapperUploadStep from '@/components/MapperUploadStep';
-
-
 import MatchingDesk from '@/components/MatchingDesk';
+import MapperReportStep, { MapperAnalysisResponse } from '@/components/MapperReportStep';
 
 export default function StockMapperWizard() {
     const [step, setStep] = useState(1);
@@ -20,11 +19,7 @@ export default function StockMapperWizard() {
         unmatched_etsy: []
     });
 
-    const [stats, setStats] = useState({
-        synced: 0,
-        unmatched: 0,
-        total_units: 0
-    });
+    const [reportData, setReportData] = useState<MapperAnalysisResponse | null>(null);
 
     const handleUploadSuccess = (data: any) => {
         // n8n returns an array with a single object containing the lists
@@ -84,17 +79,15 @@ export default function StockMapperWizard() {
                 throw new Error(errorData.error || 'Failed to save matches');
             }
 
-            // Calculate stats for report (using the full matched array length)
-            const totalMatches = matches.length;
-            const shopifyLeft = mapperData.unmatched_shopify.length; // Approximate local state
+            const responseData = await response.json();
+            // The API returns an array [ { dashboard_metrics: ..., analysis: ... } ]
+            // We need to take the first item for the report
+            const analysisResult = Array.isArray(responseData) ? responseData[0] : responseData;
 
-            setStats({
-                synced: totalMatches,
-                unmatched: shopifyLeft,
-                total_units: totalMatches
-            });
-
+            console.log("Analysis Result:", analysisResult);
+            setReportData(analysisResult);
             setStep(3);
+
         } catch (error: any) {
             console.error('Failed to save matches', error);
             // Show specific error message from server/proxy
@@ -157,58 +150,16 @@ export default function StockMapperWizard() {
                     )}
 
                     {/* Step 3: Report */}
-                    {step === 3 && (
-                        <div className="h-full overflow-y-auto custom-scrollbar">
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 max-w-2xl mx-auto text-center my-auto">
-                                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <Check className="w-10 h-10 text-green-600" />
-                                </div>
-                                <h2 className="text-3xl font-bold text-gray-900 mb-2">Sync Complete!</h2>
-                                <p className="text-gray-500 mb-10">Your inventory has been successfully mapped and synchronized.</p>
-
-                                <div className="grid grid-cols-3 gap-6 mb-10 text-left">
-                                    <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                                        <div className="text-blue-600 font-bold text-3xl mb-1">{stats.synced}</div>
-                                        <div className="text-sm text-blue-800 font-medium">Synced Products</div>
-                                    </div>
-                                    <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
-                                        <div className="text-green-600 font-bold text-3xl mb-1">{stats.total_units}</div>
-                                        <div className="text-sm text-green-800 font-medium">Stock Units</div>
-                                    </div>
-                                    <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                                        <div className="text-red-600 font-bold text-3xl mb-1">{stats.unmatched}</div>
-                                        <div className="text-sm text-red-800 font-medium">Unmatched</div>
-                                    </div>
-                                </div>
-
-                                {stats.unmatched > 0 && (
-                                    <div className="text-left bg-gray-50 rounded-xl p-6 mb-8 border border-gray-200">
-                                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                            Unmatched Items Pending
-                                        </h3>
-                                        <p className="text-sm text-gray-500">You have items remaining in your pools. You can start a new session to map them.</p>
-                                    </div>
-                                )}
-
-                                <div className="flex gap-4 justify-center">
-                                    <Link
-                                        href="/dashboard"
-                                        className="px-8 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
-                                    >
-                                        Return to Dashboard
-                                    </Link>
-                                    <button
-                                        onClick={() => {
-                                            setStep(1);
-                                            setMapperData({ matched: [], unmatched_shopify: [], unmatched_etsy: [] });
-                                        }}
-                                        className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
-                                    >
-                                        New Mapping
-                                    </button>
-                                </div>
-                            </div>
+                    {step === 3 && reportData && (
+                        <div className="h-full overflow-y-auto custom-scrollbar pb-10">
+                            <MapperReportStep
+                                data={reportData}
+                                onRestart={() => {
+                                    setStep(1);
+                                    setMapperData({ matched: [], unmatched_shopify: [], unmatched_etsy: [] });
+                                    setReportData(null);
+                                }}
+                            />
                         </div>
                     )}
                 </div>
