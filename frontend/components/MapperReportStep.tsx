@@ -231,8 +231,9 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                     </div>
 
                     <div className="space-y-4 max-w-lg mx-auto w-full">
+
                         {/* Risk Highlight - Modern & Minimal */}
-                        {item.shopify_oversell_units > 0 && (
+                        {item.shopify_oversell_units > 0 ? (
                             <div className="bg-red-50/50 rounded-xl p-3 border border-red-100/50 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 text-sm">
                                 <div className="flex items-center gap-2">
                                     <TrendingDown className="w-4 h-4 text-red-500" />
@@ -242,6 +243,18 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                                     <span className="font-bold text-red-600">{item.shopify_oversell_units} Excess</span>
                                     <span className="mx-2 text-red-200">|</span>
                                     <span className="font-bold text-red-600">${item.shopify_loss_risk.toLocaleString()} Loss</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-amber-50/50 rounded-xl p-3 border border-amber-100/50 flex flex-col md:flex-row items-center justify-center gap-3 text-amber-800 text-sm">
+                                <div className="flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                    <span className="font-bold uppercase text-[10px] text-amber-500 tracking-wider">Analysis:</span>
+                                </div>
+                                <div>
+                                    <span className="font-bold text-amber-700">Stock Mismatch</span>
+                                    <span className="mx-2 text-amber-200">|</span>
+                                    <span className="font-bold text-amber-700">Sync Required</span>
                                 </div>
                             </div>
                         )}
