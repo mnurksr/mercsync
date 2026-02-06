@@ -154,6 +154,7 @@ export default function MapperReportStep({ data, onRestart }: { data: MapperAnal
     );
 }
 
+
 function RiskCard({ item }: { item: AnalysisItem }) {
     const { shopify, etsy } = item.details;
     const isCritical = item.status.includes('critical') || item.severity > 50;
@@ -195,7 +196,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                     </div>
                 </div>
 
-                {/* Center: Inventory Comparison */}
+                {/* Center: Inventory Comparison & Action */}
                 <div className="flex-1 p-8 flex flex-col justify-center bg-gradient-to-b from-white to-gray-50/30">
                     <div className="flex items-center justify-center md:justify-around gap-8 mb-8 relative">
                         {/* Connecting Line */}
@@ -215,9 +216,11 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                             <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">Stock</div>
                         </div>
 
-                        {/* Conflict Icon */}
-                        <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center border border-red-100 z-10 shadow-sm animate-pulse-slow">
-                            <ArrowRight className="w-5 h-5 text-red-400" />
+                        {/* Connection Icon (Replaced Arrow) */}
+                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-200 z-10 shadow-sm rotate-45">
+                            <div className="-rotate-45">
+                                <LinkIcon className="w-5 h-5 text-gray-400" />
+                            </div>
                         </div>
 
                         {/* Etsy Node */}
@@ -235,60 +238,59 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                         </div>
                     </div>
 
-                    {/* Risk Highlight */}
-                    {item.shopify_oversell_units > 0 && (
-                        <div className="bg-red-50 rounded-2xl p-4 border border-red-100 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 shadow-sm mx-auto max-w-lg">
-                            <div className="p-2 bg-red-100 rounded-lg shrink-0">
-                                <TrendingDown className="w-5 h-5 text-red-600" />
+                    <div className="space-y-4 max-w-lg mx-auto w-full">
+                        {/* Risk Highlight */}
+                        {item.shopify_oversell_units > 0 && (
+                            <div className="bg-red-50 rounded-2xl p-4 border border-red-100 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 shadow-sm w-full">
+                                <div className="p-2 bg-red-100 rounded-lg shrink-0">
+                                    <TrendingDown className="w-5 h-5 text-red-600" />
+                                </div>
+                                <div className="text-center md:text-left">
+                                    <div className="text-xs uppercase font-bold text-red-400 tracking-wider mb-0.5">Oversell Risk Analysis</div>
+                                    <div className="font-semibold text-lg">
+                                        <span className="font-black text-red-600">{item.shopify_oversell_units} Units</span> Excess
+                                        <span className="mx-2 text-red-300">|</span>
+                                        <span className="font-black text-red-600">${item.shopify_loss_risk.toLocaleString()}</span> Potential Loss
+                                    </div>
+                                </div>
                             </div>
-                            <div className="text-center md:text-left">
-                                <div className="text-xs uppercase font-bold text-red-400 tracking-wider mb-0.5">Oversell Risk Analysis</div>
-                                <div className="font-semibold text-lg">
-                                    <span className="font-black text-red-600">{item.shopify_oversell_units} Units</span> Excess
-                                    <span className="mx-2 text-red-300">|</span>
-                                    <span className="font-black text-red-600">${item.shopify_loss_risk.toLocaleString()}</span> Potential Loss
+                        )}
+
+                        {/* Recommendation Alert Box (Moved to Center) */}
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-left w-full relative overflow-hidden group/alert flex items-center gap-4">
+                            <div className="p-3 bg-blue-100 rounded-lg shrink-0 text-blue-600">
+                                <Zap className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Recommendation</div>
+                                <div className="text-sm font-bold text-blue-900 leading-snug">
+                                    {item.quick_action}
                                 </div>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
 
-                {/* Right: Target Context (Etsy) - Symmetrical Light Theme */}
+                {/* Right: Product Info (Etsy) - Identical Symmetry */}
                 <div className="p-8 xl:w-[28%] bg-white border-t xl:border-t-0 xl:border-l border-gray-100 flex flex-col items-center xl:items-start text-center xl:text-left gap-6 hover:bg-gray-50/50 transition-colors">
-                    <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500 order-1">
+                    <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500">
                         <img src={etsy.image_url} alt="Etsy Product" className="w-full h-full object-cover" />
                         <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
-                            <Store className="w-3 h-3" /> Etsy (Target)
+                            <Store className="w-3 h-3" /> Etsy
                         </div>
                     </div>
 
-                    <div className="order-2 w-full">
+                    <div>
                         <h4 className="font-bold text-gray-900 text-lg leading-tight mb-2">
                             {etsy.product_name}
                         </h4>
-                        <div className="flex flex-wrap gap-2 justify-center xl:justify-start mb-4">
+                        <div className="flex flex-wrap gap-2 justify-center xl:justify-start">
                             <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
                                 {etsy.sku_code || 'NO-SKU'}
                             </span>
                             <span className="text-xs font-bold text-orange-700 bg-orange-50 px-2 py-1 rounded-md border border-orange-100">
                                 ${etsy.price}
                             </span>
-                        </div>
-
-                        {/* Recommendation Alert Box (Replaces Button) */}
-                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-left w-full relative overflow-hidden group/alert">
-                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
-                            <div className="flex items-start gap-3">
-                                <div className="p-1.5 bg-blue-100 rounded-full shrink-0 text-blue-600 mt-0.5">
-                                    <Zap className="w-3.5 h-3.5" />
-                                </div>
-                                <div>
-                                    <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Recommendation</div>
-                                    <div className="text-sm font-bold text-blue-900 leading-snug">
-                                        {item.quick_action}
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
