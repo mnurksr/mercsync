@@ -18,6 +18,7 @@ export default function StockMapperWizard() {
     const router = useRouter();
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [pendingMatches, setPendingMatches] = useState<any[] | null>(null);
+    const [isCheckingRestore, setIsCheckingRestore] = useState(true);
 
     // Data State
     const [mapperData, setMapperData] = useState({
@@ -28,6 +29,7 @@ export default function StockMapperWizard() {
 
     const [reportData, setReportData] = useState<MapperAnalysisResponse | null>(null);
 
+    // ... (handleUploadSuccess remains the same) ...
     const handleUploadSuccess = (data: any) => {
         // n8n returns an array with a single object containing the lists
         // Output format: [ { matched: [...], unmatched_shopify: [...], unmatched_etsy: [...] } ]
@@ -69,28 +71,35 @@ export default function StockMapperWizard() {
         setStep(2);
     };
 
+
     // Restore state if user logs in after being prompted
     useEffect(() => {
-        if (user) {
-            const savedMatches = localStorage.getItem('mercsync_pending_matches');
-            if (savedMatches) {
-                try {
-                    const matches = JSON.parse(savedMatches);
-                    // Clear storage to prevent infinite loops or stale data later
-                    localStorage.removeItem('mercsync_pending_matches');
-                    // Automatically trigger the save/analysis
-                    handleSaveMatches(matches);
-                } catch (e) {
-                    console.error("Failed to parse pending matches", e);
+        const checkRestore = async () => {
+            if (user) {
+                const savedMatches = localStorage.getItem('mercsync_pending_matches');
+                if (savedMatches) {
+                    try {
+                        const matches = JSON.parse(savedMatches);
+                        localStorage.removeItem('mercsync_pending_matches');
+                        // Keep isCheckingRestore true while we process
+                        await handleSaveMatches(matches);
+                        setIsCheckingRestore(false);
+                        return;
+                    } catch (e) {
+                        console.error("Failed to parse pending matches", e);
+                    }
                 }
             }
-        }
+            // If no user or no saved matches, stop checking
+            setIsCheckingRestore(false);
+        };
+
+        checkRestore();
     }, [user]);
 
     const handleSaveMatches = async (matches: any[]) => {
         // Auth Gate: Check if user is logged in
         if (!user) {
-            // Save state to localStorage
             localStorage.setItem('mercsync_pending_matches', JSON.stringify(matches));
             setPendingMatches(matches);
             setShowAuthModal(true);
@@ -103,8 +112,6 @@ export default function StockMapperWizard() {
             const response = await fetch('/api/save-matches', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // User requested strictly the "matched array". Using { matches } wrapper for safety, 
-                // but matches array contains full shopify/etsy objects with all original fields.
                 body: JSON.stringify({ matches })
             });
 
@@ -114,8 +121,6 @@ export default function StockMapperWizard() {
             }
 
             const responseData = await response.json();
-            // The API returns an array [ { dashboard_metrics: ..., analysis: ... } ]
-            // We need to take the first item for the report
             const analysisResult = Array.isArray(responseData) ? responseData[0] : responseData;
 
             console.log("Analysis Result:", analysisResult);
@@ -124,12 +129,22 @@ export default function StockMapperWizard() {
 
         } catch (error: any) {
             console.error('Failed to save matches', error);
-            // Show specific error message from server/proxy
             alert(`Failed to save matches: ${error.message || 'Unknown error'}`);
         } finally {
             setIsLoading(false);
         }
     };
+
+    if (isCheckingRestore) {
+        return (
+            <div className="h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-700">Restoring your analysis...</h3>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-screen bg-gray-50 flex flex-col font-sans overflow-hidden relative">
