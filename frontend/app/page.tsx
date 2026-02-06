@@ -63,6 +63,32 @@ export default function LandingPage() {
           </div>
         </div>
 
+        {/* Free Tool CTA Section - New Addition */}
+        <div className="mt-16 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-white/10 transition-colors duration-700"></div>
+
+            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+              <div className="flex-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold uppercase tracking-wider mb-4 border border-blue-500/30">
+                  <Zap className="w-3 h-3 text-yellow-400" /> Free Tool
+                </div>
+                <h2 className="text-3xl font-bold text-white mb-3">Calculate Your Overselling Risk</h2>
+                <p className="text-gray-300 text-lg">
+                  Upload your inventory files and instantly see how much money you're losing to sync errors. <span className="font-semibold text-white">No sign up required.</span>
+                </p>
+              </div>
+              <Link
+                href="/dashboard/mapper"
+                className="shrink-0 px-8 py-4 bg-white text-gray-900 font-bold rounded-xl hover:bg-gray-100 hover:scale-105 transition-all shadow-xl shadow-black/20 flex items-center gap-2"
+              >
+                Success Calculator
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {/* How MercSync Works */}
         <div className="mt-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
