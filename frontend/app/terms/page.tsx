@@ -6,7 +6,7 @@ export default function TermsPage() {
         <div className="min-h-screen bg-white text-gray-900 font-sans py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl mx-auto">
                 <div className="mb-8">
-                    <Link href="/" className="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors">
+                    <Link href="/" className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Go Back
                     </Link>

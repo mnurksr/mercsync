@@ -1,7 +1,8 @@
 'use client';
 
 import { motion, Variants } from 'framer-motion';
-import { ShoppingBag, Store, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight, Link as LinkIcon } from 'lucide-react';
+import { ShoppingBag, Store, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight, Link as LinkIcon, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 
 // --- Types based on User Request ---
 export interface MapperAnalysisResponse {
@@ -116,13 +117,17 @@ export default function MapperReportStep({ data, onRestart }: { data: MapperAnal
                 </h2>
                 <div className="text-gray-400 text-sm font-bold uppercase tracking-[0.3em] mb-6">Total Oversell Risk Exposure</div>
 
-                <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-xl shadow-red-600/30 flex items-center gap-2"
-                >
-                    <AlertTriangle className="w-5 h-5 fill-white" />
-                    Status: Critical
-                </motion.div>
+                <Link href="/pricing">
+                    <motion.div
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-10 py-4 rounded-2xl font-bold text-lg shadow-2xl shadow-blue-600/40 flex items-center gap-3 cursor-pointer hover:shadow-blue-600/60 transition-shadow"
+                    >
+                        <Sparkles className="w-5 h-5" />
+                        Prevent This Loss – See Plans
+                        <ArrowRight className="w-5 h-5" />
+                    </motion.div>
+                </Link>
             </motion.div>
 
             {/* 3. Product Cards: Risk Analysis */}

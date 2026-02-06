@@ -58,7 +58,7 @@ export default function AuthPage() {
 
             <div className="mb-8 text-center">
                 <Link href="/" className="inline-flex items-center gap-2 mb-4">
-                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">M</div>
+                    <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center text-white font-bold text-xl">M</div>
                     <span className="text-2xl font-bold text-gray-900 tracking-tight">MercSync</span>
                 </Link>
                 <h2 className="text-gray-500 font-medium">
