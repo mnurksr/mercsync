@@ -157,7 +157,7 @@ export default function MapperReportStep({ data, onRestart }: { data: MapperAnal
 
 function RiskCard({ item }: { item: AnalysisItem }) {
     const { shopify, etsy } = item.details;
-    const isCritical = item.status.includes('critical') || item.severity > 50;
+    const isCritical = item.status.includes('critical') || item.severity > 50 || (item.shopify_oversell_units + item.etsy_oversell_units) > 0;
 
     return (
         <motion.div
