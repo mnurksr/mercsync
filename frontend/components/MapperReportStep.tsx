@@ -1,9 +1,9 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { ShoppingBag, Store, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert } from 'lucide-react';
+import { motion, Variants } from 'framer-motion';
+import { ShoppingBag, Store, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight } from 'lucide-react';
 
-// --- New Types based on User Request ---
+// --- Types based on User Request ---
 export interface MapperAnalysisResponse {
     dashboard_metrics: {
         sync_score: number;
@@ -49,171 +49,259 @@ interface PlatformDetails {
 
 export default function MapperReportStep({ data, onRestart }: { data: MapperAnalysisResponse, onRestart: () => void }) {
     const { dashboard_metrics, analysis } = data;
-    const isCritical = dashboard_metrics.health_level === 1;
+
+    // Animation Variants
+    const containerVariants: Variants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.15
+            }
+        }
+    };
+
+    const itemVariants: Variants = {
+        hidden: { opacity: 0, y: 20 },
+        visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }
+    };
 
     return (
-        <div className="w-full max-w-6xl mx-auto space-y-10 pb-20">
+        <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+            className="w-full max-w-7xl mx-auto space-y-12 pb-24 px-4"
+        >
 
-            {/* 1. AI Summary: Strateji Notu */}
+            {/* 1. AI Summary: Strategy Note (Futuristic Card) */}
             <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-gray-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl border border-gray-700 relative overflow-hidden"
+                variants={itemVariants}
+                className="bg-gradient-to-br from-slate-900 via-slate-800 to-black rounded-3xl p-8 text-white shadow-2xl border border-slate-700/50 relative overflow-hidden group"
             >
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                    <Activity className="w-40 h-40 text-white" />
+                {/* Background Pulse Animation */}
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity duration-1000">
+                    <Activity className="w-64 h-64 text-white" />
                 </div>
-                <div className="relative z-10 flex items-start gap-4">
-                    <div className="p-3 bg-blue-500/20 rounded-xl border border-blue-400/30">
-                        <Lightbulb className="w-6 h-6 text-blue-300" />
+                <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-colors duration-700"></div>
+
+                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-6">
+                    <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg shrink-0">
+                        <Lightbulb className="w-8 h-8 text-yellow-300 fill-yellow-300/20" />
                     </div>
                     <div>
-                        <h3 className="text-sm font-bold text-blue-300 uppercase tracking-widest mb-1">
-                            STRATEJİ NOTU
+                        <h3 className="text-xs font-bold text-blue-300 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                            AI Strategy Note
                         </h3>
-                        <p className="text-xl font-medium leading-relaxed text-gray-100">
+                        <p className="text-2xl font-light leading-relaxed text-slate-100 tracking-wide">
                             "{dashboard_metrics.ai_comment}"
                         </p>
                     </div>
                 </div>
             </motion.div>
 
-            {/* 2. Risk Sayacı: Inventory Crisis Manager Header */}
+            {/* 2. Risk Counter: Inventory Crisis Manager Header */}
             <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.1 }}
-                className="flex flex-col items-center justify-center py-8 text-center"
+                variants={itemVariants}
+                className="flex flex-col items-center justify-center py-4 text-center relative"
             >
-                <div className="inline-flex items-center gap-2 mb-4 px-4 py-1.5 rounded-full bg-red-100 text-red-700 border border-red-200 text-sm font-bold animate-pulse">
+                <div className="inline-flex items-center gap-2 mb-6 px-5 py-2 rounded-full bg-red-50 text-red-600 border border-red-100 text-xs font-black uppercase tracking-widest shadow-sm">
                     <ShieldAlert className="w-4 h-4" />
-                    INVENTORY CRISIS DETECTED
+                    Inventory Crisis Detected
                 </div>
 
-                <h2 className="text-7xl font-black text-gray-900 tracking-tighter mb-2 flex items-center gap-4">
+                <h2 className="text-8xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-br from-gray-900 to-gray-700 tracking-tighter mb-2 flex items-center justify-center gap-4 filter drop-shadow-sm">
                     <span className="text-red-600">${dashboard_metrics.total_oversell_risk.toLocaleString()}</span>
                 </h2>
-                <div className="text-gray-400 text-sm font-medium uppercase tracking-[0.2em] mb-4">Total Oversell Risk</div>
+                <div className="text-gray-400 text-sm font-bold uppercase tracking-[0.3em] mb-6">Total Oversell Risk Exposure</div>
 
-                <div className="bg-red-600 text-white px-6 py-2 rounded-lg font-bold text-lg shadow-lg shadow-red-200">
-                    Durum: Kritik
-                </div>
+                <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    className="bg-red-600 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-xl shadow-red-600/30 flex items-center gap-2"
+                >
+                    <AlertTriangle className="w-5 h-5 fill-white" />
+                    Status: Critical
+                </motion.div>
             </motion.div>
 
-            {/* 3. Ürün Kartları: Risk Analysis */}
-            <div className="space-y-6">
-                <div className="flex items-center justify-between px-2">
-                    <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            {/* 3. Product Cards: Risk Analysis */}
+            <div className="space-y-8">
+                <motion.div variants={itemVariants} className="flex items-center justify-between px-2 border-b border-gray-100 pb-4">
+                    <h3 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                         Action Required
-                        <span className="bg-gray-100 text-gray-600 text-sm py-1 px-3 rounded-full">{analysis.length} Items</span>
+                        <span className="bg-gray-900 text-white text-base py-1 px-4 rounded-full font-medium">{analysis.length} Items</span>
                     </h3>
-                </div>
+                </motion.div>
 
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-8">
                     {analysis.map((item, index) => (
-                        <RiskCard key={index} item={item} index={index} />
+                        <RiskCard key={index} item={item} />
                     ))}
                 </div>
             </div>
 
             {/* Footer Action */}
-            <div className="flex justify-center pt-12">
+            <motion.div variants={itemVariants} className="flex justify-center pt-8">
                 <button
                     onClick={onRestart}
-                    className="px-8 py-3 bg-white border-2 border-gray-200 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-colors"
+                    className="px-10 py-4 bg-white border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm active:scale-95"
                 >
-                    Back to Dashboard
+                    Return to Dashboard
                 </button>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     );
 }
 
-function RiskCard({ item, index }: { item: AnalysisItem, index: number }) {
+function RiskCard({ item }: { item: AnalysisItem }) {
     const { shopify, etsy } = item.details;
     const isCritical = item.status.includes('critical') || item.severity > 50;
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
+            variants={{
+                hidden: { opacity: 0, y: 30 },
+                visible: { opacity: 1, y: 0 }
+            }}
+            whileHover={{ y: -5 }}
             className={`
-                bg-white rounded-3xl border-2 p-1 overflow-hidden shadow-sm hover:shadow-xl transition-all group
-                ${isCritical ? 'border-red-100 hover:border-red-300' : 'border-gray-100'}
+                bg-white rounded-[2rem] border overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 group
+                ${isCritical ? 'border-red-100 shadow-red-50' : 'border-gray-100'}
             `}
         >
-            <div className="flex flex-col md:flex-row h-full">
+            <div className="flex flex-col xl:flex-row h-full">
 
-                {/* Left: Product Info */}
-                <div className="p-6 md:w-1/4 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-100 flex flex-col items-center text-center">
-                    <div className="w-24 h-24 bg-white rounded-xl border border-gray-200 mb-4 overflow-hidden shadow-sm">
-                        <img src={shopify.image_url || etsy.image_url} alt="Product" className="w-full h-full object-cover" />
+                {/* Left: Product Info (Shopify Context) */}
+                <div className="p-8 xl:w-[28%] bg-white border-b xl:border-b-0 xl:border-r border-gray-100 flex flex-col md:flex-row xl:flex-col items-center xl:items-start text-center xl:text-left gap-6 hover:bg-gray-50/50 transition-colors">
+                    <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500">
+                        <img src={shopify.image_url} alt="Shopify Product" className="w-full h-full object-cover" />
+                        <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
+                            <ShoppingBag className="w-3 h-3" /> Shopify
+                        </div>
                     </div>
-                    <h4 className="font-bold text-gray-900 text-sm leading-tight mb-2 line-clamp-2">
-                        {shopify.product_name || etsy.product_name}
-                    </h4>
-                    <span className="text-xs font-mono text-gray-400">{shopify.sku_code || 'NO-SKU'}</span>
+                    <div>
+                        <h4 className="font-bold text-gray-900 text-lg leading-tight mb-2">
+                            {shopify.product_name}
+                        </h4>
+                        <div className="flex flex-wrap gap-2 justify-center xl:justify-start">
+                            <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">
+                                {shopify.sku_code || 'NO-SKU'}
+                            </span>
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                                ${shopify.price}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Center: Inventory Comparison */}
-                <div className="flex-1 p-6 flex flex-col justify-center">
-                    <div className="flex items-center justify-around gap-4 mb-6 relative">
+                {/* Center: Inventory Comparison Heatmap */}
+                <div className="flex-1 p-8 flex flex-col justify-center bg-gradient-to-b from-white to-gray-50/30">
+                    <div className="flex items-center justify-center md:justify-around gap-8 mb-8 relative">
                         {/* Connecting Line */}
-                        <div className="absolute top-1/2 left-10 right-10 h-0.5 bg-gray-100 -z-10"></div>
+                        <div className="hidden md:block absolute top-1/2 left-20 right-20 h-0.5 bg-gray-200 -z-10 bg-gradient-to-r from-emerald-100 via-gray-300 to-orange-100"></div>
 
                         {/* Shopify Node */}
-                        <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm text-center min-w-[120px]">
-                            <div className="flex items-center justify-center gap-2 text-emerald-600 mb-2">
-                                <ShoppingBag className="w-5 h-5" />
-                                <span className="text-xs font-bold uppercase">Shopify</span>
+                        <div className="bg-white p-6 rounded-3xl border border-emerald-100 shadow-xl shadow-emerald-50 text-center min-w-[140px] relative">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-white">
+                                Current
                             </div>
-                            <div className={`text-3xl font-black ${item.shopify_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                            <div className="text-emerald-600 mb-2">
+                                <ShoppingBag className="w-8 h-8 mx-auto" />
+                            </div>
+                            <div className={`text-5xl font-black ${item.shopify_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'} tracking-tighter`}>
                                 {shopify.stock}
                             </div>
-                            <div className="text-[10px] text-gray-400 font-medium mt-1">Stok</div>
+                            <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">Stock</div>
+                        </div>
+
+                        {/* Conflict Icon */}
+                        <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center border border-red-100 z-10 shadow-sm animate-pulse-slow">
+                            <ArrowRight className="w-5 h-5 text-red-400" />
                         </div>
 
                         {/* Etsy Node */}
-                        <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm text-center min-w-[120px]">
-                            <div className="flex items-center justify-center gap-2 text-orange-600 mb-2">
-                                <Store className="w-5 h-5" />
-                                <span className="text-xs font-bold uppercase">Etsy</span>
+                        <div className="bg-white p-6 rounded-3xl border border-orange-100 shadow-xl shadow-orange-50 text-center min-w-[140px] relative">
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-100 text-orange-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-white">
+                                Actual
                             </div>
-                            <div className="text-3xl font-black text-gray-900">
+                            <div className="text-orange-600 mb-2">
+                                <Store className="w-8 h-8 mx-auto" />
+                            </div>
+                            <div className="text-5xl font-black text-gray-900 tracking-tighter">
                                 {etsy.stock}
                             </div>
-                            <div className="text-[10px] text-gray-400 font-medium mt-1">Stok</div>
+                            <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">Stock</div>
                         </div>
                     </div>
 
                     {/* Risk Highlight */}
                     {item.shopify_oversell_units > 0 && (
-                        <div className="bg-red-50 rounded-xl p-3 border border-red-100 flex items-center justify-center gap-2 text-red-700 font-medium text-sm animate-pulse">
-                            <TrendingDown className="w-4 h-4" />
-                            <span>Fazladan Satış Riski: <b>{item.shopify_oversell_units} Adet</b> ({item.shopify_loss_risk > 0 ? `$${item.shopify_loss_risk.toLocaleString()} Risk` : 'High Risk'})</span>
-                        </div>
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-red-50 rounded-2xl p-4 border border-red-100 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 shadow-sm mx-auto max-w-lg"
+                        >
+                            <div className="p-2 bg-red-100 rounded-lg shrink-0">
+                                <TrendingDown className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div className="text-center md:text-left">
+                                <div className="text-xs uppercase font-bold text-red-400 tracking-wider mb-0.5">Oversell Risk Analysis</div>
+                                <div className="font-semibold text-lg">
+                                    <span className="font-black text-red-600">{item.shopify_oversell_units} Units</span> Excess
+                                    <span className="mx-2 text-red-300">|</span>
+                                    <span className="font-black text-red-600">${item.shopify_loss_risk.toLocaleString()}</span> Potential Loss
+                                </div>
+                            </div>
+                        </motion.div>
                     )}
                 </div>
 
-                {/* Right: Action Center */}
-                <div className="p-6 md:w-1/4 bg-gray-900 text-white flex flex-col justify-center items-center text-center relative overflow-hidden">
-                    <div className="relative z-10 w-full">
+                {/* Right: Action Center (With Etsy Context) */}
+                <div className="xl:w-[28%] bg-slate-900 text-slate-300 relative overflow-hidden flex flex-col">
+                    {/* Background Glow */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3"></div>
+
+                    {/* Etsy Context Section - Requested by User */}
+                    <div className="flex-1 p-8 border-b border-slate-800">
+                        <div className="flex items-center gap-2 mb-4 opacity-70">
+                            <Store className="w-4 h-4 text-orange-400" />
+                            <span className="text-xs font-bold uppercase tracking-widest text-orange-400">Target Source (Etsy)</span>
+                        </div>
+
+                        <div className="flex gap-4 items-start">
+                            <div className="w-16 h-16 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0">
+                                <img src={etsy.image_url} alt="Etsy Source" className="w-full h-full object-cover opacity-80" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-200 line-clamp-2 leading-snug mb-1" title={etsy.product_name}>
+                                    {etsy.product_name}
+                                </p>
+                                <p className="text-xs font-mono text-slate-500">
+                                    {etsy.sku_code || 'NO-SKU'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Action Button Section */}
+                    <div className="p-8 bg-slate-900/50 backdrop-blur-sm relative z-10">
                         <div className="mb-4">
-                            <div className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-1">Recommended Action</div>
-                            <div className="text-sm font-medium text-gray-300 leading-snug">
+                            <div className="text-[10px] text-blue-400 uppercase tracking-widest font-bold mb-1">Recommended Action</div>
+                            <div className="text-sm font-medium text-white leading-snug">
                                 Sync inventory to prevent overselling
                             </div>
                         </div>
 
-                        <button className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-all active:scale-95 group-hover:scale-105">
-                            <Zap className="w-4 h-4 fill-white" />
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-all group-active"
+                        >
+                            <Zap className="w-5 h-5 fill-white" />
                             <span className="truncate">{item.quick_action}</span>
-                        </button>
+                        </motion.button>
                     </div>
-
-                    {/* Background decoration */}
-                    <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-blue-600/20 rounded-full blur-3xl"></div>
                 </div>
 
             </div>
