@@ -197,72 +197,62 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                 </div>
 
                 {/* Center: Inventory Comparison & Action */}
-                <div className="flex-1 p-8 flex flex-col justify-center bg-gradient-to-b from-white to-gray-50/30">
-                    <div className="flex items-center justify-center md:justify-around gap-8 mb-8 relative">
-                        {/* Connecting Line */}
-                        <div className="hidden md:block absolute top-1/2 left-20 right-20 h-0.5 bg-gray-200 -z-10 bg-gradient-to-r from-emerald-100 via-gray-300 to-orange-100"></div>
+                <div className="flex-1 p-8 flex flex-col justify-center bg-gradient-to-b from-white to-gray-50/20">
+                    <div className="flex items-center justify-center md:justify-around gap-6 mb-8 relative">
+                        {/* Connecting Line - Dotted and Subtle */}
+                        <div className="hidden md:block absolute top-1/2 left-16 right-16 h-px border-t-2 border-dashed border-gray-200 -z-10"></div>
 
-                        {/* Shopify Node */}
-                        <div className="bg-white p-6 rounded-3xl border border-emerald-100 shadow-xl shadow-emerald-50 text-center min-w-[140px] relative">
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-white">
-                                Current
+                        {/* Shopify Node - Clean */}
+                        <div className="bg-white/80 backdrop-blur p-5 rounded-2xl border border-emerald-100/50 shadow-lg shadow-emerald-50/50 text-center min-w-[120px]">
+                            <div className="text-emerald-500 mb-1">
+                                <ShoppingBag className="w-6 h-6 mx-auto opacity-80" />
                             </div>
-                            <div className="text-emerald-600 mb-2">
-                                <ShoppingBag className="w-8 h-8 mx-auto" />
-                            </div>
-                            <div className={`text-5xl font-black ${item.shopify_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'} tracking-tighter`}>
+                            <div className={`text-4xl font-black ${item.shopify_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'} tracking-tight`}>
                                 {shopify.stock}
                             </div>
-                            <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">Stock</div>
+                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Stock</div>
                         </div>
 
-                        {/* Connection Icon (Replaced Arrow) */}
-                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-200 z-10 shadow-sm rotate-45">
-                            <div className="-rotate-45">
-                                <LinkIcon className="w-5 h-5 text-gray-400" />
-                            </div>
+                        {/* Connection Icon - Clean Circle */}
+                        <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm z-10">
+                            <LinkIcon className="w-4 h-4 text-gray-300 transform -rotate-45" />
                         </div>
 
-                        {/* Etsy Node */}
-                        <div className="bg-white p-6 rounded-3xl border border-orange-100 shadow-xl shadow-orange-50 text-center min-w-[140px] relative">
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-100 text-orange-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-white">
-                                Actual
+                        {/* Etsy Node - Clean */}
+                        <div className="bg-white/80 backdrop-blur p-5 rounded-2xl border border-orange-100/50 shadow-lg shadow-orange-50/50 text-center min-w-[120px]">
+                            <div className="text-orange-500 mb-1">
+                                <Store className="w-6 h-6 mx-auto opacity-80" />
                             </div>
-                            <div className="text-orange-600 mb-2">
-                                <Store className="w-8 h-8 mx-auto" />
-                            </div>
-                            <div className="text-5xl font-black text-gray-900 tracking-tighter">
+                            <div className="text-4xl font-black text-gray-900 tracking-tight">
                                 {etsy.stock}
                             </div>
-                            <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-2">Stock</div>
+                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Stock</div>
                         </div>
                     </div>
 
                     <div className="space-y-4 max-w-lg mx-auto w-full">
-                        {/* Risk Highlight */}
+                        {/* Risk Highlight - Modern & Minimal */}
                         {item.shopify_oversell_units > 0 && (
-                            <div className="bg-red-50 rounded-2xl p-4 border border-red-100 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 shadow-sm w-full">
-                                <div className="p-2 bg-red-100 rounded-lg shrink-0">
-                                    <TrendingDown className="w-5 h-5 text-red-600" />
+                            <div className="bg-red-50/50 rounded-xl p-3 border border-red-100/50 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 text-sm">
+                                <div className="flex items-center gap-2">
+                                    <TrendingDown className="w-4 h-4 text-red-500" />
+                                    <span className="font-bold uppercase text-[10px] text-red-400 tracking-wider">Analysis:</span>
                                 </div>
-                                <div className="text-center md:text-left">
-                                    <div className="text-xs uppercase font-bold text-red-400 tracking-wider mb-0.5">Oversell Risk Analysis</div>
-                                    <div className="font-semibold text-lg">
-                                        <span className="font-black text-red-600">{item.shopify_oversell_units} Units</span> Excess
-                                        <span className="mx-2 text-red-300">|</span>
-                                        <span className="font-black text-red-600">${item.shopify_loss_risk.toLocaleString()}</span> Potential Loss
-                                    </div>
+                                <div>
+                                    <span className="font-bold text-red-600">{item.shopify_oversell_units} Excess</span>
+                                    <span className="mx-2 text-red-200">|</span>
+                                    <span className="font-bold text-red-600">${item.shopify_loss_risk.toLocaleString()} Loss</span>
                                 </div>
                             </div>
                         )}
 
-                        {/* Recommendation Alert Box (Moved to Center) */}
-                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-left w-full relative overflow-hidden group/alert flex items-center gap-4">
-                            <div className="p-3 bg-blue-100 rounded-lg shrink-0 text-blue-600">
-                                <Zap className="w-5 h-5" />
+                        {/* Recommendation Alert Box - Premium Gradient */}
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50/50 border border-blue-100 rounded-xl p-4 flex items-center gap-4 group/alert hover:border-blue-200 transition-colors">
+                            <div className="p-2.5 bg-white rounded-lg shrink-0 text-blue-600 shadow-sm border border-blue-50">
+                                <Lightbulb className="w-5 h-5" />
                             </div>
                             <div>
-                                <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Recommendation</div>
+                                <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-0.5">Recommended Action</div>
                                 <div className="text-sm font-bold text-blue-900 leading-snug">
                                     {item.quick_action}
                                 </div>
