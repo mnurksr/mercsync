@@ -233,16 +233,16 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                     <div className="space-y-4 max-w-lg mx-auto w-full">
 
                         {/* Risk Highlight - Modern & Minimal */}
-                        {item.shopify_oversell_units > 0 ? (
+                        {(item.shopify_oversell_units + item.etsy_oversell_units) > 0 ? (
                             <div className="bg-red-50/50 rounded-xl p-3 border border-red-100/50 flex flex-col md:flex-row items-center justify-center gap-3 text-red-800 text-sm">
                                 <div className="flex items-center gap-2">
                                     <TrendingDown className="w-4 h-4 text-red-500" />
                                     <span className="font-bold uppercase text-[10px] text-red-400 tracking-wider">Analysis:</span>
                                 </div>
                                 <div>
-                                    <span className="font-bold text-red-600">{item.shopify_oversell_units} Excess</span>
+                                    <span className="font-bold text-red-600">{item.shopify_oversell_units + item.etsy_oversell_units} Excess</span>
                                     <span className="mx-2 text-red-200">|</span>
-                                    <span className="font-bold text-red-600">${item.shopify_loss_risk.toLocaleString()} Loss</span>
+                                    <span className="font-bold text-red-600">${item.total_loss_risk.toLocaleString()} Loss</span>
                                 </div>
                             </div>
                         ) : (
