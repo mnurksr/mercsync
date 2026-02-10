@@ -15,6 +15,7 @@ import { getConnectedShop } from '../actions/shop';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type ActivityItem } from '../actions/dashboard';
 import { getSetupStatus, type SetupStatus } from '../actions/staging';
 import { Skeleton } from "@/components/ui/skeleton";
+import confetti from 'canvas-confetti';
 
 // ====== FRESH LOAD LOADER ======
 // Caching removed as per user request to ensure skeleton states are visible
