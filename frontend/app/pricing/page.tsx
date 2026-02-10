@@ -1,8 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Zap, Crown, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import { Check, Zap, Crown, Shield, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/components/AuthProvider';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 const plans = [
     {
@@ -18,6 +21,7 @@ const plans = [
             '24-hour sync frequency'
         ],
         cta: 'Start Free Trial',
+        action: 'starter_payment',
         popular: false,
         icon: Zap
     },
@@ -63,6 +67,79 @@ const plans = [
 ];
 
 export default function PricingPage() {
+    const { user } = useAuth();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Call internal API to get payment link (Proxy to Webhook)
+    const initiatePayment = async (userId: string, productId: string) => {
+        setIsLoading(true);
+        try {
+            console.log('Initiating payment via proxy for user:', userId);
+
+            // Call our own API route instead of external URL to avoid CORS
+            const response = await fetch('/api/create-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    product_id: productId
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error('Payment API error:', data);
+                throw new Error(data.error || 'Payment generation failed');
+            }
+
+            console.log('Payment API response:', data);
+
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                console.error('No payment URL found in proxy response:', data);
+                alert('Failed to generate payment link. Please try again.');
+            }
+
+        } catch (error) {
+            console.error('Error initiating payment:', error);
+            alert('An error occurred. Please check the console for details.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Handle auto-checkout after login redirect
+    useEffect(() => {
+        const checkoutType = searchParams.get('checkout');
+        // Check if we should auto-checkout: param exists, user logged in, not already loading
+        if (checkoutType === 'starter' && user && !isLoading) {
+            initiatePayment(user.id, 'prod_16VbkG7cBttSlCDryyMdIn');
+        }
+    }, [user, searchParams, isLoading]);
+
+    const handlePlanClick = async (plan: typeof plans[0]) => {
+        if (isLoading) return; // Prevent double click
+
+        if (plan.action === 'starter_payment') {
+            if (user) {
+                // User is logged in -> Call Webhook
+                await initiatePayment(user.id, 'prod_16VbkG7cBttSlCDryyMdIn');
+            } else {
+                // User NOT logged in -> Redirect to Login -> Then back to Pricing
+                router.push(`/login?redirect=${encodeURIComponent('/pricing?checkout=starter')}`);
+            }
+        } else {
+            // Default behavior for other plans
+            router.push('/login');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white text-gray-900 font-sans">
             {/* Header */}
@@ -165,19 +242,30 @@ export default function PricingPage() {
                                     ))}
                                 </ul>
 
-                                <Link
-                                    href="/login"
+                                <button
+                                    onClick={() => handlePlanClick(plan)}
+                                    disabled={isLoading}
                                     className={`
                                         w-full py-4 rounded-xl font-bold text-center flex items-center justify-center gap-2 transition-all
                                         ${plan.popular
                                             ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
                                             : 'bg-gray-900 hover:bg-black text-white'
                                         }
+                                        ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}
                                     `}
                                 >
-                                    {plan.cta}
-                                    <ArrowRight className="w-4 h-4" />
-                                </Link>
+                                    {isLoading && plan.action === 'starter_payment' ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            {plan.cta}
+                                            <ArrowRight className="w-4 h-4" />
+                                        </>
+                                    )}
+                                </button>
                             </motion.div>
                         ))}
                     </div>

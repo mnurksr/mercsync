@@ -15,6 +15,8 @@ export default function PrivacyPage() {
                 <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-8">Privacy Policy</h1>
 
                 <div className="prose prose-blue max-w-none text-gray-600 leading-relaxed">
+                    <p className="mb-4"><strong>Last Updated: February 10, 2026</strong></p>
+
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. INTRODUCTION</h2>
                     <p className="mb-4">MercSync (“we”, “us”, or “our”) welcomes you to our inventory management platform (the “Service”). We are committed to protecting your personal information and your business data. This Privacy Policy explains how we collect, use, and share information when you use our app to sync data between Shopify and Etsy.</p>
 
@@ -43,7 +45,7 @@ export default function PrivacyPage() {
                     <ul className="list-disc pl-5 mb-4 space-y-2">
                         <li><strong>24-Hour Limit:</strong> We do not retain Etsy listing content (such as descriptions, titles, or tags) or pricing data for longer than 24 hours. We refresh this data regularly to ensure accuracy.</li>
                         <li><strong>Data Minimization:</strong> We only cache the minimum amount of data (e.g., Inventory IDs and Quantities) necessary to perform the synchronization service.</li>
-                        <li><strong>No unauthorized use:</strong> We do not use Etsy Member data for marketing or any purpose other than providing the MercSync service to you.</li>
+                        <li><strong>No Unauthorized Use:</strong> We do not use Etsy Member data for marketing or any purpose other than providing the MercSync service to you.</li>
                     </ul>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">5. SHARING INFORMATION</h2>
@@ -53,8 +55,9 @@ export default function PrivacyPage() {
                         <li><strong>Legal Requirements:</strong> If required by law, subpoena, or to protect the rights of MercSync.</li>
                     </ul>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">6. DATA SECURITY</h2>
-                    <p className="mb-4">We employ industry-standard security measures (SSL encryption, secure OAuth tokens) to protect your data. However, no method of transmission over the Internet is 100% secure.</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">6. DATA SECURITY & BREACH NOTIFICATION</h2>
+                    <p className="mb-4">We employ industry-standard security measures (SSL encryption via TLS 1.2+, secure OAuth tokens, and HSTS enforcement) to protect your data.</p>
+                    <p className="mb-4"><strong>Data Breach Notification:</strong> In accordance with Etsy API Terms of Use, if any Etsy Member data accessed via the API is compromised or suspected to be compromised, we will notify Etsy at dpo@etsy.com and the affected Etsy seller within 24 hours of discovery.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. YOUR RIGHTS & DELETION</h2>
                     <p className="mb-4">You have the right to access, modify, or delete your personal information.</p>

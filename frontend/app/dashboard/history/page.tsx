@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getSyncHistory, type HistoryItem } from '../../actions/history';
 import {
     LayoutDashboard, LogOut, Settings, Bell,
     ShoppingBag, Store, Check, X, RefreshCw, AlertTriangle,
@@ -11,31 +12,53 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
-// Mock sync history data
-const mockHistory = [
-    { id: 1, action: 'Inventory Synced', product: 'Vintage Leather Bag', from: 'shopify', to: 'etsy', change: '12 → 11', time: '2 min ago', status: 'success' },
-    { id: 2, action: 'Inventory Synced', product: 'Handmade Ceramic Mug', from: 'etsy', to: 'shopify', change: '8 → 7', time: '5 min ago', status: 'success' },
-    { id: 3, action: 'Low Stock Alert', product: 'Wooden Desk Organizer', from: 'system', to: null, change: 'Stock: 3', time: '12 min ago', status: 'warning' },
-    { id: 4, action: 'Inventory Synced', product: 'Custom Phone Case', from: 'shopify', to: 'etsy', change: '25 → 24', time: '18 min ago', status: 'success' },
-    { id: 5, action: 'Sync Failed', product: 'Knitted Winter Scarf', from: 'etsy', to: 'shopify', change: 'Connection timeout', time: '25 min ago', status: 'error' },
-    { id: 6, action: 'Inventory Synced', product: 'Artisan Candle Set', from: 'shopify', to: 'etsy', change: '15 → 14', time: '30 min ago', status: 'success' },
-    { id: 7, action: 'Store Connected', product: null, from: 'shopify', to: null, change: 'my-store.myshopify.com', time: '1 hour ago', status: 'success' },
-    { id: 8, action: 'Store Connected', product: null, from: 'etsy', to: null, change: 'MyEtsyShop', time: '1 hour ago', status: 'success' },
-    { id: 9, action: 'Inventory Synced', product: 'Leather Wallet', from: 'etsy', to: 'shopify', change: '7 → 6', time: '2 hours ago', status: 'success' },
-    { id: 10, action: 'Mismatch Detected', product: 'Personalized Jewelry Box', from: 'system', to: null, change: 'Shopify: 4, Etsy: 6', time: '3 hours ago', status: 'warning' },
-];
+// ====== SYNC CACHE LOADER ======
+const getInitialHistory = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const cached = localStorage.getItem('mercsync_history');
+        return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+};
 
 export default function HistoryPage() {
     const { supabase, user } = useAuth();
     const router = useRouter();
     const [filterStatus, setFilterStatus] = useState('all');
 
+    // ====== CACHE-FIRST STATE ======
+    const initialCache = getInitialHistory();
+    const [history, setHistory] = useState<HistoryItem[]>(initialCache || []);
+    const [isLoading, setIsLoading] = useState(!initialCache); // Only loading if NO cache
+
+    useEffect(() => {
+        if (user) {
+            loadData();
+        }
+    }, [user]);
+
+    const loadData = async () => {
+        // Background refresh - cache already loaded in initial state
+        try {
+            const data = await getSyncHistory(filterStatus);
+            setHistory(data);
+
+            if (filterStatus === 'all') {
+                localStorage.setItem('mercsync_history', JSON.stringify(data));
+            }
+        } catch (error) {
+            console.error('Failed to load history:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleSignOut = async () => {
         await supabase.auth.signOut();
         router.push('/login');
     };
 
-    const filteredHistory = mockHistory.filter(item => {
+    const filteredHistory = history.filter(item => {
         return filterStatus === 'all' || item.status === filterStatus;
     });
 
@@ -67,7 +90,7 @@ export default function HistoryPage() {
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex">
 
             {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col sticky top-0 h-screen">
+            <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col fixed top-0 left-0 h-screen z-20">
                 <div className="h-16 flex items-center px-6 border-b border-gray-100">
                     <Link href="/" className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
@@ -106,7 +129,7 @@ export default function HistoryPage() {
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 min-w-0">
+            <main className="flex-1 min-w-0 md:ml-64">
                 {/* Header */}
                 <header className="bg-white border-b border-gray-200 sticky top-0 z-10 h-16 flex items-center justify-between px-4 sm:px-8">
                     <div>
