@@ -62,7 +62,8 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith('/privacy') ||
         request.nextUrl.pathname.startsWith('/terms') ||
         request.nextUrl.pathname.startsWith('/pricing') ||
-        request.nextUrl.pathname.startsWith('/dashboard/mapper')
+        request.nextUrl.pathname.startsWith('/dashboard/mapper') ||
+        request.nextUrl.pathname.startsWith('/setup')
 
     // If user is not signed in and visits a protected route, redirect to login
     if (!session && !isPublicRoute) {

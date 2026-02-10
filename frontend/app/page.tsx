@@ -17,6 +17,7 @@ export default function LandingPage() {
             <Link href="#how-it-works" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">How It Works</Link>
             <Link href="#features" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Features</Link>
             <Link href="/pricing" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Pricing</Link>
+            <Link href="/setup" className="text-sm text-blue-600 hover:text-blue-800 transition-colors font-medium">Setup (Test)</Link>
           </nav>
 
           <div className="flex items-center gap-3">
