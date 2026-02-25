@@ -10,32 +10,44 @@ export type ShopConnection = {
     debugMessage?: string
 }
 
-export async function getConnectedShop(platform: string = 'shopify'): Promise<ShopConnection> {
-    const supabase = await createClient()
+import { createAdminClient } from '@/utils/supabase/admin'
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+export async function getConnectedShop(platform: string = 'shopify', testShopDomain?: string): Promise<ShopConnection> {
+    const supabase = testShopDomain ? createAdminClient() : await createClient()
 
-    if (authError || !user) {
-        console.log('getConnectedShop: No user found', authError)
-        return {
-            connected: false,
-            shop_domain: null,
-            last_sync: null,
-            platform: platform as 'shopify' | 'etsy',
-            debugMessage: `Auth failed or no user. Error: ${authError?.message}`
+    let user = null;
+    let shopQuery = supabase.from('shops').select('shop_domain, is_active, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token');
+
+    if (testShopDomain) {
+        // Test mode: bypass auth using admin client, query by shop domain
+        shopQuery = shopQuery.eq('shop_domain', testShopDomain)
+    } else {
+        // Normal mode: check auth
+        const { data: authData, error: authError } = await supabase.auth.getUser()
+        if (authError || !authData.user) {
+            console.log('getConnectedShop: No user found', authError)
+            return {
+                connected: false,
+                shop_domain: null,
+                last_sync: null,
+                platform: platform as 'shopify' | 'etsy',
+                debugMessage: `Auth failed or no user. Error: ${authError?.message}`
+            }
         }
+        user = authData.user;
+        shopQuery = shopQuery.eq('owner_id', user.id)
     }
 
-    console.log(`getConnectedShop: Checking for user ${user.id} platform ${platform}`)
+    // Log intent
+    if (testShopDomain) {
+        console.log(`getConnectedShop: TEST MODE with ADMIN CLIENT looking for domain: ${testShopDomain} for platform ${platform}`)
+    } else {
+        console.log(`getConnectedShop: Checking for user ${user?.id} platform ${platform}`)
+    }
 
     try {
         if (platform === 'shopify') {
-            // Query includes shopify_connected for new logic, 
-            // but also access_token for backwards compatibility with old n8n
-            const { data, error } = await supabase
-                .from('shops')
-                .select('shop_domain, is_active, created_at, owner_id, shopify_connected, etsy_connected, access_token')
-                .eq('owner_id', user.id)
+            const { data, error } = await shopQuery
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle()
@@ -54,13 +66,13 @@ export async function getConnectedShop(platform: string = 'shopify'): Promise<Sh
             }
 
             if (!data) {
-                console.log('getConnectedShop: No shop found for user')
+                console.log('getConnectedShop: No shop found')
                 return {
                     connected: false,
                     shop_domain: null,
                     last_sync: null,
                     platform: 'shopify',
-                    debugMessage: `No shop record found for owner_id: ${user.id}. (Double check n8n insert)`
+                    debugMessage: `No shop record found.`
                 }
             }
 
@@ -84,10 +96,7 @@ export async function getConnectedShop(platform: string = 'shopify'): Promise<Sh
 
         // Etsy connection logic
         if (platform === 'etsy') {
-            const { data, error } = await supabase
-                .from('shops')
-                .select('shop_domain, is_active, created_at, owner_id, etsy_connected, etsy_access_token')
-                .eq('owner_id', user.id)
+            const { data, error } = await shopQuery
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle()
@@ -106,13 +115,13 @@ export async function getConnectedShop(platform: string = 'shopify'): Promise<Sh
             }
 
             if (!data) {
-                console.log('getConnectedShop (etsy): No shop found for user')
+                console.log('getConnectedShop (etsy): No shop found')
                 return {
                     connected: false,
                     shop_domain: null,
                     last_sync: null,
                     platform: 'etsy',
-                    debugMessage: `No shop record found for owner_id: ${user.id}`
+                    debugMessage: `No shop record found`
                 }
             }
 
@@ -195,6 +204,71 @@ export async function disconnectShop(platform: string = 'shopify'): Promise<{ su
         return { success: false, message: 'Invalid platform' }
     } catch (e: any) {
         console.error('disconnectShop error:', e)
+        return { success: false, message: e.message }
+    }
+}
+
+/**
+ * Fetches locations from the connected Shopify store
+ */
+export async function getShopifyLocations(): Promise<{ success: boolean; data?: any[]; message?: string }> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    let shopId: string | null = null;
+    let shopDomainForTest: string | null = null;
+    let shopTokenForTest: string | null = null;
+
+    if (!user) {
+        console.log('getShopifyLocations: No user found, using hardcoded test shop data');
+        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
+        shopDomainForTest = 'shopiauto-test.myshopify.com';
+        shopTokenForTest = 'shpua_7903e8f67b0bbf1c8888340140ca515a';
+    } else {
+        const { data: userShop } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('owner_id', user.id)
+            .maybeSingle()
+
+        shopId = userShop?.id || null;
+    }
+
+    if (!shopId) {
+        return { success: false, message: 'Shop not found' }
+    }
+
+    let shopData = { shop_domain: shopDomainForTest, access_token: shopTokenForTest };
+
+    if (user) {
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id, shop_domain, access_token')
+            .eq('id', shopId)
+            .maybeSingle()
+        if (shop) shopData = { shop_domain: shop.shop_domain, access_token: shop.access_token };
+    }
+
+    if (!shopData.shop_domain || !shopData.access_token) {
+        return { success: false, message: 'Shopify not fully connected' }
+    }
+
+    try {
+        const response = await fetch(`https://${shopData.shop_domain}/admin/api/2024-01/locations.json`, {
+            headers: {
+                'X-Shopify-Access-Token': shopData.access_token,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Failed to fetch locations:', await response.text());
+            return { success: false, message: 'Failed to fetch Shopify locations' }
+        }
+
+        const data = await response.json();
+        return { success: true, data: data.locations || [] };
+    } catch (e: any) {
         return { success: false, message: e.message }
     }
 }

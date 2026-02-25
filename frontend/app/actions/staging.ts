@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export type SetupStatus = {
     shopifyConnected: boolean
@@ -11,6 +12,10 @@ export type SetupStatus = {
     etsyProductCount: number
     inventoryMappedCount: number
     isComplete: boolean
+    initialProductCounts: {
+        shopify: any
+        etsy: any
+    } | null
 }
 
 export type StagingProduct = {
@@ -21,34 +26,83 @@ export type StagingProduct = {
     imageUrl: string | null
     stockQuantity: number | null
     status: string | null
-    platformId: string | null // shopify_inventory_item_id or etsy_listing_id
+    platformId: string | null // shopify_inventory_item_id or etsy_listing_id (variant level)
+
+    // Grouping Fields
+    shopifyProductId: string | null
+    etsyListingId: string | null // For Etsy, listing_id is often the parent if variants exist
+    variantTitle: string | null
 }
 
 /**
  * Get full setup wizard status
  */
-export async function getSetupStatus(): Promise<SetupStatus> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getSetupStatus(testShopDomain?: string): Promise<SetupStatus> {
+    const supabase = testShopDomain ? createAdminClient() : await createClient()
 
-    if (!user) {
-        return {
-            shopifyConnected: false,
-            shopifyExported: false,
-            shopifyProductCount: 0,
-            etsyConnected: false,
-            etsyExported: false,
-            etsyProductCount: 0,
-            inventoryMappedCount: 0,
-            isComplete: false
+    let shopId: string | null = null;
+
+    if (testShopDomain) {
+        // Find shop by domain
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('shop_domain', testShopDomain)
+            .maybeSingle()
+
+        if (shop) {
+            shopId = shop.id;
+            console.log('getSetupStatus: TEST MODE found shopId', shopId, 'for domain', testShopDomain);
+        } else {
+            console.log('getSetupStatus: No shop found for domain', testShopDomain);
         }
     }
 
-    // Get shop info
+    if (!shopId) {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+            return {
+                shopifyConnected: false,
+                shopifyExported: false,
+                shopifyProductCount: 0,
+                etsyConnected: false,
+                etsyExported: false,
+                etsyProductCount: 0,
+                inventoryMappedCount: 0,
+                isComplete: false,
+                initialProductCounts: null
+            }
+        }
+
+        // Get shop info via user
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('owner_id', user.id)
+            .maybeSingle()
+
+        if (!shop) {
+            return {
+                shopifyConnected: false,
+                shopifyExported: false,
+                shopifyProductCount: 0,
+                etsyConnected: false,
+                etsyExported: false,
+                etsyProductCount: 0,
+                inventoryMappedCount: 0,
+                isComplete: false,
+                initialProductCounts: null
+            }
+        }
+        shopId = shop.id;
+    }
+
+    // Get full shop info using the ID we determined
     const { data: shop } = await supabase
         .from('shops')
-        .select('id, shopify_connected, etsy_connected, is_active, access_token')
-        .eq('owner_id', user.id)
+        .select('id, shopify_connected, etsy_connected, is_active, access_token, initial_product_counts')
+        .eq('id', shopId)
         .maybeSingle()
 
     if (!shop) {
@@ -60,7 +114,8 @@ export async function getSetupStatus(): Promise<SetupStatus> {
             etsyExported: false,
             etsyProductCount: 0,
             inventoryMappedCount: 0,
-            isComplete: false
+            isComplete: false,
+            initialProductCounts: null
         }
     }
 
@@ -105,7 +160,8 @@ export async function getSetupStatus(): Promise<SetupStatus> {
         etsyExported: etsyProductCount > 0,
         etsyProductCount,
         inventoryMappedCount,
-        isComplete
+        isComplete,
+        initialProductCounts: shop.initial_product_counts
     }
 }
 
@@ -116,29 +172,36 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy'): Promise<
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) return []
+    let shopId: string | null = null;
 
-    // Get shop ID
-    const { data: shop } = await supabase
-        .from('shops')
-        .select('id')
-        .eq('owner_id', user.id)
-        .maybeSingle()
+    if (!user) {
+        console.log('getStagingProducts: No user found, using hardcoded test shop ID');
+        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
+    } else {
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('owner_id', user.id)
+            .maybeSingle()
 
-    if (!shop) return []
+        shopId = shop?.id || null;
+    }
+
+    if (!shopId) return []
 
     const tableName = platform === 'shopify'
         ? 'staging_shopify_products'
         : 'staging_etsy_products'
 
     const platformIdField = platform === 'shopify'
-        ? 'shopify_inventory_item_id'
-        : 'etsy_listing_id'
+        ? 'shopify_inventory_item_id' // Variant ID
+        : 'etsy_variant_id' // Use variant ID for matching with AI
 
+    // Select all columns to check what we have
     const { data, error } = await supabase
         .from(tableName)
         .select('*')
-        .eq('shop_id', shop.id)
+        .eq('shop_id', shopId)
         .order('created_at', { ascending: false })
 
     if (error || !data) return []
@@ -151,7 +214,12 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy'): Promise<
         imageUrl: item.image_url,
         stockQuantity: item.stock_quantity,
         status: item.status,
-        platformId: item[platformIdField]
+        platformId: item[platformIdField],
+
+        // Map new grouping fields
+        shopifyProductId: item.shopify_product_id || null,
+        etsyListingId: item.etsy_listing_id || null,
+        variantTitle: item.variant_title || item.option1 || null // Fallback to option1 if variant_title missing
     }))
 }
 
@@ -162,29 +230,82 @@ export async function getStagingCounts(): Promise<{ shopify: number, etsy: numbe
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) return { shopify: 0, etsy: 0 }
+    let shopId: string | null = null;
 
-    const { data: shop } = await supabase
-        .from('shops')
-        .select('id')
-        .eq('owner_id', user.id)
-        .maybeSingle()
+    if (!user) {
+        // Force test shop ID if not logged in
+        console.log('getStagingCounts: No user found, using hardcoded test shop ID');
+        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
+    } else {
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('owner_id', user.id)
+            .maybeSingle()
 
-    if (!shop) return { shopify: 0, etsy: 0 }
+        shopId = shop?.id || null;
+    }
+
+    if (!shopId) return { shopify: 0, etsy: 0 }
 
     const [shopifyResult, etsyResult] = await Promise.all([
         supabase
             .from('staging_shopify_products')
             .select('id', { count: 'exact', head: true })
-            .eq('shop_id', shop.id),
+            .eq('shop_id', shopId),
         supabase
             .from('staging_etsy_products')
             .select('id', { count: 'exact', head: true })
-            .eq('shop_id', shop.id)
+            .eq('shop_id', shopId)
     ])
 
     return {
         shopify: shopifyResult.count || 0,
         etsy: etsyResult.count || 0
     }
+}
+
+/**
+ * Clear staging tables for the current connected shop
+ */
+export async function clearStagingTables(): Promise<{ success: boolean; message: string }> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    let shopId: string | null = null;
+
+    if (!user) {
+        console.log('clearStagingTables: No user found, using hardcoded test shop ID');
+        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
+    } else {
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('owner_id', user.id)
+            .maybeSingle()
+
+        shopId = shop?.id || null;
+    }
+
+    if (!shopId) {
+        return { success: false, message: 'Shop not found' }
+    }
+
+    // Delete from both staging tables
+    const [delShopify, delEtsy] = await Promise.all([
+        supabase.from('staging_shopify_products').delete().eq('shop_id', shopId),
+        supabase.from('staging_etsy_products').delete().eq('shop_id', shopId)
+    ])
+
+    if (delShopify.error) {
+        console.error('Failed to clear Shopify staging:', delShopify.error)
+        return { success: false, message: 'Failed to clear Shopify staging data' }
+    }
+
+    if (delEtsy.error) {
+        console.error('Failed to clear Etsy staging:', delEtsy.error)
+        return { success: false, message: 'Failed to clear Etsy staging data' }
+    }
+
+    return { success: true, message: 'Staging data cleared successfully' }
 }
