@@ -1160,10 +1160,12 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     const load = async () => {
         try {
+            console.log('[StagingInterface] load() called with currentUserId:', currentUserId);
             const [s, e] = await Promise.all([
                 getStagingProducts('shopify', currentUserId),
                 getStagingProducts('etsy', currentUserId)
             ]);
+            console.log('[StagingInterface] loaded products:', { shopify: s.length, etsy: e.length });
             setShopifyProducts(s);
             setEtsyProducts(e);
         } catch (err) {

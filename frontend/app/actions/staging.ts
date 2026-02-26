@@ -169,25 +169,36 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
  * Get products from staging tables
  */
 export async function getStagingProducts(platform: 'shopify' | 'etsy', ownerId?: string): Promise<StagingProduct[]> {
+    console.log(`[getStagingProducts] Called with platform=${platform}, ownerId=${ownerId}`)
     const supabase = ownerId ? createAdminClient() : await createClient()
 
     let resolvedOwnerId = ownerId;
 
     if (!resolvedOwnerId) {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return [];
+        if (!user) {
+            console.log('[getStagingProducts] No user and no ownerId, returning empty')
+            return [];
+        }
         resolvedOwnerId = user.id;
     }
 
-    const { data: shop } = await supabase
+    console.log(`[getStagingProducts] resolvedOwnerId=${resolvedOwnerId}`)
+
+    const { data: shop, error: shopError } = await supabase
         .from('shops')
         .select('id')
         .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
+    console.log(`[getStagingProducts] Shop query result:`, { shop, shopError })
+
     const shopId = shop?.id || null;
 
-    if (!shopId) return []
+    if (!shopId) {
+        console.log('[getStagingProducts] No shopId found, returning empty')
+        return []
+    }
 
     const tableName = platform === 'shopify'
         ? 'staging_shopify_products'
@@ -203,6 +214,8 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy', ownerId?:
         .select('*')
         .eq('shop_id', shopId)
         .order('created_at', { ascending: false })
+
+    console.log(`[getStagingProducts] ${tableName} query: shopId=${shopId}, count=${data?.length || 0}, error=${error?.message || 'none'}`)
 
     if (error || !data) return []
 
