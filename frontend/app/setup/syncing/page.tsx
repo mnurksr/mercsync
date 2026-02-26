@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/components/AuthProvider';
+import { createBrowserClient } from '@supabase/ssr';
 import { Loader2, CheckCircle2, RefreshCw, ArrowRight, Terminal } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -20,7 +20,12 @@ export default function SyncingDashboard() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const jobId = searchParams.get('job_id');
-    const { supabase } = useAuth();
+
+    // Create a dedicated Supabase client (works without auth session)
+    const supabase = useMemo(() => createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ), []);
 
     const [job, setJob] = useState<SyncJob | null>(null);
     const [messages, setMessages] = useState<string[]>([]);
