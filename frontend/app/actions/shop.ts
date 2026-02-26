@@ -215,39 +215,31 @@ export async function getShopifyLocations(): Promise<{ success: boolean; data?: 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    let shopId: string | null = null;
-    let shopDomainForTest: string | null = null;
-    let shopTokenForTest: string | null = null;
-
     if (!user) {
-        console.log('getShopifyLocations: No user found, using hardcoded test shop data');
-        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
-        shopDomainForTest = 'shopiauto-test.myshopify.com';
-        shopTokenForTest = 'shpua_7903e8f67b0bbf1c8888340140ca515a';
-    } else {
-        const { data: userShop } = await supabase
-            .from('shops')
-            .select('id')
-            .eq('owner_id', user.id)
-            .maybeSingle()
-
-        shopId = userShop?.id || null;
+        console.log('getShopifyLocations: No user found');
+        return { success: false, message: 'User not authenticated' };
     }
+
+    const { data: userShop } = await supabase
+        .from('shops')
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+    const shopId = userShop?.id || null;
 
     if (!shopId) {
         return { success: false, message: 'Shop not found' }
     }
 
-    let shopData = { shop_domain: shopDomainForTest, access_token: shopTokenForTest };
+    let shopData = { shop_domain: null as string | null, access_token: null as string | null };
 
-    if (user) {
-        const { data: shop } = await supabase
-            .from('shops')
-            .select('id, shop_domain, access_token')
-            .eq('id', shopId)
-            .maybeSingle()
-        if (shop) shopData = { shop_domain: shop.shop_domain, access_token: shop.access_token };
-    }
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id, shop_domain, access_token')
+        .eq('id', shopId)
+        .maybeSingle()
+    if (shop) shopData = { shop_domain: shop.shop_domain, access_token: shop.access_token };
 
     if (!shopData.shop_domain || !shopData.access_token) {
         return { success: false, message: 'Shopify not fully connected' }

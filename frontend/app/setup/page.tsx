@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import {
     ShoppingBag, Store,
@@ -16,6 +16,7 @@ import StagingInterface from '@/components/staging/StagingInterface';
 export default function SetupPage() {
     const { user } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState(true);
 
     // State
@@ -61,8 +62,9 @@ export default function SetupPage() {
     const loadData = async () => {
         try {
             console.log('SetupPage: Starting loadData');
-            const TEST_SHOP_DOMAIN = 'shopiauto-test.myshopify.com';
-            const shopDomainToUse = user ? undefined : TEST_SHOP_DOMAIN;
+            // Get shop domain from URL params (Shopify passes ?shop= to embedded apps)
+            const shopFromUrl = searchParams.get('shop') || undefined;
+            const shopDomainToUse = user ? undefined : shopFromUrl;
             console.log('SetupPage: Using domain:', shopDomainToUse, 'User:', user?.id);
 
             // Add timeout race
@@ -116,8 +118,13 @@ export default function SetupPage() {
     };
 
     const handleConnectEtsy = () => {
-        const userId = user?.id || 'eaccc98b-6a52-405b-a17d-c0afc594fb9d';
-        window.location.href = `https://api.mercsync.com/webhook/auth/etsy/start?user_id=${userId}`;
+        if (!user?.id) {
+            console.error('handleConnectEtsy: No user ID found');
+            alert('User not authenticated. Please log in first.');
+            return;
+        }
+        // Open in new tab to avoid loading inside Shopify iframe
+        window.open(`https://api.mercsync.com/webhook/auth/etsy/start?user_id=${user.id}`, '_blank');
     };
 
     const handleMatch = () => {
@@ -126,7 +133,7 @@ export default function SetupPage() {
 
     const handleStartImport = async () => {
         console.log('Start Import clicked');
-        const userId = user?.id || 'eaccc98b-6a52-405b-a17d-c0afc594fb9d';
+        const userId = user?.id;
 
         if (!userId) {
             console.error('Start Import: No user ID found');
@@ -225,7 +232,7 @@ export default function SetupPage() {
     }
 
     if (showMatchingInterface) {
-        const activeUserId = user?.id || 'eaccc98b-6a52-405b-a17d-c0afc594fb9d';
+        const activeUserId = user?.id;
         return <StagingInterface
             isSetupMode={true}
             userId={activeUserId}

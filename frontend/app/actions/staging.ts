@@ -172,20 +172,18 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy'): Promise<
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    let shopId: string | null = null;
 
     if (!user) {
-        console.log('getStagingProducts: No user found, using hardcoded test shop ID');
-        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
-    } else {
-        const { data: shop } = await supabase
-            .from('shops')
-            .select('id')
-            .eq('owner_id', user.id)
-            .maybeSingle()
-
-        shopId = shop?.id || null;
+        return [];
     }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+    const shopId = shop?.id || null;
 
     if (!shopId) return []
 
@@ -230,21 +228,18 @@ export async function getStagingCounts(): Promise<{ shopify: number, etsy: numbe
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    let shopId: string | null = null;
 
     if (!user) {
-        // Force test shop ID if not logged in
-        console.log('getStagingCounts: No user found, using hardcoded test shop ID');
-        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
-    } else {
-        const { data: shop } = await supabase
-            .from('shops')
-            .select('id')
-            .eq('owner_id', user.id)
-            .maybeSingle()
-
-        shopId = shop?.id || null;
+        return { shopify: 0, etsy: 0 };
     }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+    const shopId = shop?.id || null;
 
     if (!shopId) return { shopify: 0, etsy: 0 }
 
@@ -272,20 +267,18 @@ export async function clearStagingTables(): Promise<{ success: boolean; message:
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    let shopId: string | null = null;
 
     if (!user) {
-        console.log('clearStagingTables: No user found, using hardcoded test shop ID');
-        shopId = 'b336745a-68d5-42a6-a8c5-a85a1c8f8f60';
-    } else {
-        const { data: shop } = await supabase
-            .from('shops')
-            .select('id')
-            .eq('owner_id', user.id)
-            .maybeSingle()
-
-        shopId = shop?.id || null;
+        return { success: false, message: 'User not authenticated' };
     }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+    const shopId = shop?.id || null;
 
     if (!shopId) {
         return { success: false, message: 'Shop not found' }
