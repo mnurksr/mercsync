@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export type Product = {
     id: string
@@ -18,22 +19,26 @@ export type ProductsResponse = {
     isShopifyConnected: boolean
 }
 
-export async function getProducts(searchQuery: string = ''): Promise<Product[]> {
-    const response = await getProductsWithMeta(searchQuery)
+export async function getProducts(searchQuery: string = '', ownerId?: string): Promise<Product[]> {
+    const response = await getProductsWithMeta(searchQuery, ownerId)
     return response.products
 }
 
-export async function getProductsWithMeta(searchQuery: string = ''): Promise<ProductsResponse> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getProductsWithMeta(searchQuery: string = '', ownerId?: string): Promise<ProductsResponse> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
-    if (!user) return { products: [], isEtsyConnected: false, isShopifyConnected: false }
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { products: [], isEtsyConnected: false, isShopifyConnected: false }
+        resolvedOwnerId = user.id;
+    }
 
     // Get shop info including connection status
     const { data: shopData } = await supabase
         .from('shops')
         .select('id, etsy_connected, shopify_connected, is_active, access_token')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
     if (!shopData) return { products: [], isEtsyConnected: false, isShopifyConnected: false }

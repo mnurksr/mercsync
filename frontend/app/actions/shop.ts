@@ -166,13 +166,14 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
     }
 }
 
-export async function disconnectShop(platform: string = 'shopify'): Promise<{ success: boolean; message: string }> {
-    const supabase = await createClient()
+export async function disconnectShop(platform: string = 'shopify', ownerId?: string): Promise<{ success: boolean; message: string }> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-        return { success: false, message: 'Authentication failed' }
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) return { success: false, message: 'Authentication failed' }
+        resolvedOwnerId = user.id;
     }
 
     try {
@@ -184,7 +185,7 @@ export async function disconnectShop(platform: string = 'shopify'): Promise<{ su
                     access_token: null,
                     is_active: false
                 })
-                .eq('owner_id', user.id)
+                .eq('owner_id', resolvedOwnerId)
 
             if (error) throw error
             return { success: true, message: 'Shopify disconnected' }
@@ -198,7 +199,7 @@ export async function disconnectShop(platform: string = 'shopify'): Promise<{ su
                     etsy_access_token: null,
                     etsy_refresh_token: null
                 })
-                .eq('owner_id', user.id)
+                .eq('owner_id', resolvedOwnerId)
 
             if (error) throw error
             return { success: true, message: 'Etsy disconnected' }
@@ -214,19 +215,20 @@ export async function disconnectShop(platform: string = 'shopify'): Promise<{ su
 /**
  * Fetches locations from the connected Shopify store
  */
-export async function getShopifyLocations(): Promise<{ success: boolean; data?: any[]; message?: string }> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getShopifyLocations(ownerId?: string): Promise<{ success: boolean; data?: any[]; message?: string }> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
-    if (!user) {
-        console.log('getShopifyLocations: No user found');
-        return { success: false, message: 'User not authenticated' };
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, message: 'User not authenticated' };
+        resolvedOwnerId = user.id;
     }
 
     const { data: userShop } = await supabase
         .from('shops')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
     const shopId = userShop?.id || null;

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export type HistoryItem = {
     id: string
@@ -13,13 +14,17 @@ export type HistoryItem = {
     status: 'success' | 'warning' | 'error'
 }
 
-export async function getSyncHistory(filter: string = 'all'): Promise<HistoryItem[]> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getSyncHistory(filter: string = 'all', ownerId?: string): Promise<HistoryItem[]> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
-    if (!user) return []
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return []
+        resolvedOwnerId = user.id;
+    }
 
-    const { data: userShops } = await supabase.from('shops').select('id').eq('owner_id', user.id)
+    const { data: userShops } = await supabase.from('shops').select('id').eq('owner_id', resolvedOwnerId)
     const shopIds = userShops?.map(s => s.id) || []
 
     if (shopIds.length === 0) return []

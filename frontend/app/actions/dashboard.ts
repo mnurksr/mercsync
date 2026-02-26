@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export type DashboardStats = {
     productsSynced: number
@@ -19,17 +20,21 @@ export type ActivityItem = {
     status: 'success' | 'warning' | 'error'
 }
 
-export async function getDashboardStats(): Promise<DashboardStats> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getDashboardStats(ownerId?: string): Promise<DashboardStats> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
-    if (!user) return { productsSynced: 0, syncSuccessRate: 0, atRiskProducts: 0, connectedStores: 0, lastSync: '--' }
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { productsSynced: 0, syncSuccessRate: 0, atRiskProducts: 0, connectedStores: 0, lastSync: '--' }
+        resolvedOwnerId = user.id;
+    }
 
     // Connected Stores
     const { count: storeCount } = await supabase
         .from('shops')
         .select('*', { count: 'exact', head: true })
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
         .eq('is_active', true)
 
     // Products Synced (Total items)
@@ -46,7 +51,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const { data: userShops } = await supabase
         .from('shops')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
 
     const shopIds = userShops?.map(s => s.id) || []
 
@@ -100,16 +105,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     }
 }
 
-export async function getRecentActivity(): Promise<ActivityItem[]> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getRecentActivity(ownerId?: string): Promise<ActivityItem[]> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
-    if (!user) return []
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return []
+        resolvedOwnerId = user.id;
+    }
 
     const { data: userShops } = await supabase
         .from('shops')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
 
     const shopIds = userShops?.map(s => s.id) || []
 

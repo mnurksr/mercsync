@@ -1007,7 +1007,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         setShowLocationModal(true);
         setLoadingLocations(true);
         try {
-            const res = await getShopifyLocations();
+            const res = await getShopifyLocations(currentUserId);
             if (res.success && res.data) {
                 setLocations(res.data);
                 if (res.data.length > 0) {
