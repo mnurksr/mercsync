@@ -7,6 +7,7 @@ export type ShopConnection = {
     shop_domain: string | null
     last_sync: string | null
     platform: 'shopify' | 'etsy'
+    owner_id?: string | null
     debugMessage?: string
 }
 
@@ -88,6 +89,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 shop_domain: data.shop_domain,
                 last_sync: data.created_at ? new Date(data.created_at).toLocaleString() : 'Just now',
                 platform: 'shopify',
+                owner_id: data.owner_id,
                 debugMessage: isConnected
                     ? `Connected (shopify_connected=${data.shopify_connected}, is_active=${data.is_active})`
                     : `Not connected. shopify_connected=${data.shopify_connected}, is_active=${data.is_active}, has_token=${!!data.access_token}`
@@ -137,6 +139,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 shop_domain: data.shop_domain,
                 last_sync: data.created_at ? new Date(data.created_at).toLocaleString() : 'Just now',
                 platform: 'etsy',
+                owner_id: data.owner_id,
                 debugMessage: isConnected
                     ? `Connected (etsy_connected=${data.etsy_connected}, has_token=${!!data.etsy_access_token})`
                     : `Not connected. etsy_connected=${data.etsy_connected}, has_token=${!!data.etsy_access_token}`

@@ -37,7 +37,7 @@ export default function SetupPage() {
     const [isImporting, setIsImporting] = useState(false);
     const [shopifyFilters, setShopifyFilters] = useState<string[]>(['active']);
     const [etsyFilters, setEtsyFilters] = useState<string[]>(['active']);
-
+    const [ownerId, setOwnerId] = useState<string | null>(null);
 
     const [isMatching, setIsMatching] = useState(false);
     const [isMatched, setIsMatched] = useState(false);
@@ -84,6 +84,10 @@ export default function SetupPage() {
 
             console.log('SetupPage: Data loaded', { shopify, etsy, setupStatus });
 
+            // Extract owner_id from shop data (works without Supabase auth)
+            const resolvedOwnerId = shopify.owner_id || etsy.owner_id || null;
+            if (resolvedOwnerId) setOwnerId(resolvedOwnerId);
+
             const sCounts = setupStatus?.initialProductCounts?.shopify || {};
             const eCounts = setupStatus?.initialProductCounts?.etsy || {};
 
@@ -118,13 +122,14 @@ export default function SetupPage() {
     };
 
     const handleConnectEtsy = () => {
-        if (!user?.id) {
+        const resolvedUserId = user?.id || ownerId;
+        if (!resolvedUserId) {
             console.error('handleConnectEtsy: No user ID found');
             alert('User not authenticated. Please log in first.');
             return;
         }
         // Open in new tab to avoid loading inside Shopify iframe
-        window.open(`https://api.mercsync.com/webhook/auth/etsy/start?user_id=${user.id}`, '_blank');
+        window.open(`https://api.mercsync.com/webhook/auth/etsy/start?user_id=${resolvedUserId}`, '_blank');
     };
 
     const handleMatch = () => {
@@ -133,7 +138,7 @@ export default function SetupPage() {
 
     const handleStartImport = async () => {
         console.log('Start Import clicked');
-        const userId = user?.id;
+        const userId = user?.id || ownerId;
 
         if (!userId) {
             console.error('Start Import: No user ID found');
@@ -232,7 +237,7 @@ export default function SetupPage() {
     }
 
     if (showMatchingInterface) {
-        const activeUserId = user?.id;
+        const activeUserId = user?.id || ownerId;
         return <StagingInterface
             isSetupMode={true}
             userId={activeUserId}
