@@ -168,19 +168,21 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
 /**
  * Get products from staging tables
  */
-export async function getStagingProducts(platform: 'shopify' | 'etsy'): Promise<StagingProduct[]> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getStagingProducts(platform: 'shopify' | 'etsy', ownerId?: string): Promise<StagingProduct[]> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
+    let resolvedOwnerId = ownerId;
 
-    if (!user) {
-        return [];
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return [];
+        resolvedOwnerId = user.id;
     }
 
     const { data: shop } = await supabase
         .from('shops')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
     const shopId = shop?.id || null;
@@ -224,19 +226,21 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy'): Promise<
 /**
  * Quick count for staging tables (for header display)
  */
-export async function getStagingCounts(): Promise<{ shopify: number, etsy: number }> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function getStagingCounts(ownerId?: string): Promise<{ shopify: number, etsy: number }> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
+    let resolvedOwnerId = ownerId;
 
-    if (!user) {
-        return { shopify: 0, etsy: 0 };
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { shopify: 0, etsy: 0 };
+        resolvedOwnerId = user.id;
     }
 
     const { data: shop } = await supabase
         .from('shops')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
     const shopId = shop?.id || null;
@@ -263,19 +267,21 @@ export async function getStagingCounts(): Promise<{ shopify: number, etsy: numbe
 /**
  * Clear staging tables for the current connected shop
  */
-export async function clearStagingTables(): Promise<{ success: boolean; message: string }> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+export async function clearStagingTables(ownerId?: string): Promise<{ success: boolean; message: string }> {
+    const supabase = ownerId ? createAdminClient() : await createClient()
 
+    let resolvedOwnerId = ownerId;
 
-    if (!user) {
-        return { success: false, message: 'User not authenticated' };
+    if (!resolvedOwnerId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { success: false, message: 'User not authenticated' };
+        resolvedOwnerId = user.id;
     }
 
     const { data: shop } = await supabase
         .from('shops')
         .select('id')
-        .eq('owner_id', user.id)
+        .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
     const shopId = shop?.id || null;

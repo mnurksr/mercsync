@@ -987,7 +987,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         if (!confirm('Staging verileri temizlenecek ve geri dönülecek. Onaylıyor musunuz?')) return;
         setLoading(true);
         try {
-            await clearStagingTables();
+            await clearStagingTables(currentUserId);
             localStorage.removeItem('ms_staging_shopify');
             localStorage.removeItem('ms_staging_etsy');
             setShopifyProducts([]);
@@ -1049,8 +1049,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
                 // Fetch fresh staging products (since n8n might have updated stockQuantity to matching location)
                 const [s, e] = await Promise.all([
-                    getStagingProducts('shopify'),
-                    getStagingProducts('etsy')
+                    getStagingProducts('shopify', currentUserId),
+                    getStagingProducts('etsy', currentUserId)
                 ]);
 
                 setShopifyProducts(s);
@@ -1161,8 +1161,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const load = async () => {
         try {
             const [s, e] = await Promise.all([
-                getStagingProducts('shopify'),
-                getStagingProducts('etsy')
+                getStagingProducts('shopify', currentUserId),
+                getStagingProducts('etsy', currentUserId)
             ]);
             setShopifyProducts(s);
             setEtsyProducts(e);
