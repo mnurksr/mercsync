@@ -1718,6 +1718,21 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
             const job_id = crypto.randomUUID();
 
+            // Create initial sync_jobs record in Supabase FIRST
+            // so the syncing page has something to subscribe to via Realtime
+            await fetch('/api/webhooks/job-progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    job_id,
+                    user_id: currentUserId,
+                    status: 'pending',
+                    message: 'İşlem başlatılıyor...',
+                    current: 0,
+                    total: 100
+                })
+            });
+
             const payload = {
                 user_id: currentUserId,
                 job_id,
