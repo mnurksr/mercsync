@@ -1718,21 +1718,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
             const job_id = crypto.randomUUID();
 
-            // Create initial sync_jobs record in Supabase FIRST
-            // so the syncing page has something to subscribe to via Realtime
-            await fetch('/api/webhooks/job-progress', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    job_id,
-                    user_id: currentUserId,
-                    status: 'pending',
-                    message: 'İşlem başlatılıyor...',
-                    current: 0,
-                    total: 100
-                })
-            });
-
             const payload = {
                 user_id: currentUserId,
                 job_id,
@@ -1741,10 +1726,12 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 timestamp: new Date().toISOString()
             };
 
-            console.log('Sending webhook:', payload);
+            console.log('Starting sync:', payload);
             setSavingOverlay('loading');
 
-            const res = await fetch('https://api.mercsync.com/webhook/sync-stock', {
+            // Call our own API — replaces the n8n webhook.
+            // /api/sync/start creates the sync_jobs record and starts background processing.
+            const res = await fetch('/api/sync/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1754,7 +1741,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 throw new Error('Failed to start sync process');
             }
 
-            // Successfully triggered webhook, redirect to realtime progress dashboard
+            // Redirect to realtime progress dashboard
             router.push(`/setup/syncing?job_id=${job_id}`);
 
         } catch (err) {
