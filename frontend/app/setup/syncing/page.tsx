@@ -3,7 +3,10 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { CheckCircle2, RefreshCw, ArrowRight, Terminal, ShoppingBag, Store, Package, ArrowRightLeft, Zap } from 'lucide-react';
+import {
+    CheckCircle2, RefreshCw, ArrowRight, Package,
+    ShoppingBag, Store, ArrowRightLeft, Zap, AlertCircle, ArrowLeft
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type SyncStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -16,148 +19,115 @@ interface SyncJob {
     message: string;
 }
 
-// Event types from n8n
-type LogEvent = {
-    type: 'log';
-    text: string;
-    timestamp: string;
-};
-
+// Event types
+type LogEvent = { type: 'log'; text: string };
 type ProductCloneEvent = {
     type: 'product_clone';
     direction: 'to_shopify' | 'to_etsy';
-    product: {
-        name: string;
-        price: number;
-        stock: number;
-        image?: string;
-        sku?: string;
-    };
+    product: { name: string; price: number; stock: number; image?: string; sku?: string };
     status: 'cloning' | 'success' | 'failed';
     text: string;
-    timestamp: string;
 };
-
 type StockSyncEvent = {
     type: 'stock_sync';
     platform: 'shopify' | 'etsy';
-    product: {
-        name: string;
-        old_stock: number;
-        new_stock: number;
-        sku?: string;
-    };
+    product: { name: string; old_stock: number; new_stock: number; sku?: string };
     text: string;
-    timestamp: string;
 };
-
 type SyncEvent = LogEvent | ProductCloneEvent | StockSyncEvent;
 
 function parseMessage(raw: string): SyncEvent {
     try {
         const parsed = JSON.parse(raw);
-        if (parsed.type) return { ...parsed, timestamp: parsed.timestamp || new Date().toISOString() };
+        if (parsed.type) return parsed;
     } catch { }
-    // Plain text fallback
-    return { type: 'log', text: raw, timestamp: new Date().toISOString() };
+    return { type: 'log', text: raw };
 }
 
-// Direction badge component
+// ── Direction Badge ──
 function DirectionBadge({ direction }: { direction: 'to_shopify' | 'to_etsy' }) {
     if (direction === 'to_shopify') {
         return (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-green-500/15 text-green-400 border border-green-500/20">
-                <Store className="w-3 h-3" />
-                <span>→ Shopify</span>
-            </div>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-[#95BF47]/10 text-[#6d8e2e] border border-[#95BF47]/20">
+                <Store className="w-3 h-3" /> Shopify
+            </span>
         );
     }
     return (
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/20">
-            <ShoppingBag className="w-3 h-3" />
-            <span>→ Etsy</span>
-        </div>
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-[#F56400]/10 text-[#d45500] border border-[#F56400]/20">
+            <ShoppingBag className="w-3 h-3" /> Etsy
+        </span>
     );
 }
 
-// Product clone card component
+// ── Status Icon ──
+function StatusIcon({ status }: { status: 'cloning' | 'success' | 'failed' }) {
+    if (status === 'success') return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
+    if (status === 'failed') return <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />;
+    return <RefreshCw className="w-4 h-4 text-blue-500 animate-spin shrink-0" style={{ animationDuration: '1.5s' }} />;
+}
+
+// ── Product Clone Card ──
 function ProductCloneCard({ event }: { event: ProductCloneEvent }) {
     const isShopify = event.direction === 'to_shopify';
-    const borderColor = isShopify ? 'border-green-500/30' : 'border-orange-500/30';
-    const bgGlow = isShopify ? 'shadow-green-500/5' : 'shadow-orange-500/5';
+    const ringColor = event.status === 'failed' ? 'border-red-200'
+        : isShopify ? 'border-[#95BF47]/20' : 'border-[#F56400]/20';
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            className={`flex items-center gap-3 p-3 rounded-xl border ${borderColor} bg-white/[0.03] backdrop-blur-sm shadow-lg ${bgGlow}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className={`flex items-center gap-3 p-3 bg-white rounded-xl border ${ringColor} shadow-sm`}
         >
-            {/* Product Image */}
             {event.product.image ? (
-                <img
-                    src={event.product.image}
-                    alt={event.product.name}
-                    className="w-12 h-12 rounded-lg object-cover border border-white/10 shrink-0"
-                />
+                <img src={event.product.image} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-100 shrink-0" />
             ) : (
-                <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                    <Package className="w-5 h-5 text-gray-500" />
+                <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+                    <Package className="w-4 h-4 text-gray-400" />
                 </div>
             )}
-
-            {/* Product Details */}
             <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-white font-semibold text-sm truncate">{event.product.name}</span>
-                    {event.status === 'success' && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    )}
+                <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-gray-900 font-semibold text-sm truncate">{event.product.name}</span>
+                    <StatusIcon status={event.status} />
                 </div>
-                <div className="flex items-center gap-3 text-xs text-gray-400">
-                    <span className="font-medium">${event.product.price}</span>
-                    <span>•</span>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span>${event.product.price}</span>
+                    <span>·</span>
                     <span>Stok: {event.product.stock}</span>
                     {event.product.sku && event.product.sku !== 'NO-SKU' && (
-                        <>
-                            <span>•</span>
-                            <span className="text-gray-500">{event.product.sku}</span>
-                        </>
+                        <><span>·</span><span className="text-gray-400">{event.product.sku}</span></>
                     )}
                 </div>
             </div>
-
-            {/* Direction Badge */}
             <DirectionBadge direction={event.direction} />
         </motion.div>
     );
 }
 
-// Stock sync event component
-function StockSyncCard({ event }: { event: StockSyncEvent }) {
+// ── Stock Sync Row ──
+function StockSyncRow({ event }: { event: StockSyncEvent }) {
     const isShopify = event.platform === 'shopify';
-    const color = isShopify ? 'text-green-400' : 'text-orange-400';
-
     return (
         <motion.div
-            initial={{ opacity: 0, x: -8 }}
+            initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]"
+            className="flex items-center gap-2.5 px-3 py-2 bg-white rounded-lg border border-gray-100"
         >
-            <ArrowRightLeft className={`w-4 h-4 ${color} shrink-0`} />
-            <div className="flex-1 min-w-0">
-                <span className="text-gray-300 text-sm">{event.product.name}</span>
-                <span className="text-gray-500 text-xs ml-2">
-                    {event.product.old_stock} → {event.product.new_stock}
-                </span>
-            </div>
-            <span className={`text-[10px] font-bold uppercase ${color}`}>
+            <ArrowRightLeft className={`w-3.5 h-3.5 shrink-0 ${isShopify ? 'text-[#95BF47]' : 'text-[#F56400]'}`} />
+            <span className="text-sm text-gray-700 truncate flex-1">{event.product.name}</span>
+            <span className="text-xs text-gray-400 tabular-nums shrink-0">
+                {event.product.old_stock} → {event.product.new_stock}
+            </span>
+            <span className={`text-[10px] font-bold uppercase ${isShopify ? 'text-[#95BF47]' : 'text-[#F56400]'}`}>
                 {isShopify ? 'Shopify' : 'Etsy'}
             </span>
         </motion.div>
     );
 }
 
+// ── Main Page ──
 export default function SyncingDashboard() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -173,231 +143,171 @@ export default function SyncingDashboard() {
     const feedEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!jobId) {
-            router.push('/setup');
-            return;
-        }
+        if (!jobId) { router.push('/setup'); return; }
 
         const fetchInitialJob = async () => {
-            const { data, error } = await supabase
-                .from('sync_jobs')
-                .select('*')
-                .eq('id', jobId)
-                .single();
-
+            const { data } = await supabase.from('sync_jobs').select('*').eq('id', jobId).single();
             if (data) {
                 setJob(data);
-                if (data.message) {
-                    setEvents([parseMessage(data.message)]);
-                }
+                if (data.message) setEvents([parseMessage(data.message)]);
             }
         };
 
         fetchInitialJob();
 
-        // Subscribe to real-time updates
         const channel = supabase
             .channel(`job_${jobId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'sync_jobs',
-                    filter: `id=eq.${jobId}`,
-                },
-                (payload: any) => {
-                    const newJob = payload.new as SyncJob;
-                    setJob(newJob);
-
-                    if (newJob.message) {
-                        const event = parseMessage(newJob.message);
-                        setEvents((prev) => {
-                            // Deduplicate by comparing last event text
-                            const lastEvent = prev[prev.length - 1];
-                            const newText = event.type === 'log' ? event.text :
-                                event.type === 'product_clone' ? `${event.direction}-${event.product.name}` :
-                                    `stock-${event.product.name}`;
-                            const lastText = lastEvent?.type === 'log' ? lastEvent.text :
-                                lastEvent?.type === 'product_clone' ? `${lastEvent.direction}-${lastEvent.product.name}` :
-                                    lastEvent?.type === 'stock_sync' ? `stock-${lastEvent.product.name}` : '';
-
-                            if (lastText === newText) return prev;
-                            return [...prev, event];
-                        });
-                    }
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: 'sync_jobs', filter: `id=eq.${jobId}`
+            }, (payload: any) => {
+                const newJob = payload.new as SyncJob;
+                setJob(newJob);
+                if (newJob.message) {
+                    const event = parseMessage(newJob.message);
+                    setEvents(prev => {
+                        const key = (e: SyncEvent) =>
+                            e.type === 'log' ? e.text :
+                                e.type === 'product_clone' ? `${e.direction}-${e.product.name}-${e.status}` :
+                                    `stock-${e.product.name}`;
+                        const last = prev[prev.length - 1];
+                        if (last && key(last) === key(event)) return prev;
+                        return [...prev, event];
+                    });
                 }
-            )
+            })
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
     }, [jobId, router, supabase]);
 
-    // Auto-scroll
     useEffect(() => {
         feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [events]);
 
     const isComplete = job?.status === 'completed';
     const isFailed = job?.status === 'failed';
-    const progress = (job?.total_steps && job?.current_step)
-        ? Math.min(100, Math.round((job.current_step / job.total_steps) * 100))
-        : 0;
+    const isProcessing = job?.status === 'processing';
 
-    // Count cloned products
     const cloneEvents = events.filter(e => e.type === 'product_clone') as ProductCloneEvent[];
     const toShopifyCount = cloneEvents.filter(e => e.direction === 'to_shopify').length;
     const toEtsyCount = cloneEvents.filter(e => e.direction === 'to_etsy').length;
 
-    // Determine phase
-    const hasProductClones = cloneEvents.length > 0;
-    const phaseLabel = isComplete ? 'Tamamlandı' :
-        isFailed ? 'Hata' :
-            hasProductClones ? 'Ürün Klonlama' : 'Stok Senkronizasyonu';
-
     return (
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4 font-sans">
-            <div className="max-w-2xl w-full bg-[#12121a] rounded-2xl shadow-2xl overflow-hidden border border-white/[0.06] flex flex-col" style={{ maxHeight: '85vh' }}>
+        <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-4 font-sans">
+            <div className="max-w-lg w-full flex flex-col" style={{ maxHeight: '90vh' }}>
 
-                {/* Header */}
-                <div className="relative overflow-hidden shrink-0">
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-700" />
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_50%)]" />
-
-                    <div className="relative px-8 py-8 text-center">
+                {/* Header Card */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                    <div className="p-6 text-center">
                         <AnimatePresence mode="wait">
                             {isComplete ? (
                                 <motion.div key="done" initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                    className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center mx-auto mb-4 ring-2 ring-white/10">
-                                    <CheckCircle2 className="w-9 h-9 text-white" />
+                                    className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                                    <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+                                </motion.div>
+                            ) : isFailed ? (
+                                <motion.div key="fail" initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                    className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                                    <AlertCircle className="w-7 h-7 text-red-500" />
                                 </motion.div>
                             ) : (
                                 <motion.div key="spin" initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                    className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center mx-auto mb-4 ring-2 ring-white/10">
-                                    <RefreshCw className="w-8 h-8 text-white animate-spin" style={{ animationDuration: '2s' }} />
+                                    className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                                    <RefreshCw className="w-7 h-7 text-blue-500 animate-spin" style={{ animationDuration: '2s' }} />
                                 </motion.div>
                             )}
                         </AnimatePresence>
 
-                        <h2 className="text-2xl font-bold text-white mb-1">
-                            {isComplete ? 'Senkronizasyon Tamamlandı!' : isFailed ? 'Bir Hata Oluştu' : 'Senkronizasyon Odası'}
+                        <h2 className="text-xl font-bold text-gray-900 mb-1">
+                            {isComplete ? 'Senkronizasyon Tamamlandı' : isFailed ? 'Bir Hata Oluştu' : 'Senkronizasyon Devam Ediyor'}
                         </h2>
-                        <p className="text-indigo-100/80 text-sm">
-                            {isComplete
-                                ? 'Tüm işlemler başarıyla tamamlandı.'
-                                : isFailed
-                                    ? 'İşlem sırasında bir sorun oluştu.'
-                                    : 'Lütfen bu ekranı kapatmayın, işlemler devam ediyor.'}
+                        <p className="text-sm text-gray-500">
+                            {isComplete ? 'Tüm işlemler başarıyla tamamlandı.'
+                                : isFailed ? 'İşlem sırasında bir hata oluştu.'
+                                    : 'Lütfen bu sayfayı kapatmayın.'}
                         </p>
 
-                        {/* Clone counters */}
+                        {/* Counters */}
                         {(toShopifyCount > 0 || toEtsyCount > 0) && (
-                            <div className="flex items-center justify-center gap-4 mt-4">
+                            <div className="flex items-center justify-center gap-3 mt-3">
                                 {toShopifyCount > 0 && (
-                                    <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-white/90 font-medium">
-                                        <Store className="w-3 h-3" />
-                                        <span>{toShopifyCount} → Shopify</span>
-                                    </div>
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#95BF47]/10 text-[#6d8e2e]">
+                                        <Store className="w-3 h-3" />{toShopifyCount} → Shopify
+                                    </span>
                                 )}
                                 {toEtsyCount > 0 && (
-                                    <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-white/90 font-medium">
-                                        <ShoppingBag className="w-3 h-3" />
-                                        <span>{toEtsyCount} → Etsy</span>
-                                    </div>
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F56400]/10 text-[#d45500]">
+                                        <ShoppingBag className="w-3 h-3" />{toEtsyCount} → Etsy
+                                    </span>
                                 )}
+                            </div>
+                        )}
+
+                        {/* Animated dots indicator */}
+                        {isProcessing && (
+                            <div className="flex items-center justify-center gap-1 mt-3">
+                                {[0, 1, 2].map(i => (
+                                    <motion.div
+                                        key={i}
+                                        className="w-1.5 h-1.5 rounded-full bg-blue-400"
+                                        animate={{ opacity: [0.3, 1, 0.3] }}
+                                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                                    />
+                                ))}
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Progress Section */}
-                <div className="px-6 pt-5 pb-3 shrink-0 border-b border-white/[0.04]">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                            <div className={`w-1.5 h-1.5 rounded-full ${isComplete ? 'bg-emerald-400' : isFailed ? 'bg-red-400' : 'bg-indigo-400 animate-pulse'}`} />
-                            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{phaseLabel}</span>
-                        </div>
-                        <span className="text-xl font-black text-white tabular-nums">{progress}%</span>
-                    </div>
-                    <div className="relative w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                        <motion.div
-                            className={`absolute top-0 left-0 h-full rounded-full ${isComplete ? 'bg-emerald-500' : isFailed ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-purple-500'
-                                }`}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.5, ease: 'easeOut' }}
-                        />
-                    </div>
-                    {!isComplete && job?.total_steps ? (
-                        <div className="flex justify-between mt-1.5">
-                            <span className="text-[10px] text-gray-500">
-                                {job?.status === 'processing' ? 'İşleniyor...' : 'Bekleniyor...'}
-                            </span>
-                            <span className="text-[10px] text-gray-500 font-bold tabular-nums">
-                                {job.current_step} / {job.total_steps}
-                            </span>
-                        </div>
-                    ) : null}
-                </div>
-
                 {/* Event Feed */}
-                <div className="flex-1 overflow-y-auto px-4 py-3" style={{ minHeight: '200px' }}>
-                    <div className="flex items-center gap-2 mb-3 px-2">
-                        <Terminal className="w-3.5 h-3.5 text-gray-500" />
-                        <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Canlı İşlemler</span>
-                        <div className="flex-1 h-px bg-white/[0.04]" />
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 overflow-hidden flex flex-col" style={{ minHeight: '280px' }}>
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 shrink-0">
+                        <Zap className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Canlı İşlemler</span>
                     </div>
 
-                    {events.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                            <Zap className="w-8 h-8 mb-3 opacity-30" />
-                            <p className="text-sm">Webhook bekleniyor...</p>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-2">
-                            <AnimatePresence>
-                                {events.map((event, i) => {
-                                    if (event.type === 'product_clone') {
-                                        return <ProductCloneCard key={`clone-${i}`} event={event} />;
-                                    }
-                                    if (event.type === 'stock_sync') {
-                                        return <StockSyncCard key={`stock-${i}`} event={event} />;
-                                    }
-                                    // Log event
-                                    return (
-                                        <motion.div
-                                            key={`log-${i}`}
-                                            initial={{ opacity: 0, x: -8 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            className={`flex items-start gap-2 px-3 py-1.5 text-sm ${i === events.length - 1 ? 'text-indigo-300' : 'text-gray-500'
-                                                }`}
-                                        >
-                                            <span className="text-gray-600 select-none shrink-0 font-mono">›</span>
-                                            <span className="break-words leading-relaxed">{event.text}</span>
-                                        </motion.div>
-                                    );
-                                })}
-                            </AnimatePresence>
-                            <div ref={feedEndRef} className="h-2 shrink-0" />
-                        </div>
-                    )}
+                    <div className="flex-1 overflow-y-auto px-3 py-3">
+                        {events.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full py-12 text-gray-400">
+                                <RefreshCw className="w-6 h-6 mb-2 animate-spin opacity-40" style={{ animationDuration: '3s' }} />
+                                <p className="text-sm">Bekleniyor...</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                <AnimatePresence>
+                                    {events.map((event, i) => {
+                                        if (event.type === 'product_clone') return <ProductCloneCard key={`c-${i}`} event={event} />;
+                                        if (event.type === 'stock_sync') return <StockSyncRow key={`s-${i}`} event={event} />;
+                                        return (
+                                            <motion.div key={`l-${i}`}
+                                                initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}
+                                                className={`flex items-start gap-2 px-3 py-1.5 text-sm ${i === events.length - 1 ? 'text-gray-800 font-medium' : 'text-gray-400'}`}
+                                            >
+                                                <span className="text-gray-300 select-none shrink-0">›</span>
+                                                <span className="leading-relaxed">{event.text}</span>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </AnimatePresence>
+                                <div ref={feedEndRef} className="h-1 shrink-0" />
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer */}
                 <AnimatePresence>
-                    {isComplete && (
+                    {(isComplete || isFailed) && (
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="px-6 py-4 border-t border-white/[0.06] shrink-0"
+                            className="mt-4"
                         >
                             <button
-                                onClick={() => router.push('/dashboard')}
-                                className="w-full px-6 py-3 bg-white hover:bg-gray-100 text-gray-900 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
+                                onClick={() => router.push('/setup')}
+                                className="w-full px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors shadow-sm"
                             >
-                                Dashboard'a Git <ArrowRight className="w-4 h-4" />
+                                <ArrowLeft className="w-4 h-4" /> Kuruluma Dön
                             </button>
                         </motion.div>
                     )}
