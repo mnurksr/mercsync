@@ -66,12 +66,12 @@ export default function RealtimeInventory() {
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
                     <Package className="w-5 h-5 text-blue-600" />
-                    Canlı Stok İzleme (Realtime)
+                    Live Stock Monitoring (Realtime)
                 </h2>
                 <div className="flex items-center gap-3">
                     {lastUpdate && (
                         <span className="text-sm text-green-600 font-medium animate-pulse">
-                            Güncellendi: {lastUpdate}
+                            Updated: {lastUpdate}
                         </span>
                     )}
                     <button
@@ -116,7 +116,7 @@ export default function RealtimeInventory() {
                     </tbody>
                 </table>
                 {levels.length === 0 && !loading && (
-                    <div className="text-center py-8 text-gray-400">Veri bulunamadı.</div>
+                    <div className="text-center py-8 text-gray-400">No data found.</div>
                 )}
             </div>
         </div>

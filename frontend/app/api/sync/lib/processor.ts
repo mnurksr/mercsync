@@ -85,17 +85,17 @@ export async function processSync(payload: SyncPayload) {
             .maybeSingle();
 
         if (!shop) {
-            await markFailed(job_id, 'Mağaza bulunamadı');
+            await markFailed(job_id, 'Shop not found');
             return;
         }
 
-        await sendLog(job_id, 'Veriler analiz edildi. Eşitleme başlıyor...', 0, 100);
+        await sendLog(job_id, 'Data analyzed. Starting sync...', 0, 100);
 
         let completedSteps = 0;
 
         // ── Phase 1: Sync Stocks ──
         if (parsed.stockUpdates.length > 0) {
-            await sendLog(job_id, `${parsed.stockUpdates.length} stok güncellemesi işleniyor...`, 5, 100);
+            await sendLog(job_id, `Processing ${parsed.stockUpdates.length} stock updates...`, 5, 100);
 
             for (const update of parsed.stockUpdates) {
                 try {
@@ -126,12 +126,12 @@ export async function processSync(payload: SyncPayload) {
                 await delay(1000); // Rate limiting
             }
 
-            await sendLog(job_id, 'Stok senkronizasyonu tamamlandı ✓', 40, 100);
+            await sendLog(job_id, 'Stock sync completed ✓', 40, 100);
         }
 
         // ── Phase 2: Clone to Shopify ──
         if (parsed.toShopify.length > 0) {
-            await sendLog(job_id, `${parsed.toShopify.length} ürün Shopify'a klonlanıyor...`, 41, 100);
+            await sendLog(job_id, `Cloning ${parsed.toShopify.length} products to Shopify...`, 41, 100);
 
             for (let i = 0; i < parsed.toShopify.length; i++) {
                 const product = parsed.toShopify[i];
@@ -147,7 +147,7 @@ export async function processSync(payload: SyncPayload) {
                         stock: product.stock,
                         image: product.image,
                         sku: product.sku
-                    }, 'success', 'Ürün başarıyla Shopify\'a klonlandı', progress, 100);
+                    }, 'success', 'Product cloned to Shopify successfully', progress, 100);
 
                 } catch (err: any) {
                     console.error(`[Sync] Clone to Shopify failed for ${product.title}:`, err.message);
@@ -158,7 +158,7 @@ export async function processSync(payload: SyncPayload) {
                         stock: product.stock,
                         image: product.image,
                         sku: product.sku
-                    }, 'failed', `Hata: ${err.message}`, 0, 100);
+                    }, 'failed', `Error: ${err.message}`, 0, 100);
                 }
 
                 await delay(1000);
@@ -167,7 +167,7 @@ export async function processSync(payload: SyncPayload) {
 
         // ── Phase 3: Clone to Etsy ──
         if (parsed.toEtsy.length > 0) {
-            await sendLog(job_id, `${parsed.toEtsy.length} ürün Etsy'ye klonlanıyor...`, 71, 100);
+            await sendLog(job_id, `Cloning ${parsed.toEtsy.length} products to Etsy...`, 71, 100);
 
             // Pre-fetch shipping profile & readiness state (once)
             let shippingProfileId: number | null = null;
@@ -187,7 +187,7 @@ export async function processSync(payload: SyncPayload) {
                         stock: product.stock,
                         image: product.image,
                         sku: product.sku
-                    }, 'cloning', 'Ürün Etsy\'ye klonlanıyor...', 0, 100);
+                    }, 'cloning', 'Cloning product to Etsy...', 0, 100);
 
                     await cloneToEtsy(shop, product, shippingProfileId, readinessStateId);
 
@@ -200,7 +200,7 @@ export async function processSync(payload: SyncPayload) {
                         stock: product.stock,
                         image: product.image,
                         sku: product.sku
-                    }, 'success', 'Ürün başarıyla Etsy\'ye klonlandı', progress, 100);
+                    }, 'success', 'Product cloned to Etsy successfully', progress, 100);
 
                 } catch (err: any) {
                     console.error(`[Sync] Clone to Etsy failed for ${product.title}:`, err.message);
@@ -211,7 +211,7 @@ export async function processSync(payload: SyncPayload) {
                         stock: product.stock,
                         image: product.image,
                         sku: product.sku
-                    }, 'failed', `Hata: ${err.message}`, 0, 100);
+                    }, 'failed', `Error: ${err.message}`, 0, 100);
                 }
 
                 await delay(1500); // Etsy rate limit is stricter
@@ -224,7 +224,7 @@ export async function processSync(payload: SyncPayload) {
 
     } catch (err: any) {
         console.error(`[Sync] Fatal error in job ${job_id}:`, err);
-        await markFailed(job_id, err.message || 'Bilinmeyen hata');
+        await markFailed(job_id, err.message || 'Unknown error');
     }
 }
 
@@ -371,7 +371,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
         .eq('etsy_listing_id', product.source_id);
 
     if (!dbRows || dbRows.length === 0) {
-        throw new Error(`Kaynak Etsy ürünü bulunamadı: ${product.source_id}`);
+        throw new Error(`Source Etsy product not found: ${product.source_id}`);
     }
 
     // 2. Build Shopify product payload

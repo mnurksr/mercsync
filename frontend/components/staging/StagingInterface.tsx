@@ -984,7 +984,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [submittingLocation, setSubmittingLocation] = useState(false);
 
     const handleGoBack = async () => {
-        if (!confirm('Staging verileri temizlenecek ve geri dönülecek. Onaylıyor musunuz?')) return;
+        if (!confirm('Staging data will be cleared and you will go back. Do you confirm?')) return;
         setLoading(true);
         try {
             await clearStagingTables(currentUserId);
@@ -997,7 +997,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             else router.back();
         } catch (error) {
             console.error('Failed to clear staging tables:', error);
-            alert('Staging verileri temizlenirken bir hata oluştu.');
+            alert('An error occurred while clearing staging data.');
         } finally {
             setLoading(false);
         }
@@ -1018,7 +1018,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             }
         } catch (error) {
             console.error('Error loading locations:', error);
-            alert('Lokasyonlar yüklenirken bir hata oluştu.');
+            alert('An error occurred while loading locations.');
         } finally {
             setLoadingLocations(false);
         }
@@ -1026,7 +1026,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     const submitLocationAndContinue = async () => {
         if (!selectedLocation) {
-            alert('Lütfen bir lokasyon seçin.');
+            alert('Please select a location.');
             return;
         }
 
@@ -1089,11 +1089,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 setShowLocationModal(false);
                 openReconciliation(refreshedMatches);
             } else {
-                alert('Webhook isteği başarısız oldu. Lütfen tekrar deneyin.');
+                alert('Webhook request failed. Please try again.');
             }
         } catch (error) {
             console.error('Webhook error:', error);
-            alert('Webhook gönderilirken bir hata oluştu.');
+            alert('An error occurred while sending the webhook.');
         } finally {
             setSubmittingLocation(false);
         }
@@ -2569,7 +2569,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         </div>
 
                         <p className="text-sm text-gray-500 mb-6">
-                            Lütfen envanter senkronizasyonu için ana Shopify lokasyonunuzu seçin.
+                            Please select your primary Shopify location for inventory synchronization.
                         </p>
 
                         {loadingLocations ? (
@@ -2585,7 +2585,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                         onChange={(e) => setSelectedLocation(e.target.value)}
                                         className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                                     >
-                                        <option value="" disabled>Lokasyon seçin...</option>
+                                        <option value="" disabled>Select a location...</option>
                                         {locations.map((loc) => (
                                             <option key={loc.id} value={loc.id.toString()}>
                                                 {loc.name} {loc.address1 ? `(${loc.address1})` : ''}
@@ -2600,7 +2600,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                     className="w-full h-11 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
                                 >
                                     {submittingLocation ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                                    Onayla ve Devam Et
+                                    Confirm & Continue
                                 </button>
                             </div>
                         )}

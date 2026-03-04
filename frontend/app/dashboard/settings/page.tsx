@@ -84,12 +84,12 @@ export default function SettingsPage() {
 
     const handleConnectShopify = () => {
         if (!shopName.trim()) {
-            alert('Lütfen mağaza adını girin');
+            alert('Please enter the shop name');
             return;
         }
 
         if (!user?.id) {
-            alert('Kullanıcı oturumu bulunamadı. Lütfen sayfayı yenileyin veya tekrar giriş yapın.');
+            alert('User session not found. Please refresh the page or log in again.');
             return;
         }
 
@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
     const handleConnectEtsy = () => {
         if (!shopName.trim()) {
-            alert('Lütfen mağaza adını girin');
+            alert('Please enter the shop name');
             return;
         }
         // Build OAuth URL with user_id and shop name

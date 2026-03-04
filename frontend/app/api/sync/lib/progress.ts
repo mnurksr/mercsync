@@ -61,7 +61,7 @@ export async function sendStockSync(
         type: 'stock_sync',
         platform,
         product: { name: productName, old_stock: oldStock, new_stock: newStock, sku },
-        text: `${platform === 'shopify' ? 'Shopify' : 'Etsy'} stok güncellendi`
+        text: `${platform === 'shopify' ? 'Shopify' : 'Etsy'} stock updated`
     });
 
     await updateProgress(jobId, {
@@ -108,7 +108,7 @@ export async function markCompleted(jobId: string) {
         status: 'completed',
         current: 100,
         total: 100,
-        message: 'Tüm işlemler başarıyla tamamlandı!'
+        message: 'All operations completed successfully!'
     });
 }
 
@@ -118,6 +118,6 @@ export async function markCompleted(jobId: string) {
 export async function markFailed(jobId: string, errorMessage: string) {
     await updateProgress(jobId, {
         status: 'failed',
-        message: `Hata: ${errorMessage}`
+        message: `Error: ${errorMessage}`
     });
 }

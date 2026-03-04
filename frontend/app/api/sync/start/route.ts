@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
                 status: 'pending',
                 current_step: 0,
                 total_steps: 100,
-                message: 'İşlem başlatılıyor...'
+                message: 'Starting process...'
             }, { onConflict: 'id' });
 
         // 2. Respond immediately (like n8n's "Respond to Frontend" node)

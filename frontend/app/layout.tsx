@@ -37,10 +37,10 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
                 <Package className="w-4 h-4" /> Dashboard
               </Link>
               <Link href="/settings" className={`flex items-center gap-2 text-sm font-medium ${pathname === '/settings' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}>
-                <Settings className="w-4 h-4" /> Entegrasyonlar
+                <Settings className="w-4 h-4" /> Integrations
               </Link>
               <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 text-sm font-medium text-red-500 hover:text-red-700 ml-4">
-                <LogOut className="w-4 h-4" /> Çıkış
+                <LogOut className="w-4 h-4" /> Logout
               </button>
             </nav>
           )}

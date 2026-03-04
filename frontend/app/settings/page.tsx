@@ -27,7 +27,7 @@ export default function IntegrationsPage() {
         loadShopData();
 
         // Check URL params for success messages
-        if (searchParams.get('etsy_connected')) alert('Etsy hesabı başarıyla bağlandı!');
+        if (searchParams.get('etsy_connected')) alert('Etsy account connected successfully!');
 
     }, [user, searchParams]);
 
@@ -56,7 +56,7 @@ export default function IntegrationsPage() {
         let authUrl = '';
 
         if (platform === 'shopify') {
-            if (!shopifyDomainInput) return alert('Lütfen mağaza domainini girin!');
+            if (!shopifyDomainInput) return alert('Please enter the shop domain!');
             const shop = shopifyDomainInput.replace('https://', '').replace('.myshopify.com', '').replace(/\/$/, '');
             authUrl = `${BASE_WEBHOOK}/shopify/start?user_id=${user?.id}&shop=${shop}.myshopify.com`;
         } else if (platform === 'etsy') {
@@ -67,7 +67,7 @@ export default function IntegrationsPage() {
     };
 
     const handleDisconnect = async (platform: string) => {
-        if (!confirm(`${platform} bağlantısını kesmek istediğinize emin misiniz?`)) return;
+        if (!confirm(`Are you sure you want to disconnect ${platform}?`)) return;
 
         const updates: any = {};
         if (platform === 'shopify') {
@@ -83,14 +83,14 @@ export default function IntegrationsPage() {
         const { error } = await supabase.from('shops').update(updates).eq('owner_id', user?.id);
 
         if (error) {
-            alert('Hata oluştu: ' + error.message);
+            alert('Error: ' + error.message);
         } else {
-            alert('Bağlantı kesildi.');
+            alert('Disconnected.');
             loadShopData();
         }
     };
 
-    if (loading) return <div className="p-10 text-center">Yükleniyor...</div>;
+    if (loading) return <div className="p-10 text-center">Loading...</div>;
 
     const IntegrationsCard = ({
         platform,
@@ -131,12 +131,12 @@ export default function IntegrationsPage() {
                 {isConnected ? (
                     <div className="flex gap-2">
                         <button disabled className="flex-1 bg-green-50 text-green-700 font-semibold py-2 rounded-md cursor-default border border-green-200">
-                            Bağlandı
+                            Connected
                         </button>
                         <button
                             onClick={() => handleDisconnect(platform)}
                             className="bg-red-50 text-red-600 p-2 rounded-md hover:bg-red-100 border border-red-200"
-                            title="Bağlantıyı Kes"
+                            title="Disconnect"
                         >
                             <Trash2 size={20} />
                         </button>
@@ -148,7 +148,7 @@ export default function IntegrationsPage() {
                             'bg-orange-600 hover:bg-orange-700'
                             }`}
                     >
-                        {platform === 'shopify' ? 'Mağazayı Bağla' : `${name} Bağla`}
+                        {platform === 'shopify' ? 'Connect Store' : `Connect ${name}`}
                     </button>
                 )}
             </div>
@@ -157,14 +157,14 @@ export default function IntegrationsPage() {
 
     return (
         <div className="max-w-5xl mx-auto py-10 px-4">
-            <h1 className="text-3xl font-bold mb-2 text-gray-800">Entegrasyonlar</h1>
-            <p className="text-gray-500 mb-8">Sadece Shopify ve Etsy mağazalarınızı bağlayarak ürün ve siparişlerinizi tek yerden yönetin.</p>
+            <h1 className="text-3xl font-bold mb-2 text-gray-800">Integrations</h1>
+            <p className="text-gray-500 mb-8">Connect your Shopify and Etsy stores to manage products and orders from one place.</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <IntegrationsCard
                     platform="shopify"
                     name="Shopify"
-                    description="Resmi Mağaza Bağlantısı"
+                    description="Official Store Connection"
                     isConnected={!!shopData?.shopify_domain && !!shopData?.shopify_domain /* basic check */} // is_active check handled in query if needed
                     iconColor="bg-green-100 text-green-600"
                     iconLetter="S"
