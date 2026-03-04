@@ -235,13 +235,14 @@ export function buildListingPayload(
         shopifyProduct.variants?.some((v: any) => v.requires_shipping === false);
     const etsyType = isDigital ? 'download' : 'physical';
 
-    // Variant property detection
+    // Variant property detection — always create properties when multiple variants exist
     const variants = shopifyProduct.variants || [];
     const activeProperties: number[] = [];
+    const optionName = shopifyProduct.options?.[0]?.name || 'Variation';
 
-    if (shopifyProduct.options?.[0] &&
-        shopifyProduct.options[0].name !== 'Title' &&
-        variants.length > 1) {
+    // If there are multiple variants, USE property 513 (Etsy "Variation 1")
+    // regardless of the option name — this is the key fix for the "single variant" bug  
+    if (variants.length > 1) {
         activeProperties.push(513);
     }
 
@@ -265,8 +266,8 @@ export function buildListingPayload(
             sku: variant.sku || `SKU-${variant.id}`,
             property_values: activeProperties.length > 0 ? [{
                 property_id: 513,
-                property_name: shopifyProduct.options[0].name,
-                values: [variant.option1 || variant.title]
+                property_name: optionName === 'Title' ? 'Variation' : optionName,
+                values: [variant.option1 || variant.title || 'Default']
             }] : [],
             offerings: [offering]
         };
