@@ -107,7 +107,6 @@ export function buildProductPayload(
         filteredRows = dbRows.filter(row =>
             selectedVariantIds.includes(row.etsy_variant_id?.toString())
         );
-        if (filteredRows.length === 0) filteredRows = dbRows; // Fallback if no match
     }
 
     // Collect all unique images

@@ -243,7 +243,7 @@ export function buildListingPayload(
         const filtered = variants.filter((v: any) =>
             selectedVariantIds.includes(v.id?.toString())
         );
-        if (filtered.length > 0) variants = filtered;
+        variants = filtered;
     }
 
     const activeProperties: number[] = [];

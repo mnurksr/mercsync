@@ -72,74 +72,56 @@ export default function PricingPage() {
     const toast = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState<string | null>(null);
 
-    // Call internal API to get payment link (Proxy to Webhook)
-    const initiatePayment = async (userId: string, productId: string) => {
-        setIsLoading(true);
+    // Create Shopify subscription via our billing API
+    const initiateSubscription = async (planId: string) => {
+        if (!user?.id) {
+            // Not logged in — redirect to login, then come back
+            router.push(`/login?redirect=${encodeURIComponent(`/pricing?checkout=${planId}`)}`);
+            return;
+        }
+
+        setIsLoading(planId);
         try {
-            console.log('Initiating payment via proxy for user:', userId);
-
-            // Call our own API route instead of external URL to avoid CORS
-            const response = await fetch('/api/create-payment', {
+            const response = await fetch('/api/billing/create-subscription', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    product_id: productId
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan: planId, user_id: user.id })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                console.error('Payment API error:', data);
-                throw new Error(data.error || 'Payment generation failed');
+                throw new Error(data.error || 'Failed to create subscription');
             }
 
-            console.log('Payment API response:', data);
-
-            if (data.url) {
-                window.location.href = data.url;
+            if (data.confirmationUrl) {
+                // Redirect to Shopify's secure billing page (iframe-safe)
+                window.top ? window.top.location.href = data.confirmationUrl : window.location.href = data.confirmationUrl;
             } else {
-                console.error('No payment URL found in proxy response:', data);
-                toast.error('Failed to generate payment link. Please try again.');
+                throw new Error('No confirmation URL received');
             }
-
-        } catch (error) {
-            console.error('Error initiating payment:', error);
-            toast.error('An error occurred. Please check the console for details.');
+        } catch (error: any) {
+            console.error('Billing error:', error);
+            toast.error(error.message || 'An error occurred. Please try again.');
         } finally {
-            setIsLoading(false);
+            setIsLoading(null);
         }
     };
 
     // Handle auto-checkout after login redirect
     useEffect(() => {
-        const checkoutType = searchParams.get('checkout');
-        // Check if we should auto-checkout: param exists, user logged in, not already loading
-        if (checkoutType === 'starter' && user && !isLoading) {
-            initiatePayment(user.id, 'prod_16VbkG7cBttSlCDryyMdIn');
+        const checkoutPlan = searchParams.get('checkout');
+        if (checkoutPlan && user && !isLoading) {
+            initiateSubscription(checkoutPlan);
         }
-    }, [user, searchParams, isLoading]);
+    }, [user, searchParams]);
 
-    const handlePlanClick = async (plan: typeof plans[0]) => {
-        if (isLoading) return; // Prevent double click
-
-        if (plan.action === 'starter_payment') {
-            if (user) {
-                // User is logged in -> Call Webhook
-                await initiatePayment(user.id, 'prod_16VbkG7cBttSlCDryyMdIn');
-            } else {
-                // User NOT logged in -> Redirect to Login -> Then back to Pricing
-                router.push(`/login?redirect=${encodeURIComponent('/pricing?checkout=starter')}`);
-            }
-        } else {
-            // Default behavior for other plans
-            router.push('/login');
-        }
+    const handlePlanClick = (plan: typeof plans[0]) => {
+        if (isLoading) return;
+        const planId = plan.name.toLowerCase();
+        initiateSubscription(planId);
     };
 
     return (
@@ -246,7 +228,7 @@ export default function PricingPage() {
 
                                 <button
                                     onClick={() => handlePlanClick(plan)}
-                                    disabled={isLoading}
+                                    disabled={!!isLoading}
                                     className={`
                                         w-full py-4 rounded-xl font-bold text-center flex items-center justify-center gap-2 transition-all
                                         ${plan.popular
@@ -256,7 +238,7 @@ export default function PricingPage() {
                                         ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}
                                     `}
                                 >
-                                    {isLoading && plan.action === 'starter_payment' ? (
+                                    {isLoading === plan.name.toLowerCase() ? (
                                         <>
                                             <Loader2 className="w-4 h-4 animate-spin" />
                                             Processing...

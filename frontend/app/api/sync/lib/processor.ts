@@ -387,8 +387,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
         // Filter dbRows to only selected variants
         let rowsToProcess = dbRows;
         if (selectedVariantIds && selectedVariantIds.length > 0) {
-            const filtered = dbRows.filter(row => selectedVariantIds.includes(row.etsy_variant_id?.toString()));
-            if (filtered.length > 0) rowsToProcess = filtered;
+            rowsToProcess = dbRows.filter(row => selectedVariantIds.includes(row.etsy_variant_id?.toString()));
         }
 
         for (const row of rowsToProcess) {
@@ -537,8 +536,7 @@ async function cloneToEtsy(
         // Build new variants to append from Shopify data
         let variantsToAdd = shopifyProduct.variants || [];
         if (selectedVariantIds && selectedVariantIds.length > 0) {
-            const filtered = variantsToAdd.filter((v: any) => selectedVariantIds.includes(v.id?.toString()));
-            if (filtered.length > 0) variantsToAdd = filtered;
+            variantsToAdd = variantsToAdd.filter((v: any) => selectedVariantIds.includes(v.id?.toString()));
         }
 
         const stockMap: Record<string, number> = {};
