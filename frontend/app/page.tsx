@@ -2,6 +2,12 @@ import Link from 'next/link';
 import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
 
 export default function LandingPage() {
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('shop')) {
+    // If Shopify iframe loads the root, redirect directly to dashboard
+    window.location.href = '/dashboard' + window.location.search;
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-blue-100">
 

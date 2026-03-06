@@ -14,27 +14,42 @@ import { getConnectedShop } from '../actions/shop';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type ActivityItem } from '../actions/dashboard';
 import { getSetupStatus, type SetupStatus } from '../actions/staging';
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from '@/components/ui/useToast';
 
 export default function Dashboard() {
     const { supabase, user } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
+    const toast = useToast();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Clean up charge_id from URL without reloading
+    // Clean up charge_id from URL without reloading and verify billing
     useEffect(() => {
         const chargeId = searchParams.get('charge_id');
-        if (chargeId) {
-            // Log or verify charge ID if necessary
+        const shopDomain = searchParams.get('shop');
+
+        if (chargeId && shopDomain) {
             console.log('Returned from billing with charge_id:', chargeId);
+
+            // Verify with backend
+            fetch('/api/billing/verify-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ charge_id: chargeId, shop_domain: shopDomain })
+            }).then(async res => {
+                const data = await res.json();
+                if (data.success) {
+                    toast.success("Subscription Activated. Welcome aboard!");
+                }
+            }).catch(console.error);
 
             // Clean the URL using History API to prevent page reload
             const newUrl = new URL(window.location.href);
             newUrl.searchParams.delete('charge_id');
             window.history.replaceState({}, '', newUrl.toString());
         }
-    }, [searchParams]);
+    }, [searchParams, toast]);
 
     const [stats, setStats] = useState<DashboardStats>({
         productsSynced: 0,
