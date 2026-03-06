@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/useToast';
+import { getShopDomain } from '@/utils/shopDomain';
 
 const PLANS = [
     {
@@ -72,8 +73,8 @@ export default function PlansPage() {
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Get shop domain from URL params (Shopify embeds always pass ?shop=xxx)
-    const shopDomain = searchParams.get('shop') || undefined;
+    // Get shop domain — checks URL params first, then sessionStorage
+    const shopDomain = getShopDomain(searchParams);
 
     const handleSelectPlan = async (planId: string) => {
         if (!user?.id && !shopDomain) {

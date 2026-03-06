@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
 import StagingInterface from '@/components/staging/StagingInterface';
+import { setShopDomain } from '@/utils/shopDomain';
 
 export default function SetupPage() {
     const { user } = useAuth();
@@ -63,6 +64,7 @@ export default function SetupPage() {
         try {
             console.log('SetupPage: Starting loadData');
             const shopFromUrl = searchParams.get('shop') || undefined;
+            if (shopFromUrl) setShopDomain(shopFromUrl); // Persist for subsequent pages
             const shopDomainToUse = user ? undefined : shopFromUrl;
             console.log('SetupPage: Using domain:', shopDomainToUse, 'User:', user?.id);
 

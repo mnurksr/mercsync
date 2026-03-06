@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { getShopDomain } from '@/utils/shopDomain';
 
 const plans = [
     {
@@ -74,8 +75,8 @@ export default function PricingPage() {
     const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState<string | null>(null);
 
-    // Get shop domain from URL params (Shopify embeds always pass ?shop=xxx)
-    const shopDomain = searchParams.get('shop') || undefined;
+    // Get shop domain — checks URL params first, then sessionStorage
+    const shopDomain = getShopDomain(searchParams);
 
     // Create Shopify subscription via our billing API
     const initiateSubscription = async (planId: string) => {
