@@ -1,6 +1,8 @@
 'use client';
 
 import { useAuth } from '@/components/AuthProvider';
+import { useToast } from '@/components/ui/useToast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useEffect, useState } from 'react';
 import { Save, CheckCircle, XCircle, RefreshCw, ExternalLink, Trash2 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -13,11 +15,13 @@ interface ShopState {
 
 export default function IntegrationsPage() {
     const { supabase, user } = useAuth();
+    const toast = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
 
     const [loading, setLoading] = useState(true);
     const [shopData, setShopData] = useState<ShopState | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; platform: string }>({ isOpen: false, platform: '' });
 
     // Inputs
     const [shopifyDomainInput, setShopifyDomainInput] = useState('');
@@ -27,7 +31,7 @@ export default function IntegrationsPage() {
         loadShopData();
 
         // Check URL params for success messages
-        if (searchParams.get('etsy_connected')) alert('Etsy account connected successfully!');
+        if (searchParams.get('etsy_connected')) toast.success('Etsy account connected successfully!');
 
     }, [user, searchParams]);
 
@@ -56,7 +60,7 @@ export default function IntegrationsPage() {
         let authUrl = '';
 
         if (platform === 'shopify') {
-            if (!shopifyDomainInput) return alert('Please enter the shop domain!');
+            if (!shopifyDomainInput) return toast.warning('Please enter the shop domain!');
             const shop = shopifyDomainInput.replace('https://', '').replace('.myshopify.com', '').replace(/\/$/, '');
             authUrl = `${BASE_WEBHOOK}/shopify/start?user_id=${user?.id}&shop=${shop}.myshopify.com`;
         } else if (platform === 'etsy') {
@@ -67,11 +71,14 @@ export default function IntegrationsPage() {
     };
 
     const handleDisconnect = async (platform: string) => {
-        if (!confirm(`Are you sure you want to disconnect ${platform}?`)) return;
+        setConfirmModal({ isOpen: true, platform });
+    };
+
+    const executeDisconnect = async (platform: string) => {
+        setConfirmModal({ isOpen: false, platform: '' });
 
         const updates: any = {};
         if (platform === 'shopify') {
-            // Shopify için genelde kaydı silmeyiz ama token'ı sıfırlarız
             updates.access_token = null;
             updates.is_active = false;
         } else if (platform === 'etsy') {
@@ -83,9 +90,9 @@ export default function IntegrationsPage() {
         const { error } = await supabase.from('shops').update(updates).eq('owner_id', user?.id);
 
         if (error) {
-            alert('Error: ' + error.message);
+            toast.error('Error: ' + error.message);
         } else {
-            alert('Disconnected.');
+            toast.success('Disconnected successfully.');
             loadShopData();
         }
     };
@@ -156,31 +163,43 @@ export default function IntegrationsPage() {
     );
 
     return (
-        <div className="max-w-5xl mx-auto py-10 px-4">
-            <h1 className="text-3xl font-bold mb-2 text-gray-800">Integrations</h1>
-            <p className="text-gray-500 mb-8">Connect your Shopify and Etsy stores to manage products and orders from one place.</p>
+        <>
+            <div className="max-w-5xl mx-auto py-10 px-4">
+                <h1 className="text-3xl font-bold mb-2 text-gray-800">Integrations</h1>
+                <p className="text-gray-500 mb-8">Connect your Shopify and Etsy stores to manage products and orders from one place.</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <IntegrationsCard
-                    platform="shopify"
-                    name="Shopify"
-                    description="Official Store Connection"
-                    isConnected={!!shopData?.shopify_domain && !!shopData?.shopify_domain /* basic check */} // is_active check handled in query if needed
-                    iconColor="bg-green-100 text-green-600"
-                    iconLetter="S"
-                    borderColor="border-green-200"
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <IntegrationsCard
+                        platform="shopify"
+                        name="Shopify"
+                        description="Official Store Connection"
+                        isConnected={!!shopData?.shopify_domain && !!shopData?.shopify_domain}
+                        iconColor="bg-green-100 text-green-600"
+                        iconLetter="S"
+                        borderColor="border-green-200"
+                    />
 
-                <IntegrationsCard
-                    platform="etsy"
-                    name="Etsy"
-                    description="El Emeği & Vintage"
-                    isConnected={shopData?.etsy_connected}
-                    iconColor="bg-orange-100 text-orange-600"
-                    iconLetter="E"
-                    borderColor="border-orange-200"
-                />
+                    <IntegrationsCard
+                        platform="etsy"
+                        name="Etsy"
+                        description="El Emeği & Vintage"
+                        isConnected={shopData?.etsy_connected}
+                        iconColor="bg-orange-100 text-orange-600"
+                        iconLetter="E"
+                        borderColor="border-orange-200"
+                    />
+                </div>
             </div>
-        </div>
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                title="Disconnect Store"
+                message={`Are you sure you want to disconnect ${confirmModal.platform}? You can reconnect later.`}
+                variant="danger"
+                confirmLabel="Disconnect"
+                cancelLabel="Cancel"
+                onConfirm={() => executeDisconnect(confirmModal.platform)}
+                onCancel={() => setConfirmModal({ isOpen: false, platform: '' })}
+            />
+        </>
     );
 }

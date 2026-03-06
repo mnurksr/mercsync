@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
 
 import MapperUploadStep from '@/components/MapperUploadStep';
@@ -11,6 +12,7 @@ import MapperReportStep, { MapperAnalysisResponse } from '@/components/MapperRep
 export default function StockMapperWizard() {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const toast = useToast();
 
     // Data State
     const [mapperData, setMapperData] = useState({
@@ -87,7 +89,7 @@ export default function StockMapperWizard() {
 
         } catch (error: any) {
             console.error('Failed to save matches', error);
-            alert(`Failed to save matches: ${error.message || 'Unknown error'}`);
+            toast.error(`Failed to save matches: ${error.message || 'Unknown error'}`);
         } finally {
             setIsLoading(false);
         }

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Check, Zap, Crown, Shield, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/AuthProvider';
+import { useToast } from '@/components/ui/useToast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -68,6 +69,7 @@ const plans = [
 
 export default function PricingPage() {
     const { user } = useAuth();
+    const toast = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState(false);
@@ -103,12 +105,12 @@ export default function PricingPage() {
                 window.location.href = data.url;
             } else {
                 console.error('No payment URL found in proxy response:', data);
-                alert('Failed to generate payment link. Please try again.');
+                toast.error('Failed to generate payment link. Please try again.');
             }
 
         } catch (error) {
             console.error('Error initiating payment:', error);
-            alert('An error occurred. Please check the console for details.');
+            toast.error('An error occurred. Please check the console for details.');
         } finally {
             setIsLoading(false);
         }

@@ -31,6 +31,7 @@ type StockUpdate = {
 
 type CloneProduct = {
     source_id: string;
+    target_id?: string; // If set, append variants to existing product instead of creating new
     title: string;
     sku: string;
     price: number;
@@ -374,8 +375,79 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
         throw new Error(`Source Etsy product not found: ${product.source_id}`);
     }
 
-    // 2. Build Shopify product payload
-    const { product: shopifyPayload, originalStocks } = shopifyApi.buildProductPayload(product, dbRows);
+    // Build selected variant IDs list from clone data
+    const selectedVariantIds = product.variants?.length > 0
+        ? product.variants.filter(v => v.selected !== false).map(v => v.source_variant_id)
+        : undefined;
+
+    // === VARIANT INJECTION: Append to existing product ===
+    if (product.target_id) {
+        console.log(`[Sync] Variant injection: appending to Shopify product ${product.target_id}`);
+
+        // Filter dbRows to only selected variants
+        let rowsToProcess = dbRows;
+        if (selectedVariantIds && selectedVariantIds.length > 0) {
+            const filtered = dbRows.filter(row => selectedVariantIds.includes(row.etsy_variant_id?.toString()));
+            if (filtered.length > 0) rowsToProcess = filtered;
+        }
+
+        for (const row of rowsToProcess) {
+            const variantPayload = {
+                option1: row.variant_title || 'Default Title',
+                price: row.price ? row.price.toString() : '0.00',
+                sku: row.sku || '',
+                inventory_management: 'shopify',
+                requires_shipping: true
+            };
+
+            try {
+                const result = await shopifyApi.addVariantToProduct(creds, product.target_id, variantPayload);
+                const variant = result.variant;
+
+                // Set inventory level
+                await delay(1000);
+                await shopifyApi.setInventoryLevel(
+                    creds,
+                    shop.main_location_id,
+                    variant.inventory_item_id,
+                    row.stock_quantity || 0
+                );
+
+                // Insert into staging table
+                const locMap = shop.main_location_id
+                    ? [{ location_id: shop.main_location_id, available: row.stock_quantity || 0 }]
+                    : [];
+
+                await supabase
+                    .from('staging_shopify_products')
+                    .upsert({
+                        shop_id: shop.id,
+                        shopify_product_id: product.target_id,
+                        shopify_variant_id: variant.id.toString(),
+                        shopify_inventory_item_id: variant.inventory_item_id.toString(),
+                        name: `${product.title} - ${row.variant_title || 'Default'}`,
+                        sku: variant.sku || null,
+                        price: parseFloat(variant.price || 0),
+                        image_url: row.image_url || null,
+                        status: 'active',
+                        stock_quantity: row.stock_quantity || 0,
+                        product_title: product.title,
+                        variant_title: row.variant_title || 'Default',
+                        description: product.description || '',
+                        location_inventory_map: JSON.stringify(locMap)
+                    }, { onConflict: 'shopify_inventory_item_id' });
+            } catch (e: any) {
+                console.warn(`[Sync] Failed to add variant ${row.variant_title}:`, e.message);
+            }
+
+            await delay(1000);
+        }
+        return;
+    }
+
+    // === STANDARD CLONE: Create new product ===
+    // 2. Build Shopify product payload (with variant filtering)
+    const { product: shopifyPayload, originalStocks } = shopifyApi.buildProductPayload(product, dbRows, selectedVariantIds);
 
     // 3. Create product on Shopify
     const created = await shopifyApi.createProduct(creds, shopifyPayload);
@@ -450,12 +522,134 @@ async function cloneToEtsy(
         .select('shopify_variant_id, stock_quantity')
         .eq('shopify_product_id', product.source_id);
 
-    // 3. Build Etsy payloads
+    // Build selected variant IDs list from clone data
+    const selectedVariantIds = product.variants?.length > 0
+        ? product.variants.filter(v => v.selected !== false).map(v => v.source_variant_id)
+        : undefined;
+
+    // === VARIANT INJECTION: Append to existing Etsy listing ===
+    if (product.target_id) {
+        console.log(`[Sync] Variant injection: appending to Etsy listing ${product.target_id}`);
+
+        // Get current inventory
+        const currentInventory = await etsyApi.getInventory(product.target_id, shop.etsy_access_token);
+
+        // Build new variants to append from Shopify data
+        let variantsToAdd = shopifyProduct.variants || [];
+        if (selectedVariantIds && selectedVariantIds.length > 0) {
+            const filtered = variantsToAdd.filter((v: any) => selectedVariantIds.includes(v.id?.toString()));
+            if (filtered.length > 0) variantsToAdd = filtered;
+        }
+
+        const stockMap: Record<string, number> = {};
+        (dbStocks || []).forEach((row: any) => {
+            stockMap[row.shopify_variant_id.toString()] = row.stock_quantity;
+        });
+
+        const optionName = shopifyProduct.options?.[0]?.name || 'Variation';
+
+        // Merge existing products with new
+        const existingProducts = (currentInventory.products || []).map((p: any) => ({
+            sku: p.sku || '',
+            property_values: (p.property_values || []).map((prop: any) => {
+                const cleaned: any = {
+                    property_id: prop.property_id,
+                    value_ids: prop.value_ids,
+                    property_name: prop.property_name,
+                    values: prop.values
+                };
+                if (prop.scale_id !== null) cleaned.scale_id = prop.scale_id;
+                return cleaned;
+            }),
+            offerings: (p.offerings || []).map((off: any) => {
+                let priceVal = off.price;
+                if (typeof priceVal === 'object' && priceVal.amount !== undefined) {
+                    priceVal = priceVal.amount / priceVal.divisor;
+                }
+                return {
+                    price: priceVal,
+                    quantity: off.quantity,
+                    is_enabled: off.is_enabled,
+                    readiness_state_id: off.readiness_state_id
+                };
+            })
+        }));
+
+        const newProducts = variantsToAdd.map((variant: any) => {
+            const stock = Math.max(1, stockMap[variant.id.toString()] || 1);
+            const offering: any = {
+                price: parseFloat(variant.price),
+                quantity: stock,
+                is_enabled: true
+            };
+            if (readinessStateId) offering.readiness_state_id = readinessStateId;
+
+            return {
+                sku: variant.sku || `SKU-${variant.id}`,
+                property_values: [{
+                    property_id: 513,
+                    property_name: optionName === 'Title' ? 'Variation' : optionName,
+                    values: [variant.option1 || variant.title || 'Default']
+                }],
+                offerings: [offering]
+            };
+        });
+
+        const mergedProducts = [...existingProducts, ...newProducts];
+        const activeProperties = mergedProducts.some(p => p.property_values.length > 0) ? [513] : [];
+
+        const mergedPayload = {
+            products: mergedProducts,
+            price_on_property: activeProperties,
+            quantity_on_property: activeProperties,
+            sku_on_property: activeProperties
+        };
+
+        const etsyInventory = await etsyApi.updateInventory(product.target_id, shop.etsy_access_token, mergedPayload);
+
+        // Insert new variants into staging_etsy_products
+        const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
+        for (const etsyProduct of (etsyInventory.products || [])) {
+            const offering = etsyProduct.offerings[0];
+            const actualPrice = typeof offering.price === 'object'
+                ? offering.price.amount / offering.price.divisor
+                : offering.price;
+
+            let variantTitle = 'Default';
+            if (etsyProduct.property_values?.length > 0) {
+                variantTitle = etsyProduct.property_values.map((p: any) => p.values[0]).join(' / ');
+            }
+
+            await supabase
+                .from('staging_etsy_products')
+                .upsert({
+                    shop_id: shop.id,
+                    etsy_listing_id: product.target_id,
+                    etsy_variant_id: etsyProduct.product_id.toString(),
+                    name: product.title,
+                    sku: etsyProduct.sku || null,
+                    price: actualPrice,
+                    currency: offering.price?.currency_code || 'USD',
+                    image_url: mainImageUrl,
+                    stock_quantity: offering.quantity,
+                    status: 'active',
+                    product_title: product.title,
+                    variant_title: variantTitle,
+                    description: product.description || '',
+                    has_variations: etsyInventory.products.length > 1
+                }, { onConflict: 'etsy_variant_id' });
+        }
+        return;
+    }
+
+    // === STANDARD CLONE: Create new listing ===
+    // 3. Build Etsy payloads (with variant filtering)
     const { listingPayload, inventoryPayload } = etsyApi.buildListingPayload(
         shopifyProduct,
         dbStocks || [],
         shippingProfileId,
-        readinessStateId
+        readinessStateId,
+        selectedVariantIds
     );
 
     // 4. Create listing on Etsy

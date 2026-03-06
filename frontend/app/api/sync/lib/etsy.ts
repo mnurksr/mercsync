@@ -215,12 +215,14 @@ export async function downloadImage(imageUrl: string): Promise<Buffer | null> {
 /**
  * Build Etsy listing payload from Shopify product data
  * Replaces: "Code in JavaScript" in Clone to Etsy workflow
+ * @param selectedVariantIds - Optional: if provided, only include these variant IDs
  */
 export function buildListingPayload(
     shopifyProduct: any,
     dbStocks: { shopify_variant_id: string; stock_quantity: number }[],
     shippingProfileId: number | null,
-    readinessStateId: number | null
+    readinessStateId: number | null,
+    selectedVariantIds?: string[]
 ): { listingPayload: any; inventoryPayload: any } {
     // Build stock map from DB
     const stockMap: Record<string, number> = {};
@@ -235,8 +237,15 @@ export function buildListingPayload(
         shopifyProduct.variants?.some((v: any) => v.requires_shipping === false);
     const etsyType = isDigital ? 'download' : 'physical';
 
-    // Variant property detection — always create properties when multiple variants exist
-    const variants = shopifyProduct.variants || [];
+    // Filter variants by selected IDs if provided
+    let variants = shopifyProduct.variants || [];
+    if (selectedVariantIds && selectedVariantIds.length > 0) {
+        const filtered = variants.filter((v: any) =>
+            selectedVariantIds.includes(v.id?.toString())
+        );
+        if (filtered.length > 0) variants = filtered;
+    }
+
     const activeProperties: number[] = [];
     const optionName = shopifyProduct.options?.[0]?.name || 'Variation';
 

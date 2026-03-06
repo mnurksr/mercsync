@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { useToast } from '@/components/ui/useToast';
 import {
     ShoppingBag, Store,
     Loader2, Zap, Check, Box, FileText, Archive, AlertCircle, Plus
@@ -14,6 +15,7 @@ import StagingInterface from '@/components/staging/StagingInterface';
 
 export default function SetupPage() {
     const { user } = useAuth();
+    const toast = useToast();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState(true);
@@ -120,7 +122,7 @@ export default function SetupPage() {
         const resolvedUserId = user?.id || ownerId;
         if (!resolvedUserId) {
             console.error('handleConnectEtsy: No user ID found');
-            alert('User not authenticated. Please log in first.');
+            toast.error('User not authenticated. Please log in first.');
             return;
         }
         window.open(`https://api.mercsync.com/webhook/auth/etsy/start?user_id=${resolvedUserId}`, '_blank');
@@ -136,7 +138,7 @@ export default function SetupPage() {
 
         if (!userId) {
             console.error('Start Import: No user ID found');
-            alert('User not authenticated. Cannot start import.');
+            toast.error('User not authenticated. Cannot start import.');
             return;
         }
 
@@ -176,7 +178,7 @@ export default function SetupPage() {
             }
 
             if (importPromises.length === 0) {
-                alert('Please select at least one category to import.');
+                toast.warning('Please select at least one category to import.');
                 setIsImporting(false);
                 return;
             }
@@ -189,11 +191,11 @@ export default function SetupPage() {
                 setShowMatchingInterface(true);
             } else {
                 console.error('One or more import webhooks failed');
-                alert('Failed to start some imports. Please check console.');
+                toast.error('Failed to start some imports. Please check console.');
             }
         } catch (error) {
             console.error('Import error:', error);
-            alert('An error occurred. Please try again.');
+            toast.error('An error occurred. Please try again.');
         } finally {
             setIsImporting(false);
             setShowSyncModal(false);

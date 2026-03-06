@@ -9,6 +9,8 @@ import {
     ChevronDown, ChevronRight, AlertTriangle, Layers, Package, GitBranch, ArrowDownUp, Plus, Info, Pencil, Trash2
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { useToast } from '@/components/ui/useToast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -120,15 +122,15 @@ function EditableStock({
         <div
             onClick={() => { setTempValue(value.toString()); setEditing(true); }}
             className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105 ${isExcess
-                ? 'bg-red-100 ring-2 ring-red-400'
-                : 'bg-gray-100 hover:bg-gray-200'
+                ? 'bg-red-50 ring-2 ring-red-300'
+                : 'bg-gray-50 border border-gray-200 hover:border-gray-300'
                 }`}
         >
             {platform === 'shopify'
                 ? <ShoppingBag className={`w-4 h-4 mb-0.5 ${isExcess ? 'text-red-500' : 'text-gray-400'}`} />
                 : <Store className={`w-4 h-4 mb-0.5 ${isExcess ? 'text-red-500' : 'text-gray-400'}`} />
             }
-            <span className={`text-xl font-bold ${isExcess ? 'text-red-600' : 'text-gray-700'}`}>
+            <span className={`text-xl font-bold ${isExcess ? 'text-red-600' : 'text-emerald-600'}`}>
                 {value}
             </span>
         </div>
@@ -602,6 +604,7 @@ type CrossListingVariant = {
 
 type CrossListingItem = {
     source_id: string;
+    target_id?: string; // If set, append variants to this existing product instead of creating new
     title: string;
     sku: string;
     price: number;
@@ -618,9 +621,10 @@ type CloneModalProps = {
     sourceGroup: ReconcileGroup | null;
     targetPlatform: 'shopify' | 'etsy';
     initialData?: CrossListingItem;
+    targetId?: string;
 };
 
-function CloneModal({ isOpen, onClose, onConfirm, sourceGroup, targetPlatform, initialData }: CloneModalProps) {
+function CloneModal({ isOpen, onClose, onConfirm, sourceGroup, targetPlatform, initialData, targetId }: CloneModalProps) {
     const [formData, setFormData] = useState({
         title: '',
         sku: '',
@@ -902,6 +906,7 @@ function CloneModal({ isOpen, onClose, onConfirm, sourceGroup, targetPlatform, i
 
                             onConfirm({
                                 source_id: sourceId,
+                                target_id: targetId,
                                 title: formData.title,
                                 sku: formData.sku,
                                 price: formData.price,
@@ -932,8 +937,12 @@ interface StagingInterfaceProps {
 
 export default function StagingInterface({ isSetupMode = false, onComplete, onBack, userId: propUserId }: StagingInterfaceProps) {
     const { user: authUser } = useAuth();
+    const toast = useToast();
     const router = useRouter();
     const cache = getCache();
+
+    // Confirm Modal State
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; variant?: 'danger' | 'default' }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
 
     // Use prop userId if available, otherwise fall back to auth user
     const currentUserId = propUserId || authUser?.id;
@@ -987,23 +996,31 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [submittingLocation, setSubmittingLocation] = useState(false);
 
     const handleGoBack = async () => {
-        if (!confirm('Staging data will be cleared and you will go back. Do you confirm?')) return;
-        setLoading(true);
-        try {
-            await clearStagingTables(currentUserId);
-            localStorage.removeItem('ms_staging_shopify');
-            localStorage.removeItem('ms_staging_etsy');
-            setShopifyProducts([]);
-            setEtsyProducts([]);
-            setMatches([]);
-            if (onBack) onBack();
-            else router.back();
-        } catch (error) {
-            console.error('Failed to clear staging tables:', error);
-            alert('An error occurred while clearing staging data.');
-        } finally {
-            setLoading(false);
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: 'Go Back?',
+            message: 'Staging data will be cleared and you will go back. This action cannot be undone.',
+            variant: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                setLoading(true);
+                try {
+                    await clearStagingTables(currentUserId);
+                    localStorage.removeItem('ms_staging_shopify');
+                    localStorage.removeItem('ms_staging_etsy');
+                    setShopifyProducts([]);
+                    setEtsyProducts([]);
+                    setMatches([]);
+                    if (onBack) onBack();
+                    else router.back();
+                } catch (error) {
+                    console.error('Failed to clear staging tables:', error);
+                    toast.error('An error occurred while clearing staging data.');
+                } finally {
+                    setLoading(false);
+                }
+            }
+        });
     };
 
     const handleContinueClick = async () => {
@@ -1017,11 +1034,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     setSelectedLocation(res.data[0].id.toString());
                 }
             } else {
-                alert(res.message || 'Lokasyonlar yüklenemedi.');
+                toast.error(res.message || 'Failed to load locations.');
             }
         } catch (error) {
             console.error('Error loading locations:', error);
-            alert('An error occurred while loading locations.');
+            toast.error('An error occurred while loading locations.');
         } finally {
             setLoadingLocations(false);
         }
@@ -1029,7 +1046,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     const submitLocationAndContinue = async () => {
         if (!selectedLocation) {
-            alert('Please select a location.');
+            toast.warning('Please select a location.');
             return;
         }
 
@@ -1092,11 +1109,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 setShowLocationModal(false);
                 openReconciliation(refreshedMatches);
             } else {
-                alert('Webhook request failed. Please try again.');
+                toast.error('Webhook request failed. Please try again.');
             }
         } catch (error) {
             console.error('Webhook error:', error);
-            alert('An error occurred while sending the webhook.');
+            toast.error('An error occurred while sending the webhook.');
         } finally {
             setSubmittingLocation(false);
         }
@@ -1114,7 +1131,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     // Cross Listing State
     const [crossListing, setCrossListing] = useState<{ to_shopify: CrossListingItem[], to_etsy: CrossListingItem[] }>({ to_shopify: [], to_etsy: [] });
-    const [cloneModal, setCloneModal] = useState<{ isOpen: boolean; sourceGroup: ReconcileGroup | null; targetPlatform: 'shopify' | 'etsy'; initialData?: CrossListingItem }>({
+    const [cloneModal, setCloneModal] = useState<{ isOpen: boolean; sourceGroup: ReconcileGroup | null; targetPlatform: 'shopify' | 'etsy'; initialData?: CrossListingItem; targetId?: string }>({
         isOpen: false,
         sourceGroup: null,
         targetPlatform: 'shopify'
@@ -1128,13 +1145,22 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         const listKey = target === 'shopify' ? 'to_shopify' : 'to_etsy';
         const sourceId = platform === 'shopify' ? group.items[0]?.shopify?.shopifyProductId : group.items[0]?.etsy?.etsyListingId;
 
+        // Detect if this is a matched product with variant mismatch (target already exists)
+        let targetId: string | undefined;
+        if (target === 'shopify' && group.shopify) {
+            targetId = group.shopify.id; // Existing Shopify product ID
+        } else if (target === 'etsy' && group.etsy) {
+            targetId = group.etsy.id; // Existing Etsy listing ID
+        }
+
         const existing = sourceId ? crossListing[listKey].find(i => i.source_id === sourceId) : undefined;
 
         setCloneModal({
             isOpen: true,
             sourceGroup: group,
             targetPlatform: target,
-            initialData: existing
+            initialData: existing,
+            targetId
         });
     };
 
@@ -1993,7 +2019,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                     const img = (group.items[0]?.shopify || group.items[0]?.etsy)?.imageUrl;
 
                                                     return (
-                                                        <div key={group.id} className={`bg-white rounded-2xl border overflow-hidden shadow-sm ${hasMismatch ? 'border-red-200' : 'border-gray-200 opacity-80'}`}>
+                                                        <div key={group.id} className={`bg-white rounded-2xl border overflow-hidden shadow-sm ${hasMismatch ? 'border-red-200' : 'border-gray-200'}`}>
                                                             {/* Product Header */}
                                                             <div className={`p-4 flex items-center gap-4 border-b ${hasMismatch ? 'bg-red-50/50 border-red-100' : 'bg-gray-50/50 border-gray-100'}`}>
                                                                 <div className="w-14 h-14 rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden shrink-0">
@@ -2044,8 +2070,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                                                     ) : (
                                                                                         <>
                                                                                             <span className="text-xs font-medium text-gray-400 mb-1 opacity-0">Δ 0</span>
-                                                                                            <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center ring-4 ring-white shadow-sm z-10">
-                                                                                                <Check className="w-3.5 h-3.5 text-green-500" />
+                                                                                            <div className="w-5 h-5 rounded-full flex items-center justify-center z-10">
+                                                                                                <Check className="w-4 h-4 text-emerald-400" />
                                                                                             </div>
                                                                                         </>
                                                                                     )}
@@ -2206,7 +2232,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                             <div className="flex items-center gap-2 mt-1">
                                                                 <span className="text-xs text-gray-500">{group.items.length} variant{group.items.length > 1 ? 's' : ''}</span>
                                                                 {isUnmatched ? (
-                                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 uppercase tracking-wide">
+                                                                    <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full text-gray-500">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                                                                         Unmatched Product
                                                                     </span>
                                                                 ) : (
@@ -2259,9 +2286,9 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                         ) : (
                                                             <button
                                                                 onClick={() => handleCloneClick(group)}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${cloneTarget === 'Etsy'
-                                                                    ? 'bg-orange-50 text-orange-700 hover:bg-orange-100 ring-1 ring-orange-900/5'
-                                                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 ring-1 ring-blue-900/5'
+                                                                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all shadow-sm ${cloneTarget === 'Etsy'
+                                                                    ? 'bg-orange-500 text-white hover:bg-orange-600'
+                                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
                                                                     }`}
                                                             >
                                                                 {cloneTarget === 'Etsy' ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
@@ -2354,6 +2381,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     sourceGroup={cloneModal.sourceGroup}
                     targetPlatform={cloneModal.targetPlatform}
                     initialData={cloneModal.initialData}
+                    targetId={cloneModal.targetId}
                 />
             </>
         );
@@ -2429,7 +2457,17 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             </div>
 
             <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 py-4 overflow-hidden min-h-0">
-                <div className="grid grid-cols-12 gap-6 h-full">
+                <div className="grid grid-cols-12 gap-6 h-full relative">
+                    {/* AI Match Lock Overlay */}
+                    {aiLoading && (
+                        <div className="absolute inset-0 z-20 bg-white/40 backdrop-blur-[1px] flex items-center justify-center rounded-xl" style={{ pointerEvents: 'all' }}>
+                            <div className="flex flex-col items-center gap-3 bg-white/90 px-8 py-6 rounded-2xl shadow-lg border border-gray-200">
+                                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                                <p className="text-sm font-semibold text-gray-700">AI Matching in progress...</p>
+                                <p className="text-xs text-gray-400">Please wait while we analyze your products</p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* LEFT COLUMN: SHOPIFY UNMATCHED (Source) */}
                     <div className="col-span-3 flex flex-col h-full bg-gray-50/50 rounded-xl border border-gray-200 overflow-hidden">
@@ -2494,52 +2532,77 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             onDragLeave={() => setCenterHover(false)}
                             onDrop={(e) => { e.preventDefault(); handleDropOnCenter(); }}
                         >
-                            {/* Drop Area Overlay or Indicator */}
-                            {draggedGroup && (
-                                <div className={`p-4 border-2 border-dashed rounded-xl flex items-center justify-center text-sm font-medium transition-colors mb-4 ${centerHover ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-400'
-                                    }`}>
-                                    Drop here to link match
-                                </div>
-                            )}
-
-                            {matches.length === 0 && (
-                                <div className="flex flex-col items-center justify-center h-64 text-center">
-                                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                        <Wand2 className="w-8 h-8 text-gray-400" />
+                            {loading ? (
+                                // Skeleton for center column
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <div key={i} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm animate-pulse">
+                                        <div className="flex items-center gap-4 mb-3">
+                                            <div className="w-12 h-12 rounded-lg bg-gray-200 flex-shrink-0" />
+                                            <div className="flex-1 space-y-2">
+                                                <div className="h-4 bg-gray-200 rounded w-2/3" />
+                                                <div className="h-3 bg-gray-100 rounded w-1/3" />
+                                            </div>
+                                            <div className="w-8 h-8 rounded bg-gray-100" />
+                                        </div>
+                                        <div className="border-t border-gray-100 pt-3 space-y-2">
+                                            <div className="flex gap-4">
+                                                <div className="flex-1 h-10 bg-gray-100 rounded-lg" />
+                                                <div className="w-8 h-8 rounded-full bg-gray-200" />
+                                                <div className="flex-1 h-10 bg-gray-100 rounded-lg" />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <h3 className="text-gray-900 font-medium mb-1">No Matches Yet</h3>
-                                    <p className="text-gray-500 text-sm max-w-xs mb-4">
-                                        Drag products from the sides to link them, or use AI Match to auto-detect pairs.
-                                    </p>
-                                    <button
-                                        onClick={aiMatch}
-                                        disabled={aiLoading}
-                                        className="h-9 px-4 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-2"
-                                    >
-                                        {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                        Run AI Match
-                                    </button>
-                                </div>
+                                ))
+                            ) : (
+                                <>
+                                    {/* Drop Area Overlay or Indicator */}
+                                    {draggedGroup && (
+                                        <div className={`p-4 border-2 border-dashed rounded-xl flex items-center justify-center text-sm font-medium transition-colors mb-4 ${centerHover ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-300 text-gray-400'
+                                            }`}>
+                                            Drop here to link match
+                                        </div>
+                                    )}
+
+                                    {matches.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center h-64 text-center">
+                                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                                <Wand2 className="w-8 h-8 text-gray-400" />
+                                            </div>
+                                            <h3 className="text-gray-900 font-medium mb-1">No Matches Yet</h3>
+                                            <p className="text-gray-500 text-sm max-w-xs mb-4">
+                                                Drag products from the sides to link them, or use AI Match to auto-detect pairs.
+                                            </p>
+                                            <button
+                                                onClick={aiMatch}
+                                                disabled={aiLoading}
+                                                className="h-9 px-4 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-2"
+                                            >
+                                                {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                                Run AI Match
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {matches.slice().sort((a, b) => {
+                                        // Priority: MATCHED > SHOPIFY_ONLY > ETSY_ONLY (or mixed)
+                                        // We can define 'MATCHED' as having (links > 0) OR (shopify && etsy)
+                                        const isMatchedA = a.variantMatches.length > 0 || (a.shopify && a.etsy);
+                                        const isMatchedB = b.variantMatches.length > 0 || (b.shopify && b.etsy);
+
+                                        if (isMatchedA && !isMatchedB) return -1;
+                                        if (!isMatchedA && isMatchedB) return 1;
+                                        // Secondary sort by title if needed? or just stable
+                                        return 0;
+                                    }).map(match => (
+                                        <MatchedParentCard
+                                            key={match.id}
+                                            match={match}
+                                            onRemove={removeMatch}
+                                            onUpdate={updateMatch}
+                                        />
+                                    ))}
+                                </>
                             )}
-
-                            {matches.slice().sort((a, b) => {
-                                // Priority: MATCHED > SHOPIFY_ONLY > ETSY_ONLY (or mixed)
-                                // We can define 'MATCHED' as having (links > 0) OR (shopify && etsy)
-                                const isMatchedA = a.variantMatches.length > 0 || (a.shopify && a.etsy);
-                                const isMatchedB = b.variantMatches.length > 0 || (b.shopify && b.etsy);
-
-                                if (isMatchedA && !isMatchedB) return -1;
-                                if (!isMatchedA && isMatchedB) return 1;
-                                // Secondary sort by title if needed? or just stable
-                                return 0;
-                            }).map(match => (
-                                <MatchedParentCard
-                                    key={match.id}
-                                    match={match}
-                                    onRemove={removeMatch}
-                                    onUpdate={updateMatch}
-                                />
-                            ))}
                         </div>
                     </div>
 
@@ -2553,21 +2616,37 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{unmatchedEtsyGroups.length}</span>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                            {unmatchedEtsyGroups.map(g => (
-                                <DraggableProductCard
-                                    key={g.id}
-                                    group={g}
-                                    side="etsy"
-                                    onDragStart={handleDragStart}
-                                    onDragEnd={handleDragEnd}
-                                    onDrop={(e, target) => handleDropOnGroup(target)}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    isSelected={selectedGroup?.id === g.id}
-                                    onClick={() => handleProductClick(g, 'etsy')}
-                                />
-                            ))}
-                            {unmatchedEtsyGroups.length === 0 && (
-                                <div className="text-center py-10 text-gray-400 text-sm">No unmatched items</div>
+                            {loading ? (
+                                // Skeleton for right column
+                                Array.from({ length: 6 }).map((_, i) => (
+                                    <div key={i} className="p-3 bg-white rounded-lg border shadow-sm flex items-center gap-3 animate-pulse">
+                                        <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
+                                        <div className="flex-1 space-y-2">
+                                            <div className="h-4 bg-gray-200 rounded w-3/4" />
+                                            <div className="h-3 bg-gray-100 rounded w-1/3" />
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <>
+                                    {unmatchedEtsyGroups.map(g => (
+                                        <DraggableProductCard
+                                            key={g.id}
+                                            group={g}
+                                            side="etsy"
+                                            onDragStart={handleDragStart}
+                                            onDragEnd={handleDragEnd}
+                                            onDrop={(e, target) => handleDropOnGroup(target)}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            isSelected={selectedGroup?.id === g.id}
+                                            onClick={() => handleProductClick(g, 'etsy')}
+                                            disabled={aiLoading}
+                                        />
+                                    ))}
+                                    {unmatchedEtsyGroups.length === 0 && (
+                                        <div className="text-center py-10 text-gray-400 text-sm">No unmatched items</div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
@@ -2580,7 +2659,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in duration-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-gray-900">Ana Shopify Lokasyonu</h3>
+                            <h3 className="text-lg font-bold text-gray-900">Primary Shopify Location</h3>
                             <button onClick={() => setShowLocationModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <X className="w-5 h-5" />
                             </button>
@@ -2597,7 +2676,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         ) : (
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Lokasyon</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                                     <select
                                         value={selectedLocation}
                                         onChange={(e) => setSelectedLocation(e.target.value)}
@@ -2625,6 +2704,18 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     </div>
                 </div>
             )}
+
+            {/* Confirm Modal */}
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                variant={confirmModal.variant}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                confirmLabel="Yes, Go Back"
+                cancelLabel="Cancel"
+            />
         </div>
     );
 }

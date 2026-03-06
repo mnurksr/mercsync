@@ -3,17 +3,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShoppingBag, ArrowRight } from 'lucide-react';
+import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
 
 export default function AuthPage() {
     const [shopName, setShopName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const toast = useToast();
 
     const handleConnect = (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!shopName.trim()) {
-            alert('Please enter your store name');
+            toast.warning('Please enter your store name');
             return;
         }
 

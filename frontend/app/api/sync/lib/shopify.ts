@@ -76,16 +76,43 @@ export async function getProduct(
 }
 
 /**
+ * Add a variant to an existing Shopify product
+ * Used for variant injection into matched products
+ * POST /products/{id}/variants.json
+ */
+export async function addVariantToProduct(
+    creds: ShopifyCredentials,
+    productId: string | number,
+    variantPayload: any
+) {
+    return shopifyFetch(creds, `products/${productId}/variants.json`, {
+        method: 'POST',
+        body: JSON.stringify({ variant: variantPayload })
+    });
+}
+
+/**
  * Build a Shopify product payload from Etsy source data
  * Replaces: "Code in JavaScript1" in Clone to Shopify workflow
+ * @param selectedVariantIds - Optional: if provided, only include these variant IDs
  */
 export function buildProductPayload(
     sourceProduct: any,
-    dbRows: any[]
+    dbRows: any[],
+    selectedVariantIds?: string[]
 ): { product: any; originalStocks: number[] } {
+    // Filter dbRows by selected variant IDs if provided
+    let filteredRows = dbRows;
+    if (selectedVariantIds && selectedVariantIds.length > 0) {
+        filteredRows = dbRows.filter(row =>
+            selectedVariantIds.includes(row.etsy_variant_id?.toString())
+        );
+        if (filteredRows.length === 0) filteredRows = dbRows; // Fallback if no match
+    }
+
     // Collect all unique images
     const allImages = new Set<string>();
-    dbRows.forEach(row => {
+    filteredRows.forEach(row => {
         if (row.image_url) {
             row.image_url.split(',').forEach((img: string) => allImages.add(img.trim()));
         }
@@ -96,7 +123,7 @@ export function buildProductPayload(
         .map(url => ({ src: url }));
 
     // Build variants
-    const variants = dbRows.map(row => ({
+    const variants = filteredRows.map(row => ({
         option1: row.variant_title || 'Default Title',
         price: row.price ? row.price.toString() : '0.00',
         sku: row.sku || '',
@@ -104,7 +131,7 @@ export function buildProductPayload(
         requires_shipping: true
     }));
 
-    const originalStocks = dbRows.map(row => row.stock_quantity || 0);
+    const originalStocks = filteredRows.map(row => row.stock_quantity || 0);
 
     return {
         product: {

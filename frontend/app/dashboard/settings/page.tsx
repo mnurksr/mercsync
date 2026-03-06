@@ -7,6 +7,8 @@ import {
     ArrowUpRight, Box, History, Link2, Unlink
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { useToast } from '@/components/ui/useToast';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +19,7 @@ import { getConnectedShop, disconnectShop } from '../../actions/shop';
 
 export default function SettingsPage() {
     const { supabase, user } = useAuth();
+    const toast = useToast();
     const router = useRouter();
 
     // ====== FRESH LOAD STATE ======
@@ -84,12 +87,12 @@ export default function SettingsPage() {
 
     const handleConnectShopify = () => {
         if (!shopName.trim()) {
-            alert('Please enter the shop name');
+            toast.warning('Please enter the shop name');
             return;
         }
 
         if (!user?.id) {
-            alert('User session not found. Please refresh the page or log in again.');
+            toast.error('User session not found. Please refresh the page or log in again.');
             return;
         }
 
@@ -108,7 +111,7 @@ export default function SettingsPage() {
 
     const handleConnectEtsy = () => {
         if (!shopName.trim()) {
-            alert('Please enter the shop name');
+            toast.warning('Please enter the shop name');
             return;
         }
         // Build OAuth URL with user_id and shop name
@@ -118,25 +121,32 @@ export default function SettingsPage() {
         window.location.href = `https://api.mercsync.com/webhook/auth/etsy/start?user_id=${userId}&shop=${shop}&return_url=${returnUrl}`;
     };
 
+    const [disconnectTarget, setDisconnectTarget] = useState<'shopify' | 'etsy' | null>(null);
+
     const handleDisconnect = async (platform: 'shopify' | 'etsy') => {
-        if (confirm('Are you sure you want to disconnect?')) {
-            try {
-                const result = await disconnectShop(platform);
+        setDisconnectTarget(platform);
+    };
 
-                if (result.success) {
-                    setStores((prev: typeof stores) => ({
-                        ...prev,
-                        [platform]: { connected: false, name: null, domain: null, shopId: null }
-                    }));
+    const executeDisconnect = async () => {
+        if (!disconnectTarget) return;
+        const platform = disconnectTarget;
+        setDisconnectTarget(null);
 
-                    // Force refresh debug info
-                    checkConnections();
-                } else {
-                    alert(`Failed to disconnect: ${result.message}`);
-                }
-            } catch (err: any) {
-                alert(`Error: ${err.message}`);
+        try {
+            const result = await disconnectShop(platform);
+
+            if (result.success) {
+                setStores((prev: typeof stores) => ({
+                    ...prev,
+                    [platform]: { connected: false, name: null, domain: null, shopId: null }
+                }));
+                toast.success('Disconnected successfully.');
+                checkConnections();
+            } else {
+                toast.error(`Failed to disconnect: ${result.message}`);
             }
+        } catch (err: any) {
+            toast.error(`Error: ${err.message}`);
         }
     };
 
@@ -564,6 +574,18 @@ export default function SettingsPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Disconnect Confirm Modal */}
+            <ConfirmModal
+                isOpen={!!disconnectTarget}
+                title="Disconnect Store"
+                message="Are you sure you want to disconnect? You can reconnect later."
+                variant="danger"
+                confirmLabel="Disconnect"
+                cancelLabel="Cancel"
+                onConfirm={executeDisconnect}
+                onCancel={() => setDisconnectTarget(null)}
+            />
         </div>
     );
 }
