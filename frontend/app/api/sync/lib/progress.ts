@@ -10,7 +10,8 @@ type ProgressUpdate = {
 };
 
 /**
- * Update sync_jobs record — triggers Supabase Realtime for the UI
+ * Update sync_jobs record — triggers Supabase Realtime for the UI.
+ * The `message` column stores a JSON array of all events so no events are lost.
  */
 export async function updateProgress(jobId: string, data: ProgressUpdate) {
     const updateData: any = {
@@ -20,7 +21,28 @@ export async function updateProgress(jobId: string, data: ProgressUpdate) {
     if (data.status) updateData.status = data.status;
     if (data.current !== undefined) updateData.current_step = data.current;
     if (data.total !== undefined) updateData.total_steps = data.total;
-    if (data.message !== undefined) updateData.message = data.message;
+
+    if (data.message !== undefined) {
+        // Fetch current message array and append
+        const { data: existing } = await supabase
+            .from('sync_jobs')
+            .select('message')
+            .eq('id', jobId)
+            .single();
+
+        let events: string[] = [];
+        if (existing?.message) {
+            try {
+                const parsed = JSON.parse(existing.message);
+                if (Array.isArray(parsed)) events = parsed;
+            } catch {
+                // Old format (single string) — wrap it
+                events = [existing.message];
+            }
+        }
+        events.push(data.message);
+        updateData.message = JSON.stringify(events);
+    }
 
     const { error } = await supabase
         .from('sync_jobs')

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import {
@@ -17,6 +17,7 @@ interface SyncJob {
     current_step: number;
     total_steps: number;
     message: string;
+    updated_at: string;
 }
 
 type LogEvent = { type: 'log'; text: string };
@@ -35,7 +36,7 @@ type StockSyncEvent = {
 };
 type SyncEvent = LogEvent | ProductCloneEvent | StockSyncEvent;
 
-function parseMessage(raw: string): SyncEvent {
+function parseEvent(raw: string): SyncEvent {
     try {
         const parsed = JSON.parse(raw);
         if (parsed.type) return parsed;
@@ -43,9 +44,52 @@ function parseMessage(raw: string): SyncEvent {
     return { type: 'log', text: raw };
 }
 
+/**
+ * Parse the message column — could be:
+ * - A JSON array of event strings (new format)
+ * - A single JSON event string (old format)
+ * - A plain text string
+ */
+function parseAllEvents(message: string): SyncEvent[] {
+    if (!message) return [];
+    try {
+        const parsed = JSON.parse(message);
+        // New format: JSON array of event strings
+        if (Array.isArray(parsed)) {
+            return parsed.map((item: string) => parseEvent(item));
+        }
+        // Single JSON event object
+        if (parsed.type) return [parsed as SyncEvent];
+    } catch { }
+    // Plain text fallback
+    return [{ type: 'log', text: message }];
+}
+
 /** Trim variant suffix: "Cool T-Shirt - Large / Blue" → "Cool T-Shirt" */
 function cleanName(name: string): string {
     return (name || '').split(' - ')[0].trim();
+}
+
+/**
+ * Deduplicate product_clone events — keep last status per product+direction
+ */
+function dedupeCloneEvents(events: SyncEvent[]): SyncEvent[] {
+    const result: SyncEvent[] = [];
+    const cloneMap = new Map<string, number>(); // key -> last index in result
+
+    for (const event of events) {
+        if (event.type === 'product_clone') {
+            const key = `${event.direction}-${event.product.name}`;
+            const existingIdx = cloneMap.get(key);
+            if (existingIdx !== undefined) {
+                result[existingIdx] = event; // Update in place
+                continue;
+            }
+            cloneMap.set(key, result.length);
+        }
+        result.push(event);
+    }
+    return result;
 }
 
 export default function SyncingDashboard() {
@@ -61,56 +105,61 @@ export default function SyncingDashboard() {
     const [job, setJob] = useState<SyncJob | null>(null);
     const [events, setEvents] = useState<SyncEvent[]>([]);
     const feedEndRef = useRef<HTMLDivElement>(null);
+    const lastMessageHash = useRef<string>('');
+    const isDone = useRef(false);
+
+    /** Process a job record — extract ALL events from the message array */
+    const processJobUpdate = useCallback((newJob: SyncJob) => {
+        // Hash check: skip if message hasn't changed
+        const hash = `${newJob.status}:${newJob.message?.length || 0}:${newJob.updated_at}`;
+        if (hash === lastMessageHash.current) return;
+        lastMessageHash.current = hash;
+
+        setJob(newJob);
+
+        if (newJob.status === 'completed' || newJob.status === 'failed') {
+            isDone.current = true;
+        }
+
+        if (newJob.message) {
+            const allEvents = parseAllEvents(newJob.message);
+            const deduped = dedupeCloneEvents(allEvents);
+            setEvents(deduped);
+        }
+    }, []);
 
     useEffect(() => {
         if (!jobId) { router.push('/setup'); return; }
 
-        const fetchInitialJob = async () => {
+        // 1. Initial fetch
+        const fetchJob = async () => {
             const { data } = await supabase.from('sync_jobs').select('*').eq('id', jobId).single();
-            if (data) {
-                setJob(data);
-                if (data.message) setEvents([parseMessage(data.message)]);
-            }
+            if (data) processJobUpdate(data);
         };
+        fetchJob();
 
-        fetchInitialJob();
-
+        // 2. Realtime subscription (works when WebSocket isn't blocked)
         const channel = supabase
             .channel(`job_${jobId}`)
             .on('postgres_changes', {
                 event: '*', schema: 'public', table: 'sync_jobs', filter: `id=eq.${jobId}`
             }, (payload: any) => {
-                const newJob = payload.new as SyncJob;
-                setJob(newJob);
-                if (newJob.message) {
-                    const event = parseMessage(newJob.message);
-                    setEvents(prev => {
-                        if (event.type === 'product_clone') {
-                            const productKey = `${event.direction}-${event.product.name}`;
-                            const existingIdx = prev.findIndex(e =>
-                                e.type === 'product_clone' &&
-                                `${e.direction}-${e.product.name}` === productKey
-                            );
-                            if (existingIdx !== -1) {
-                                const updated = [...prev];
-                                updated[existingIdx] = event;
-                                return updated;
-                            }
-                        }
-                        const lastText = (e: SyncEvent) =>
-                            e.type === 'log' ? e.text :
-                                e.type === 'stock_sync' ? `stock-${e.product.name}` :
-                                    `clone-${(e as ProductCloneEvent).product.name}`;
-                        const last = prev[prev.length - 1];
-                        if (last && lastText(last) === lastText(event)) return prev;
-                        return [...prev, event];
-                    });
-                }
+                processJobUpdate(payload.new as SyncJob);
             })
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
-    }, [jobId, router, supabase]);
+        // 3. Polling fallback (2s) — essential for Shopify iframe
+        const pollInterval = setInterval(async () => {
+            if (isDone.current) { clearInterval(pollInterval); return; }
+            const { data } = await supabase.from('sync_jobs').select('*').eq('id', jobId).single();
+            if (data) processJobUpdate(data);
+        }, 2000);
+
+        return () => {
+            supabase.removeChannel(channel);
+            clearInterval(pollInterval);
+        };
+    }, [jobId, router, supabase, processJobUpdate]);
 
     useEffect(() => {
         feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
