@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -68,12 +68,16 @@ export default function PlansPage() {
     const { user } = useAuth();
     const router = useRouter();
     const toast = useToast();
+    const searchParams = useSearchParams();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Get shop domain from URL params (Shopify embeds always pass ?shop=xxx)
+    const shopDomain = searchParams.get('shop') || undefined;
+
     const handleSelectPlan = async (planId: string) => {
-        if (!user?.id) {
-            toast.error('User not authenticated');
+        if (!user?.id && !shopDomain) {
+            toast.error('Could not identify your shop. Please try again from Shopify admin.');
             return;
         }
 
@@ -84,7 +88,11 @@ export default function PlansPage() {
             const res = await fetch('/api/billing/create-subscription', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ plan: planId, user_id: user.id })
+                body: JSON.stringify({
+                    plan: planId,
+                    user_id: user?.id || undefined,
+                    shop_domain: shopDomain
+                })
             });
 
             const data = await res.json();

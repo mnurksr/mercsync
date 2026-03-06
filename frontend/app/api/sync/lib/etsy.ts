@@ -215,14 +215,14 @@ export async function downloadImage(imageUrl: string): Promise<Buffer | null> {
 /**
  * Build Etsy listing payload from Shopify product data
  * Replaces: "Code in JavaScript" in Clone to Etsy workflow
- * @param selectedVariantIds - Optional: if provided, only include these variant IDs
+ * @param cloneVariants - Optional: pre-built variant data from clone modal
  */
 export function buildListingPayload(
     shopifyProduct: any,
     dbStocks: { shopify_variant_id: string; stock_quantity: number }[],
     shippingProfileId: number | null,
     readinessStateId: number | null,
-    selectedVariantIds?: string[]
+    cloneVariants?: { title: string; sku: string; price: number; stock: number }[]
 ): { listingPayload: any; inventoryPayload: any } {
     // Build stock map from DB
     const stockMap: Record<string, number> = {};
@@ -237,20 +237,14 @@ export function buildListingPayload(
         shopifyProduct.variants?.some((v: any) => v.requires_shipping === false);
     const etsyType = isDigital ? 'download' : 'physical';
 
-    // Filter variants by selected IDs if provided
-    let variants = shopifyProduct.variants || [];
-    if (selectedVariantIds && selectedVariantIds.length > 0) {
-        const filtered = variants.filter((v: any) =>
-            selectedVariantIds.includes(v.id?.toString())
-        );
-        variants = filtered;
-    }
+    // Use clone variants if provided, otherwise use Shopify product variants
+    const useCloneVariants = cloneVariants && cloneVariants.length > 0;
+    const variants = useCloneVariants ? cloneVariants : (shopifyProduct.variants || []);
 
     const activeProperties: number[] = [];
     const optionName = shopifyProduct.options?.[0]?.name || 'Variation';
 
     // If there are multiple variants, USE property 513 (Etsy "Variation 1")
-    // regardless of the option name — this is the key fix for the "single variant" bug  
     if (variants.length > 1) {
         activeProperties.push(513);
     }
@@ -258,8 +252,14 @@ export function buildListingPayload(
     // Build inventory products
     let totalStock = 0;
     const etsyProducts = variants.map((variant: any) => {
-        // Etsy doesn't allow quantity 0 — use at least 1
-        let actualStock = isDigital ? 999 : Math.max(1, stockMap[variant.id.toString()] || 1);
+        let actualStock: number;
+        if (useCloneVariants) {
+            // Use stock directly from clone payload
+            actualStock = isDigital ? 999 : Math.max(1, variant.stock || 1);
+        } else {
+            // Use stock from DB map
+            actualStock = isDigital ? 999 : Math.max(1, stockMap[variant.id?.toString()] || 1);
+        }
         totalStock += actualStock;
 
         const offering: any = {
@@ -272,7 +272,7 @@ export function buildListingPayload(
         }
 
         return {
-            sku: variant.sku || `SKU-${variant.id}`,
+            sku: variant.sku || (variant.id ? `SKU-${variant.id}` : `SKU-${Date.now()}`),
             property_values: activeProperties.length > 0 ? [{
                 property_id: 513,
                 property_name: optionName === 'Title' ? 'Variation' : optionName,

@@ -74,10 +74,13 @@ export default function PricingPage() {
     const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState<string | null>(null);
 
+    // Get shop domain from URL params (Shopify embeds always pass ?shop=xxx)
+    const shopDomain = searchParams.get('shop') || undefined;
+
     // Create Shopify subscription via our billing API
     const initiateSubscription = async (planId: string) => {
-        if (!user?.id) {
-            // Not logged in — redirect to login, then come back
+        // Need either user auth or shop domain from URL
+        if (!user?.id && !shopDomain) {
             router.push(`/login?redirect=${encodeURIComponent(`/pricing?checkout=${planId}`)}`);
             return;
         }
@@ -87,7 +90,11 @@ export default function PricingPage() {
             const response = await fetch('/api/billing/create-subscription', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ plan: planId, user_id: user.id })
+                body: JSON.stringify({
+                    plan: planId,
+                    user_id: user?.id || undefined,
+                    shop_domain: shopDomain
+                })
             });
 
             const data = await response.json();

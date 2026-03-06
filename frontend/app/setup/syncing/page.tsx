@@ -119,6 +119,36 @@ export default function SyncingDashboard() {
     const isComplete = job?.status === 'completed';
     const isFailed = job?.status === 'failed';
 
+    // Group clone events by direction
+    const toShopifyEvents = events.filter(e => e.type === 'product_clone' && e.direction === 'to_shopify') as ProductCloneEvent[];
+    const toEtsyEvents = events.filter(e => e.type === 'product_clone' && e.direction === 'to_etsy') as ProductCloneEvent[];
+    const logEvents = events.filter(e => e.type === 'log' || e.type === 'stock_sync');
+
+    const renderProductItem = (event: ProductCloneEvent) => (
+        <motion.div
+            key={`c-${event.product.name}-${event.direction}`}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 px-4 py-3"
+        >
+            {event.product.image ? (
+                <img src={event.product.image} alt="" className="w-8 h-8 rounded-lg object-cover border border-gray-100 shrink-0" />
+            ) : (
+                <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+                    <Package className="w-3.5 h-3.5 text-gray-400" />
+                </div>
+            )}
+            <div className="flex-1 min-w-0">
+                <span className="text-sm text-gray-900 font-medium truncate block">{cleanName(event.product.name)}</span>
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5">
+                {event.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+                {event.status === 'failed' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+                {event.status === 'cloning' && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" style={{ animationDuration: '1.2s' }} />}
+            </div>
+        </motion.div>
+    );
+
     return (
         <div style={{ margin: 0, padding: 0, height: '100vh', overflow: 'hidden' }}
             className="bg-[#F6F6F7] flex flex-col items-center justify-start font-sans"
@@ -159,7 +189,7 @@ export default function SyncingDashboard() {
                 </p>
             </div>
 
-            {/* Log Stream */}
+            {/* Log Stream — grouped by direction */}
             <div className="w-full max-w-md flex-1 min-h-0 px-4 pb-3">
                 <div className="h-full overflow-y-auto rounded-xl bg-white border border-gray-200 shadow-sm">
                     {events.length === 0 ? (
@@ -168,66 +198,66 @@ export default function SyncingDashboard() {
                             <p className="text-xs">Waiting for operations...</p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-gray-50">
-                            <AnimatePresence>
-                                {events.map((event, i) => {
-                                    if (event.type === 'product_clone') {
-                                        const isShopify = event.direction === 'to_shopify';
-                                        const displayName = cleanName(event.product.name);
-                                        return (
-                                            <motion.div
-                                                key={`c-${event.product.name}-${event.direction}`}
-                                                initial={{ opacity: 0, y: 4 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                className="flex items-center gap-3 px-4 py-3"
-                                            >
-                                                {event.product.image ? (
-                                                    <img src={event.product.image} alt="" className="w-8 h-8 rounded-lg object-cover border border-gray-100 shrink-0" />
-                                                ) : (
-                                                    <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-                                                        <Package className="w-3.5 h-3.5 text-gray-400" />
-                                                    </div>
-                                                )}
-                                                <div className="flex-1 min-w-0">
-                                                    <span className="text-sm text-gray-900 font-medium truncate block">{displayName}</span>
-                                                </div>
-                                                <div className="shrink-0 flex items-center gap-1.5">
-                                                    {event.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-                                                    {event.status === 'failed' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
-                                                    {event.status === 'cloning' && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" style={{ animationDuration: '1.2s' }} />}
-                                                    {isShopify
-                                                        ? <Store className="w-3.5 h-3.5 text-[#95BF47]" />
-                                                        : <ShoppingBag className="w-3.5 h-3.5 text-[#F56400]" />
-                                                    }
-                                                </div>
-                                            </motion.div>
-                                        );
-                                    }
-                                    if (event.type === 'stock_sync') {
-                                        return (
-                                            <motion.div
-                                                key={`s-${i}`}
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                className="flex items-center gap-3 px-4 py-2.5 text-xs text-gray-500"
-                                            >
-                                                <span className="flex-1 truncate">{cleanName(event.product.name)}</span>
-                                                <span className="tabular-nums text-gray-400">{event.product.old_stock} → {event.product.new_stock}</span>
-                                            </motion.div>
-                                        );
-                                    }
-                                    return (
-                                        <motion.div
-                                            key={`l-${i}`}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            className={`px-4 py-2 text-xs ${i === events.length - 1 ? 'text-gray-700 font-medium' : 'text-gray-400'}`}
-                                        >
-                                            <span className="text-gray-300 mr-1.5">›</span>{event.text}
-                                        </motion.div>
-                                    );
-                                })}
-                            </AnimatePresence>
+                        <div>
+                            {/* To Shopify Section */}
+                            {toShopifyEvents.length > 0 && (
+                                <div>
+                                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                                        <Store className="w-4 h-4 text-[#95BF47]" />
+                                        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Shopify</span>
+                                        <span className="ml-auto text-[11px] text-gray-400 tabular-nums">{toShopifyEvents.length}</span>
+                                    </div>
+                                    <div className="divide-y divide-gray-50">
+                                        <AnimatePresence>
+                                            {toShopifyEvents.map(e => renderProductItem(e))}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* To Etsy Section */}
+                            {toEtsyEvents.length > 0 && (
+                                <div>
+                                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100 border-t">
+                                        <ShoppingBag className="w-4 h-4 text-[#F56400]" />
+                                        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Etsy</span>
+                                        <span className="ml-auto text-[11px] text-gray-400 tabular-nums">{toEtsyEvents.length}</span>
+                                    </div>
+                                    <div className="divide-y divide-gray-50">
+                                        <AnimatePresence>
+                                            {toEtsyEvents.map(e => renderProductItem(e))}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Log messages */}
+                            {logEvents.length > 0 && (
+                                <div className="divide-y divide-gray-50">
+                                    <AnimatePresence>
+                                        {logEvents.map((event, i) => {
+                                            if (event.type === 'stock_sync') {
+                                                return (
+                                                    <motion.div key={`s-${i}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                                        className="flex items-center gap-3 px-4 py-2.5 text-xs text-gray-500"
+                                                    >
+                                                        <span className="flex-1 truncate">{cleanName(event.product.name)}</span>
+                                                        <span className="tabular-nums text-gray-400">{event.product.old_stock} → {event.product.new_stock}</span>
+                                                    </motion.div>
+                                                );
+                                            }
+                                            return (
+                                                <motion.div key={`l-${i}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                                    className={`px-4 py-2 text-xs ${i === logEvents.length - 1 ? 'text-gray-700 font-medium' : 'text-gray-400'}`}
+                                                >
+                                                    <span className="text-gray-300 mr-1.5">›</span>{event.text}
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </AnimatePresence>
+                                </div>
+                            )}
+
                             <div ref={feedEndRef} className="h-1 shrink-0" />
                         </div>
                     )}

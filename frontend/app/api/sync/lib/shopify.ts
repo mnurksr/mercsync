@@ -94,24 +94,16 @@ export async function addVariantToProduct(
 /**
  * Build a Shopify product payload from Etsy source data
  * Replaces: "Code in JavaScript1" in Clone to Shopify workflow
- * @param selectedVariantIds - Optional: if provided, only include these variant IDs
+ * @param cloneVariants - Optional: pre-built variant data from clone modal (title/sku/price/stock)
  */
 export function buildProductPayload(
     sourceProduct: any,
     dbRows: any[],
-    selectedVariantIds?: string[]
+    cloneVariants?: { title: string; sku: string; price: number; stock: number }[]
 ): { product: any; originalStocks: number[] } {
-    // Filter dbRows by selected variant IDs if provided
-    let filteredRows = dbRows;
-    if (selectedVariantIds && selectedVariantIds.length > 0) {
-        filteredRows = dbRows.filter(row =>
-            selectedVariantIds.includes(row.etsy_variant_id?.toString())
-        );
-    }
-
-    // Collect all unique images
+    // ALWAYS collect images from ALL source rows
     const allImages = new Set<string>();
-    filteredRows.forEach(row => {
+    dbRows.forEach(row => {
         if (row.image_url) {
             row.image_url.split(',').forEach((img: string) => allImages.add(img.trim()));
         }
@@ -121,16 +113,29 @@ export function buildProductPayload(
         .filter(url => url !== '')
         .map(url => ({ src: url }));
 
-    // Build variants
-    const variants = filteredRows.map(row => ({
-        option1: row.variant_title || 'Default Title',
-        price: row.price ? row.price.toString() : '0.00',
-        sku: row.sku || '',
-        inventory_management: 'shopify',
-        requires_shipping: true
-    }));
+    // Build variants — use clone payload data if provided, otherwise use dbRows
+    let variants: any[];
+    let originalStocks: number[];
 
-    const originalStocks = filteredRows.map(row => row.stock_quantity || 0);
+    if (cloneVariants && cloneVariants.length > 0) {
+        variants = cloneVariants.map(v => ({
+            option1: v.title || 'Default Title',
+            price: v.price ? v.price.toString() : '0.00',
+            sku: v.sku || '',
+            inventory_management: 'shopify',
+            requires_shipping: true
+        }));
+        originalStocks = cloneVariants.map(v => v.stock || 0);
+    } else {
+        variants = dbRows.map(row => ({
+            option1: row.variant_title || 'Default Title',
+            price: row.price ? row.price.toString() : '0.00',
+            sku: row.sku || '',
+            inventory_management: 'shopify',
+            requires_shipping: true
+        }));
+        originalStocks = dbRows.map(row => row.stock_quantity || 0);
+    }
 
     return {
         product: {

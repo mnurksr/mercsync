@@ -20,11 +20,11 @@ const SHOPIFY_API_VERSION = '2024-01';
 
 export async function POST(req: NextRequest) {
     try {
-        const { plan, user_id } = await req.json();
+        const { plan, user_id, shop_domain } = await req.json();
 
-        if (!plan || !user_id) {
+        if (!plan || (!user_id && !shop_domain)) {
             return NextResponse.json(
-                { error: 'plan and user_id are required' },
+                { error: 'plan and (user_id or shop_domain) are required' },
                 { status: 400 }
             );
         }
@@ -37,13 +37,15 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Get shop credentials from DB
+        // Get shop credentials from DB — lookup by shop_domain first, fallback to owner_id
         const supabase = createAdminClient();
-        const { data: shop } = await supabase
-            .from('shops')
-            .select('shop_domain, access_token')
-            .eq('owner_id', user_id)
-            .maybeSingle();
+        let shopQuery = supabase.from('shops').select('shop_domain, access_token, owner_id');
+        if (shop_domain) {
+            shopQuery = shopQuery.eq('shop_domain', shop_domain);
+        } else {
+            shopQuery = shopQuery.eq('owner_id', user_id);
+        }
+        const { data: shop } = await shopQuery.maybeSingle();
 
         if (!shop?.shop_domain || !shop?.access_token) {
             return NextResponse.json(
@@ -144,7 +146,7 @@ export async function POST(req: NextRequest) {
                 plan_name: planConfig.name,
                 billing_status: 'pending'
             })
-            .eq('owner_id', user_id);
+            .eq('shop_domain', shop.shop_domain);
 
         return NextResponse.json({
             confirmationUrl,
