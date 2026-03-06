@@ -138,15 +138,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Update shop record with plan info
-        await supabase
-            .from('shops')
-            .update({
-                plan: plan,
-                plan_name: planConfig.name,
-                billing_status: 'pending'
-            })
-            .eq('shop_domain', shop.shop_domain);
+        // We don't update the DB here since there is no billing_status column.
+        // The plan_type will be updated to the chosen plan in the /verify-subscription route 
+        // after the user approves the charge and returns to the dashboard.
 
         return NextResponse.json({
             confirmationUrl,

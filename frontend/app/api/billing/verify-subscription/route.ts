@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         // 1. Get shop credentials
         const { data: shop } = await supabase
             .from('shops')
-            .select('access_token, billing_status')
+            .select('access_token, plan_type')
             .eq('shop_domain', shop_domain)
             .single();
 
@@ -34,10 +34,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Shop credentials not found' }, { status: 404 });
         }
 
-        // If it's already active, skip verification (idempotency)
-        if (shop.billing_status === 'active') {
-            return NextResponse.json({ success: true, status: 'active', skipped: true });
-        }
+        // If it's already active on a paid plan, we can technically skip, 
+        // but it's safer to just re-verify in case they changed plans.
+        // For simplicity, we just proceed to sync with Shopify.
 
         // 2. Query Shopify to verify the charge status
         // The charge_id from the URL is actually a global ID when querying via GraphQL in modern versions, 
@@ -74,16 +73,19 @@ export async function POST(req: NextRequest) {
         const subscriptions = result.data?.currentAppInstallation?.activeSubscriptions || [];
 
         // Check if there is an active subscription
-        const hasActiveSub = subscriptions.some((sub: any) => sub.status === 'ACTIVE');
+        const activeSub = subscriptions.find((sub: any) => sub.status === 'ACTIVE');
 
-        if (hasActiveSub) {
-            // Update local database to active
+        if (activeSub) {
+            // e.g. "Starter" -> "starter"
+            const planType = activeSub.name.toLowerCase();
+
+            // Update local database to active plan
             await supabase
                 .from('shops')
-                .update({ billing_status: 'active' })
+                .update({ plan_type: planType })
                 .eq('shop_domain', shop_domain);
 
-            return NextResponse.json({ success: true, status: 'active' });
+            return NextResponse.json({ success: true, status: 'active', plan: planType });
         } else {
             return NextResponse.json({ success: false, status: 'inactive' });
         }
