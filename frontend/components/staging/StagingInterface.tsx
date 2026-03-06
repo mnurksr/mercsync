@@ -182,7 +182,7 @@ const matchVariants = (shopify: ProductGroup | null, etsy: ProductGroup | null) 
     };
 };
 
-function DraggableProductCard({ group, side, onDragStart, onDrop, onDragOver, onDragEnd, isSelected, onClick }: {
+function DraggableProductCard({ group, side, onDragStart, onDrop, onDragOver, onDragEnd, isSelected, onClick, disabled }: {
     group: ProductGroup,
     side: 'shopify' | 'etsy',
     onDragStart: (e: React.DragEvent, group: ProductGroup, from: 'shopify' | 'etsy') => void,
@@ -190,15 +190,17 @@ function DraggableProductCard({ group, side, onDragStart, onDrop, onDragOver, on
     onDrop?: (e: React.DragEvent, target: ProductGroup) => void,
     onDragOver?: (e: React.DragEvent) => void,
     isSelected?: boolean,
-    onClick?: () => void
+    onClick?: () => void,
+    disabled?: boolean
 }) {
     const [isOver, setIsOver] = useState(false);
 
     return (
         <div
-            draggable
+            draggable={!disabled}
             onClick={onClick}
             onDragStart={(e) => {
+                if (disabled) return;
                 e.dataTransfer.setData('group_data', JSON.stringify({ group, side }));
                 onDragStart(e, group, side);
             }}
@@ -217,10 +219,11 @@ function DraggableProductCard({ group, side, onDragStart, onDrop, onDragOver, on
                     if (!isOver) setIsOver(true);
                 }
             }}
-            className={`p-3 bg-white rounded-lg border shadow-sm cursor-grab active:cursor-grabbing transition-all relative
+            className={`p-3 bg-white rounded-lg border shadow-sm transition-all relative
+                ${disabled ? 'opacity-60 cursor-not-allowed grayscale-[20%]' : 'cursor-grab active:cursor-grabbing hover:shadow-md'}
                 ${side === 'shopify' ? 'border-l-4 border-l-[#95BF47]' : 'border-r-4 border-r-[#F56400]'}
-                ${isOver ? 'ring-2 ring-blue-400 bg-blue-50 scale-[1.02]' : 'hover:shadow-md'}
-                ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}
+                ${isOver && !disabled ? 'ring-2 ring-blue-400 bg-blue-50 scale-[1.02]' : ''}
+                ${isSelected && !disabled ? 'ring-2 ring-blue-500 bg-blue-50' : ''}
             `}
         >
             {isSelected && (
@@ -2365,7 +2368,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     // === MATCHING VIEW ===
     return (
-        <div className="min-h-screen bg-gray-50" style={{ overscrollBehavior: 'none' }}>
+        <div className="h-screen bg-gray-50 flex flex-col overflow-hidden" style={{ overscrollBehavior: 'none' }}>
             <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
                 <div className="max-w-[1800px] mx-auto px-6 py-4">
                     <div className="flex items-center justify-between">
@@ -2425,7 +2428,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 </div>
             </div>
 
-            <div className="max-w-[1920px] mx-auto px-6 py-6 h-[calc(100vh-80px)] overflow-hidden">
+            <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 py-4 overflow-hidden min-h-0">
                 <div className="grid grid-cols-12 gap-6 h-full">
 
                     {/* LEFT COLUMN: SHOPIFY UNMATCHED (Source) */}
@@ -2438,21 +2441,36 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{unmatchedShopifyGroups.length}</span>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                            {unmatchedShopifyGroups.map(g => (
-                                <DraggableProductCard
-                                    key={g.id}
-                                    group={g}
-                                    side="shopify"
-                                    onDragStart={handleDragStart}
-                                    onDragEnd={handleDragEnd}
-                                    onDrop={(e) => handleDropOnGroup(g)}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    isSelected={selectedGroup?.id === g.id}
-                                    onClick={() => handleProductClick(g, 'shopify')}
-                                />
-                            ))}
-                            {unmatchedShopifyGroups.length === 0 && (
-                                <div className="text-center py-10 text-gray-400 text-sm">No unmatched items</div>
+                            {loading ? (
+                                Array.from({ length: 6 }).map((_, i) => (
+                                    <div key={i} className="p-3 bg-white rounded-lg border shadow-sm flex items-center gap-3 animate-pulse">
+                                        <div className="w-10 h-10 rounded bg-gray-200 flex-shrink-0" />
+                                        <div className="flex-1 space-y-2">
+                                            <div className="h-4 bg-gray-200 rounded w-3/4" />
+                                            <div className="h-3 bg-gray-100 rounded w-1/3" />
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <>
+                                    {unmatchedShopifyGroups.map(g => (
+                                        <DraggableProductCard
+                                            key={g.id}
+                                            group={g}
+                                            side="shopify"
+                                            onDragStart={handleDragStart}
+                                            onDragEnd={handleDragEnd}
+                                            onDrop={(e) => handleDropOnGroup(g)}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            isSelected={selectedGroup?.id === g.id}
+                                            onClick={() => handleProductClick(g, 'shopify')}
+                                            disabled={aiLoading}
+                                        />
+                                    ))}
+                                    {unmatchedShopifyGroups.length === 0 && (
+                                        <div className="text-center py-10 text-gray-400 text-sm">No unmatched items</div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
