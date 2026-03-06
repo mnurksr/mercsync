@@ -122,7 +122,7 @@ export default function SyncingDashboard() {
         }
 
         if (newJob.message) {
-            const allEvents = parseAllEvents(newJob.message);
+            const allEvents = parseAllEvents(newJob.message).filter(e => e.type !== 'stock_sync');
             const deduped = dedupeCloneEvents(allEvents);
             setEvents(deduped);
         }

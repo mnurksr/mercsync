@@ -72,7 +72,9 @@ export async function middleware(request: NextRequest) {
 
     // If user is signed in and visits login or root, redirect to dashboard
     if (session && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname === '/')) {
-        return NextResponse.redirect(new URL('/dashboard', request.url))
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        return NextResponse.redirect(url);
     }
 
     return response

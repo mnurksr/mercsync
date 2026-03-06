@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Build the GraphQL mutation
+        // Build the GraphQL mutation — returnUrl points to the app root in Shopify Admin
         const returnUrl = `https://${shop.shop_domain}/admin/apps/mercsync`;
 
         const mutation = `

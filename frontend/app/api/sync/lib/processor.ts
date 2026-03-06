@@ -96,7 +96,7 @@ export async function processSync(payload: SyncPayload) {
 
         // ── Phase 1: Sync Stocks ──
         if (parsed.stockUpdates.length > 0) {
-            await sendLog(job_id, `Processing ${parsed.stockUpdates.length} stock updates...`, 5, 100);
+            await sendLog(job_id, 'Synchronizing inventory levels across platforms...', 5, 100);
 
             for (const update of parsed.stockUpdates) {
                 try {
@@ -109,16 +109,7 @@ export async function processSync(payload: SyncPayload) {
                     completedSteps++;
                     const progress = Math.round((completedSteps / totalSteps) * 40); // stocks = 0-40%
 
-                    await sendStockSync(
-                        job_id,
-                        update.platform,
-                        update.title,
-                        0, // old stock unknown here
-                        update.new_stock,
-                        progress,
-                        100,
-                        update.sku
-                    );
+                    console.log(`[Sync] Updated stock for ${update.title} on ${update.platform}`);
                 } catch (err: any) {
                     console.error(`[Sync] Stock update failed for ${update.title}:`, err.message);
                     // Continue with next item — don't break the loop
@@ -127,7 +118,7 @@ export async function processSync(payload: SyncPayload) {
                 await delay(1000); // Rate limiting
             }
 
-            await sendLog(job_id, 'Stock sync completed ✓', 40, 100);
+            await sendLog(job_id, 'Inventory levels successfully synchronized. ✓', 40, 100);
         }
 
         // ── Phase 2: Clone to Shopify ──

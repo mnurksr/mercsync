@@ -7,7 +7,7 @@ import {
     Clock, Package, TrendingUp, Box, History
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { getConnectedShop } from '../actions/shop';
@@ -18,8 +18,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Dashboard() {
     const { supabase, user } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Clean up charge_id from URL without reloading
+    useEffect(() => {
+        const chargeId = searchParams.get('charge_id');
+        if (chargeId) {
+            // Log or verify charge ID if necessary
+            console.log('Returned from billing with charge_id:', chargeId);
+
+            // Clean the URL using History API to prevent page reload
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('charge_id');
+            window.history.replaceState({}, '', newUrl.toString());
+        }
+    }, [searchParams]);
 
     const [stats, setStats] = useState<DashboardStats>({
         productsSynced: 0,

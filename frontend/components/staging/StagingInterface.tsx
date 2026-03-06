@@ -1907,14 +1907,14 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={resetAll}
-                                        disabled={activeTab === 'equalize' ? !hasChanges : queuedClones === 0}
+                                        disabled={false}
                                         className="h-9 px-4 text-gray-600 font-medium text-sm rounded-lg flex items-center gap-2 hover:bg-gray-100 disabled:opacity-40 transition-colors"
                                     >
                                         <RotateCcw className="w-4 h-4" /> Reset
                                     </button>
                                     <button
                                         onClick={saveChanges}
-                                        disabled={syncing || (!hasChanges && queuedClones === 0)}
+                                        disabled={syncing}
                                         className="h-9 px-5 bg-green-600 text-white font-semibold text-sm rounded-lg flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
                                     >
                                         {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
