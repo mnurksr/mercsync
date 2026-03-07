@@ -54,11 +54,10 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Build the GraphQL mutation — returnUrl points to our own frontend URL.
-        // We use req.nextUrl.origin to dynamically get the current app host (e.g., ngrok or prod domain).
-        // Then we redirect them back to /dashboard which will handle the charge_id.
-        const appDomain = req.headers.get('origin') || req.nextUrl.origin;
-        const returnUrl = `${appDomain}/dashboard?shop=${shop_domain}`;
+        // We construct the Shopify Admin URL so the user returns to the embedded app inside Shopify.
+        // We pass the shop domain to our dashboard so we know who just paid.
+        const shopifyAppUrl = `https://admin.shopify.com/store/${shop_domain.replace('.myshopify.com', '')}/apps/${process.env.NEXT_PUBLIC_SHOPIFY_API_KEY}`;
+        const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop_domain}`;
 
         const mutation = `
             mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {

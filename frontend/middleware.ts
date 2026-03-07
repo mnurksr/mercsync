@@ -83,15 +83,6 @@ export async function middleware(request: NextRequest) {
         });
     }
 
-    // 1. Akıllı Yönlendirme
-    // Eğer istek kök dizine (/) geliyorsa ve URL'de ?shop= varsa (Shopify içinden geliyorsa), 
-    // Landing Page'i hiç render etmeden doğrudan /dashboard rotasına yönlendir.
-    if (request.nextUrl.pathname === '/' && shop) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        return NextResponse.redirect(url);
-    }
-
     // Determine if user has ANY form of access: either a traditional Supabase session, OR our Shopify cookie
     const hasAccess = session || mercsyncShopCookie;
 

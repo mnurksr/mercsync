@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
 
 export default async function LandingPage(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
@@ -9,7 +10,8 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
 
   // Akıllı Yönlendirme & Tanıtım Sayfasını Gizleme
   if (typeof shop === 'string') {
-    const supabase = await createClient();
+    // RLS bypass via Admin client for unauthenticated but cookie-verified requests
+    const supabase = createAdminClient();
     const { data: shopData } = await supabase
       .from('shops')
       .select('is_active, plan_type')
