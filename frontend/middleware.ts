@@ -83,25 +83,24 @@ export async function middleware(request: NextRequest) {
             const returnUrl = encodeURIComponent(request.url);
             const authUrl = `https://api.mercsync.com/webhook/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
 
-            // Shopify App Bridge Redirect / Top-Level Escape
-            // Kombinasyon: Hem header bazlı intercept (App bridge hook) hem de
-            // postMessage ile güvenli top-level yönlendirme (Popup blocker'a takılmamak için)
+            // Shopify App Bridge V4 ile Güvenli Yönlendirme
+            // Hem XHR interceptleri hem de doküman yüklemeleri (Iframe) için gerekli başlıkları ekliyor ve
+            // App Bridge kütüphanesini yükleyerek güvenli bir `open(url, '_top')` işlemi çalıştırıyoruz.
             const html = `
             <!DOCTYPE html>
             <html>
                 <head>
                     <base target="_top">
+                    <!-- Shopify App Bridge v4 CDN -->
+                    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
                     <script type="text/javascript">
-                        if (window === window.parent) {
-                            window.location.href = "${authUrl}";
-                        } else {
-                            // Shopify App Bridge Redirect Payload
-                            var payload = JSON.stringify({
-                                message: 'Shopify.API.remoteRedirect',
-                                data: { location: "${authUrl}" }
-                            });
-                            window.parent.postMessage(payload, 'https://admin.shopify.com');
-                        }
+                        document.addEventListener("DOMContentLoaded", function() {
+                            if (window.shopify) {
+                                open("${authUrl}", "_top");
+                            } else {
+                                window.top.location.href = "${authUrl}";
+                            }
+                        });
                     </script>
                 </head>
                 <body>
@@ -113,7 +112,7 @@ export async function middleware(request: NextRequest) {
             `;
 
             return new NextResponse(html, {
-                status: 403,
+                status: 200,
                 headers: {
                     'Content-Type': 'text/html',
                     'X-Shopify-API-Request-Failure-Reauthorize': '1',
