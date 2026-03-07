@@ -47,6 +47,41 @@ export default function Dashboard() {
         loadData();
     }, []);
 
+    useEffect(() => {
+        const chargeId = searchParams.get('charge_id');
+        const shopDomainUrl = searchParams.get('shop');
+
+        if (chargeId && shopDomainUrl) {
+            console.log('Returned from billing with charge_id:', chargeId);
+            setIsLoading(true);
+
+            // Verify with backend
+            fetch('/api/billing/verify-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ charge_id: chargeId, shop_domain: shopDomainUrl })
+            }).then(async res => {
+                const data = await res.json();
+                if (data.success) {
+                    toast.success("Subscription Activated. Welcome aboard!");
+                    // Force a total refresh so layout.tsx reads the new plan from DB
+                    window.location.href = `/dashboard?shop=${shopDomainUrl}`;
+                } else {
+                    toast.error("Subscription verification failed. Please try again.");
+                }
+            }).catch(e => {
+                console.error(e);
+                toast.error("Error verifying payment.");
+            }).finally(() => {
+                setIsLoading(false);
+                // Clean the URL using History API to prevent page reload
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.delete('charge_id');
+                window.history.replaceState({}, '', newUrl.toString());
+            });
+        }
+    }, [searchParams, toast]);
+
     const loadData = async () => {
         try {
             const [shopify, etsy, dashboardStats, recentActivity, wizardStatus] = await Promise.all([
@@ -60,6 +95,13 @@ export default function Dashboard() {
             // Security check: If Server Actions couldn't find ANY identity (Session OR Cookie)
             if (!shopify.connected && !shopify.shop_domain && dashboardStats.connectedStores === 0) {
                 router.push('/login');
+                return;
+            }
+
+            // Redirect to billing only if pending AND no ongoing payment verification
+            const chargeId = searchParams.get('charge_id');
+            if (shopify.plan_type === 'pending' && !chargeId) {
+                router.push('/billing');
                 return;
             }
 

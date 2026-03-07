@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
                         id
                         name
                         status
+                        createdAt
                     }
                 }
             }
@@ -72,12 +73,17 @@ export async function POST(req: NextRequest) {
         const result = await response.json();
         const subscriptions = result.data?.currentAppInstallation?.activeSubscriptions || [];
 
-        // Check if there is an active subscription
-        const activeSub = subscriptions.find((sub: any) => sub.status === 'ACTIVE');
+        // Check if there is an active subscription, sort by newest first
+        const activeSub = subscriptions
+            .filter((sub: any) => sub.status === 'ACTIVE')
+            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
         if (activeSub) {
-            // e.g. "Starter" -> "starter"
-            const planType = activeSub.name.toLowerCase();
+            // e.g. "MercSync Professional" -> "professional"
+            let planType = activeSub.name.toLowerCase();
+            if (planType.includes('starter')) planType = 'starter';
+            else if (planType.includes('professional')) planType = 'professional';
+            else if (planType.includes('enterprise')) planType = 'enterprise';
 
             // Update local database to active plan
             await supabase

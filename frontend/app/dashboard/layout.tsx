@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         }
 
         // Security / Routing Guard 2: Set up but haven't chosen a plan? Go to billing.
-        if (!shopify.plan_type || shopify.plan_type === 'guest' || shopify.plan_type === 'none' || shopify.plan_type === 'pending') {
+        if (!shopify.plan_type || shopify.plan_type === 'guest' || shopify.plan_type === 'none') {
             redirect('/billing');
         }
 

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         // We use the App Handle for the return URL since Shopify uses the handle in its admin routing path.
         const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || "mercsync-1";
         const shopifyAppUrl = `https://admin.shopify.com/store/${shop_domain.replace('.myshopify.com', '')}/apps/${appHandle}`;
-        const returnUrl = `${shopifyAppUrl}/billing?shop=${shop_domain}`;
+        const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop_domain}`;
 
         const mutation = `
             mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
