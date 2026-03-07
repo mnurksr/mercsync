@@ -93,15 +93,25 @@ export async function middleware(request: NextRequest) {
                     <meta charset="utf-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1">
                     <base target="_top">
-                    <!-- Shopify App Bridge v4 CDN -->
+                    <!-- Shopify App Bridge v4 CDN (Requires API Key to initialize) -->
+                    <meta name="shopify-api-key" content="${process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || 'a3ba5196aa260a2b8eec8da2662c1cf6'}" />
                     <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+                    
                     <script type="text/javascript">
                         document.addEventListener("DOMContentLoaded", function() {
-                            if (window.shopify) {
-                                open("${authUrl}", "_top");
-                            } else {
-                                window.top.location.href = "${authUrl}";
-                            }
+                            // Give App Bridge a moment to attach
+                            setTimeout(function() {
+                                if (window.shopify) {
+                                    window.open("${authUrl}", "_top");
+                                } else {
+                                    // Fallbacks if App Bridge CDN fails to load
+                                    if (window.parent) {
+                                        window.parent.location.href = "${authUrl}";
+                                    } else {
+                                        window.top.location.href = "${authUrl}";
+                                    }
+                                }
+                            }, 300);
                         });
                     </script>
                     <style>
