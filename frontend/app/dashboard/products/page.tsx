@@ -40,12 +40,12 @@ export default function ProductsPage() {
     const [importSuccess, setImportSuccess] = useState(false);
 
     useEffect(() => {
-        if (user) loadData();
-    }, [user]);
+        loadData();
+    }, []);
 
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            if (user) loadData();
+            loadData();
         }, 300);
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);

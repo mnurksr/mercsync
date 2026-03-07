@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type HistoryItem = {
     id: string
@@ -15,13 +15,17 @@ export type HistoryItem = {
 }
 
 export async function getSyncHistory(filter: string = 'all', ownerId?: string): Promise<HistoryItem[]> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return []
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return []
     }
 
     const { data: userShops } = await supabase.from('shops').select('id').eq('owner_id', resolvedOwnerId)

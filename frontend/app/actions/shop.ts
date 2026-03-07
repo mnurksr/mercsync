@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
+import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type ShopConnection = {
     connected: boolean
@@ -8,42 +9,47 @@ export type ShopConnection = {
     last_sync: string | null
     platform: 'shopify' | 'etsy'
     owner_id?: string | null
+    plan_type?: string | null
     debugMessage?: string
 }
 
-import { createAdminClient } from '@/utils/supabase/admin'
-
 export async function getConnectedShop(platform: string = 'shopify', testShopDomain?: string): Promise<ShopConnection> {
-    const supabase = testShopDomain ? createAdminClient() : await createClient()
-
-    let user = null;
-    let shopQuery = supabase.from('shops').select('shop_domain, is_active, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token');
+    let supabase;
+    let resolvedOwnerId = null;
 
     if (testShopDomain) {
-        // Test mode: bypass auth using admin client, query by shop domain
-        shopQuery = shopQuery.eq('shop_domain', testShopDomain)
+        supabase = createAdminClient()
     } else {
-        // Normal mode: check auth
-        const { data: authData, error: authError } = await supabase.auth.getUser()
-        if (authError || !authData.user) {
-            console.log('getConnectedShop: No user found', authError)
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) {
+            console.log('getConnectedShop: No user found')
             return {
                 connected: false,
                 shop_domain: null,
                 last_sync: null,
                 platform: platform as 'shopify' | 'etsy',
-                debugMessage: `Auth failed or no user. Error: ${authError?.message}`
+                debugMessage: `Auth failed or no user`
             }
         }
-        user = authData.user;
-        shopQuery = shopQuery.eq('owner_id', user.id)
+    }
+
+    let shopQuery = supabase.from('shops').select('shop_domain, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token');
+
+    if (testShopDomain) {
+        // Test mode: bypass auth using admin client, query by shop domain
+        shopQuery = shopQuery.eq('shop_domain', testShopDomain)
+    } else {
+        shopQuery = shopQuery.eq('owner_id', resolvedOwnerId)
     }
 
     // Log intent
     if (testShopDomain) {
         console.log(`getConnectedShop: TEST MODE with ADMIN CLIENT looking for domain: ${testShopDomain} for platform ${platform}`)
     } else {
-        console.log(`getConnectedShop: Checking for user ${user?.id} platform ${platform}`)
+        console.log(`getConnectedShop: Checking for user ${resolvedOwnerId} platform ${platform}`)
     }
 
     try {
@@ -82,7 +88,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
             // 2. Fallback: if is_active=true AND access_token exists -> connected (old n8n behavior)
             const isConnected =
                 data.shopify_connected === true ||
-                (data.is_active === true && data.access_token && data.shop_domain);
+                (data.is_active === true && !!data.access_token && !!data.shop_domain);
 
             return {
                 connected: isConnected,
@@ -90,6 +96,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 last_sync: data.created_at ? new Date(data.created_at).toLocaleString() : 'Just now',
                 platform: 'shopify',
                 owner_id: data.owner_id,
+                plan_type: data.plan_type,
                 debugMessage: isConnected
                     ? `Connected (shopify_connected=${data.shopify_connected}, is_active=${data.is_active})`
                     : `Not connected. shopify_connected=${data.shopify_connected}, is_active=${data.is_active}, has_token=${!!data.access_token}`
@@ -140,6 +147,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 last_sync: data.created_at ? new Date(data.created_at).toLocaleString() : 'Just now',
                 platform: 'etsy',
                 owner_id: data.owner_id,
+                plan_type: data.plan_type,
                 debugMessage: isConnected
                     ? `Connected (etsy_connected=${data.etsy_connected}, has_token=${!!data.etsy_access_token})`
                     : `Not connected. etsy_connected=${data.etsy_connected}, has_token=${!!data.etsy_access_token}`
@@ -167,13 +175,19 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
 }
 
 export async function disconnectShop(platform: string = 'shopify', ownerId?: string): Promise<{ success: boolean; message: string }> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError || !user) return { success: false, message: 'Authentication failed' }
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) {
+            return { success: false, message: 'Authentication failed' }
+        }
     }
 
     try {
@@ -216,13 +230,19 @@ export async function disconnectShop(platform: string = 'shopify', ownerId?: str
  * Fetches locations from the connected Shopify store
  */
 export async function getShopifyLocations(ownerId?: string): Promise<{ success: boolean; data?: any[]; message?: string }> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return { success: false, message: 'User not authenticated' };
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) {
+            return { success: false, message: 'User not authenticated' }
+        }
     }
 
     const { data: userShop } = await supabase

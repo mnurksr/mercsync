@@ -66,10 +66,11 @@ export default function Dashboard() {
     });
 
     useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user]);
+        // NATIVE SESSIONLESS AUTHENTICATION:
+        // Always attempt to load data. The Server Actions will securely read the 'mercsync_shop' 
+        // cookie to authenticate embedded Shopify users even if 'user' is null.
+        loadData();
+    }, []);
 
     const loadData = async () => {
         try {
@@ -80,6 +81,25 @@ export default function Dashboard() {
                 getRecentActivity(),
                 getSetupStatus()
             ]);
+
+            // Security check: If Server Actions couldn't find ANY identity (Session OR Cookie)
+            if (!shopify.connected && !shopify.shop_domain && dashboardStats.connectedStores === 0) {
+                router.push('/login');
+                return;
+            }
+
+            // Route to Onboarding if setup wasn't fully completed
+            if (!wizardStatus.isComplete) {
+                router.push('/setup');
+                return;
+            }
+
+            // Route to Billing if they are still on 'guest' plan
+            // Note: If plan_type is missing, we also assume they need to pick a plan
+            if (shopify.plan_type === 'guest' || !shopify.plan_type) {
+                router.push('/setup/plans');
+                return;
+            }
 
             const newStores = {
                 shopify: {
@@ -97,23 +117,6 @@ export default function Dashboard() {
             setStores(newStores);
             setStats(dashboardStats);
             setActivities(recentActivity);
-
-            // Redirect to setup if not complete
-            // Condition: Both stores connected AND at least one product synced (or some other completion metric)
-            // For now, let's say both connected is the bare minimum, but strict onboarding implies all steps.
-            const isComplete = newStores.shopify.connected && newStores.etsy.connected && dashboardStats.productsSynced > 0;
-
-            if (!isComplete && !isLoading) {
-                // We don't want to redirect instantly if it causes a flash, but here we are inside loadData
-                // Better to do this check in a simpler way or let the UI handle the redirect
-            }
-
-            // Actually, we can just redirect here
-            if (!isComplete) {
-                // Check if we are already coming from setup to valid loop? 
-                // No, just push to setup.
-                router.push('/setup');
-            }
 
         } catch (error) {
             console.error('Failed to load dashboard data:', error);

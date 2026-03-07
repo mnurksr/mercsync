@@ -32,10 +32,8 @@ export default function HistoryPage() {
     const [isLoading, setIsLoading] = useState(!initialCache); // Only loading if NO cache
 
     useEffect(() => {
-        if (user) {
-            loadData();
-        }
-    }, [user]);
+        loadData();
+    }, []);
 
     const loadData = async () => {
         // Background refresh - cache already loaded in initial state

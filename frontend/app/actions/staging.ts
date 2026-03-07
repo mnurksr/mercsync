@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type SetupStatus = {
     shopifyConnected: boolean
@@ -38,11 +38,11 @@ export type StagingProduct = {
  * Get full setup wizard status
  */
 export async function getSetupStatus(testShopDomain?: string): Promise<SetupStatus> {
-    const supabase = testShopDomain ? createAdminClient() : await createClient()
-
+    let supabase;
     let shopId: string | null = null;
 
     if (testShopDomain) {
+        supabase = createAdminClient()
         // Find shop by domain
         const { data: shop } = await supabase
             .from('shops')
@@ -56,12 +56,11 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
         } else {
             console.log('getSetupStatus: No shop found for domain', testShopDomain);
         }
-    }
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
 
-    if (!shopId) {
-        const { data: { user } } = await supabase.auth.getUser()
-
-        if (!user) {
+        if (!context.ownerId) {
             return {
                 shopifyConnected: false,
                 shopifyExported: false,
@@ -75,11 +74,11 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
             }
         }
 
-        // Get shop info via user
+        // Get shop info via ownerId
         const { data: shop } = await supabase
             .from('shops')
             .select('id')
-            .eq('owner_id', user.id)
+            .eq('owner_id', context.ownerId)
             .maybeSingle()
 
         if (!shop) {
@@ -96,6 +95,20 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
             }
         }
         shopId = shop.id;
+    }
+
+    if (!shopId) {
+        return {
+            shopifyConnected: false,
+            shopifyExported: false,
+            shopifyProductCount: 0,
+            etsyConnected: false,
+            etsyExported: false,
+            etsyProductCount: 0,
+            inventoryMappedCount: 0,
+            isComplete: false,
+            initialProductCounts: null
+        }
     }
 
     // Get full shop info using the ID we determined
@@ -170,17 +183,21 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
  */
 export async function getStagingProducts(platform: 'shopify' | 'etsy', ownerId?: string): Promise<StagingProduct[]> {
     console.log(`[getStagingProducts] Called with platform=${platform}, ownerId=${ownerId}`)
-    const supabase = ownerId ? createAdminClient() : await createClient()
 
+    let supabase;
     let resolvedOwnerId = ownerId;
 
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) {
             console.log('[getStagingProducts] No user and no ownerId, returning empty')
-            return [];
+            return []
         }
-        resolvedOwnerId = user.id;
     }
 
     console.log(`[getStagingProducts] resolvedOwnerId=${resolvedOwnerId}`)
@@ -240,14 +257,17 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy', ownerId?:
  * Quick count for staging tables (for header display)
  */
 export async function getStagingCounts(ownerId?: string): Promise<{ shopify: number, etsy: number }> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
 
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return { shopify: 0, etsy: 0 };
-        resolvedOwnerId = user.id;
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return { shopify: 0, etsy: 0 }
     }
 
     const { data: shop } = await supabase
@@ -281,14 +301,17 @@ export async function getStagingCounts(ownerId?: string): Promise<{ shopify: num
  * Clear staging tables for the current connected shop
  */
 export async function clearStagingTables(ownerId?: string): Promise<{ success: boolean; message: string }> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
 
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return { success: false, message: 'User not authenticated' };
-        resolvedOwnerId = user.id;
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return { success: false, message: 'User not authenticated' }
     }
 
     const { data: shop } = await supabase

@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type DashboardStats = {
     productsSynced: number
@@ -21,13 +21,17 @@ export type ActivityItem = {
 }
 
 export async function getDashboardStats(ownerId?: string): Promise<DashboardStats> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return { productsSynced: 0, syncSuccessRate: 0, atRiskProducts: 0, connectedStores: 0, lastSync: '--' }
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return { productsSynced: 0, syncSuccessRate: 0, atRiskProducts: 0, connectedStores: 0, lastSync: '--' }
     }
 
     // Connected Stores
@@ -106,13 +110,17 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
 }
 
 export async function getRecentActivity(ownerId?: string): Promise<ActivityItem[]> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return []
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return []
     }
 
     const { data: userShops } = await supabase

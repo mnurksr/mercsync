@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type Product = {
     id: string
@@ -25,13 +25,17 @@ export async function getProducts(searchQuery: string = '', ownerId?: string): P
 }
 
 export async function getProductsWithMeta(searchQuery: string = '', ownerId?: string): Promise<ProductsResponse> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return { products: [], isEtsyConnected: false, isShopifyConnected: false }
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return { products: [], isEtsyConnected: false, isShopifyConnected: false }
     }
 
     // Get shop info including connection status

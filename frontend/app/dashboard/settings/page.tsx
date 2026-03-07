@@ -40,10 +40,8 @@ export default function SettingsPage() {
     const [debugInfo, setDebugInfo] = useState<any>(null);
 
     useEffect(() => {
-        if (user) {
-            checkConnections();
-        }
-    }, [user]);
+        checkConnections();
+    }, []);
 
     const checkConnections = async () => {
         // Background refresh - cache already loaded in initial state

@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/utils/supabase/server'
-import { createAdminClient } from '@/utils/supabase/admin'
+import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type InventoryItem = {
     id: string
@@ -19,13 +19,17 @@ export type InventoryItem = {
  * Get products from inventory_items table
  */
 export async function getInventoryItems(searchQuery?: string, ownerId?: string): Promise<InventoryItem[]> {
-    const supabase = ownerId ? createAdminClient() : await createClient()
-
+    let supabase;
     let resolvedOwnerId = ownerId;
-    if (!resolvedOwnerId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return []
-        resolvedOwnerId = user.id;
+
+    if (ownerId) {
+        supabase = createAdminClient()
+    } else {
+        const context = await getValidatedUserContext()
+        supabase = context.supabase
+        resolvedOwnerId = context.ownerId
+
+        if (!resolvedOwnerId) return []
     }
 
     // Get shop ID
