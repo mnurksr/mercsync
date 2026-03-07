@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
 
         // We construct the Shopify Admin URL so the user returns to the embedded app inside Shopify.
         // We pass the shop domain to our dashboard so we know who just paid.
-        const shopifyAppUrl = `https://admin.shopify.com/store/${shop_domain.replace('.myshopify.com', '')}/apps/${process.env.NEXT_PUBLIC_SHOPIFY_API_KEY}`;
+        const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY || process.env.SHOPIFY_API_KEY;
+        const shopifyAppUrl = `https://admin.shopify.com/store/${shop_domain.replace('.myshopify.com', '')}/apps/${apiKey}`;
         const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop_domain}`;
 
         const mutation = `

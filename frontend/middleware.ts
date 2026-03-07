@@ -90,8 +90,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
-    // If user is signed in (or has shop cookie) and visits login or root, redirect to dashboard
-    if (hasAccess && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname === '/')) {
+    // If user is signed in (or has shop cookie) and visits login, redirect to dashboard
+    if (hasAccess && request.nextUrl.pathname.startsWith('/login')) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';
         return NextResponse.redirect(url);
