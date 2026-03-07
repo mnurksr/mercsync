@@ -51,6 +51,25 @@ export async function setInventoryLevel(
 }
 
 /**
+ * Enables inventory tracking for an inventory item
+ * PUT /inventory_items/{id}.json
+ */
+export async function enableInventoryTracking(
+    creds: ShopifyCredentials,
+    inventoryItemId: string | number
+) {
+    return shopifyFetch(creds, `inventory_items/${inventoryItemId}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            inventory_item: {
+                id: Number(inventoryItemId),
+                tracked: true
+            }
+        })
+    });
+}
+
+/**
  * Create a new product on Shopify
  * Replaces: POST /products.json
  */

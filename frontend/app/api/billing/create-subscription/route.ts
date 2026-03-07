@@ -54,8 +54,11 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Build the GraphQL mutation — returnUrl points to the app root in Shopify Admin
-        const returnUrl = `https://${shop.shop_domain}/admin/apps/mercsync`;
+        // Build the GraphQL mutation — returnUrl points to our own frontend URL.
+        // We use req.nextUrl.origin to dynamically get the current app host (e.g., ngrok or prod domain).
+        // Then we redirect them back to /dashboard which will handle the charge_id.
+        const appDomain = req.headers.get('origin') || req.nextUrl.origin;
+        const returnUrl = `${appDomain}/dashboard?shop=${shop_domain}`;
 
         const mutation = `
             mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {

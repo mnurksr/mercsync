@@ -290,12 +290,31 @@ async function syncShopifyStock(shop: any, update: StockUpdate) {
     }
 
     // Call Shopify API
-    await shopifyApi.setInventoryLevel(
-        { shopDomain: shop.shop_domain, accessToken: shop.access_token },
-        shop.main_location_id,
-        stagingRow.shopify_inventory_item_id,
-        update.new_stock
-    );
+    try {
+        await shopifyApi.setInventoryLevel(
+            { shopDomain: shop.shop_domain, accessToken: shop.access_token },
+            shop.main_location_id,
+            stagingRow.shopify_inventory_item_id,
+            update.new_stock
+        );
+    } catch (e: any) {
+        if (e.message && e.message.includes('Inventory item does not have inventory tracking enabled')) {
+            console.log(`[Sync] Auto-enabling inventory tracking for item ${stagingRow.shopify_inventory_item_id}`);
+            await shopifyApi.enableInventoryTracking(
+                { shopDomain: shop.shop_domain, accessToken: shop.access_token },
+                stagingRow.shopify_inventory_item_id
+            );
+            // Retry setting inventory
+            await shopifyApi.setInventoryLevel(
+                { shopDomain: shop.shop_domain, accessToken: shop.access_token },
+                shop.main_location_id,
+                stagingRow.shopify_inventory_item_id,
+                update.new_stock
+            );
+        } else {
+            throw e;
+        }
+    }
 
     // Update staging table
     await supabase
@@ -393,12 +412,27 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
 
                 // Set inventory level
                 await delay(1000);
-                await shopifyApi.setInventoryLevel(
-                    creds,
-                    shop.main_location_id,
-                    variant.inventory_item_id,
-                    cv.stock || 0
-                );
+                try {
+                    await shopifyApi.setInventoryLevel(
+                        creds,
+                        shop.main_location_id,
+                        variant.inventory_item_id,
+                        cv.stock || 0
+                    );
+                } catch (e: any) {
+                    if (e.message && e.message.includes('Inventory item does not have inventory tracking enabled')) {
+                        console.log(`[Sync] Auto-enabling inventory tracking for injected variant ${variant.inventory_item_id}`);
+                        await shopifyApi.enableInventoryTracking(creds, variant.inventory_item_id);
+                        await shopifyApi.setInventoryLevel(
+                            creds,
+                            shop.main_location_id,
+                            variant.inventory_item_id,
+                            cv.stock || 0
+                        );
+                    } else {
+                        throw e;
+                    }
+                }
 
                 // Insert into staging table
                 const locMap = shop.main_location_id
@@ -455,7 +489,22 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                 stock
             );
         } catch (e: any) {
-            console.warn(`[Sync] Failed to set stock for variant ${variant.id}:`, e.message);
+            if (e.message && e.message.includes('Inventory item does not have inventory tracking enabled')) {
+                console.log(`[Sync] Auto-enabling inventory tracking for cloned variant ${variant.inventory_item_id}`);
+                await shopifyApi.enableInventoryTracking(creds, variant.inventory_item_id);
+                try {
+                    await shopifyApi.setInventoryLevel(
+                        creds,
+                        shop.main_location_id,
+                        variant.inventory_item_id,
+                        stock
+                    );
+                } catch (retryErr: any) {
+                    console.warn(`[Sync] Failed to set stock for variant ${variant.id} after enabling tracking:`, retryErr.message);
+                }
+            } else {
+                console.warn(`[Sync] Failed to set stock for variant ${variant.id}:`, e.message);
+            }
         }
     }
 
