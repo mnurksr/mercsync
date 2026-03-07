@@ -113,12 +113,8 @@ export default function SetupPage() {
                 }
             });
 
-            // If the setup is fully complete, but they ended up back at /setup (e.g. from app/page.tsx 
-            // because they haven't paid), we should immediately forward them to the billing plans.
-            if (setupStatus.isComplete) {
-                router.push('/setup/plans');
-                return;
-            }
+            // NOTE: Automatic redirection to billing is now handled by app/setup/layout.tsx on the server side.
+            // Client-side redirects here are removed to prevent UI flashes.
 
         } catch (error) {
             console.error('Failed to load setup data', error);

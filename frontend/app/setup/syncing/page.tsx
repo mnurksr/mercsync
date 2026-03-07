@@ -318,7 +318,7 @@ export default function SyncingDashboard() {
                 {(isComplete || isFailed) && (
                     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md px-4 pb-6">
                         <button
-                            onClick={() => router.push(isComplete ? '/setup/plans' : '/setup')}
+                            onClick={() => router.push(isComplete ? '/billing' : '/setup')}
                             className="w-full px-5 py-3.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors text-sm"
                         >
                             {isComplete ? (

@@ -88,18 +88,8 @@ export default function Dashboard() {
                 return;
             }
 
-            // Route to Onboarding if setup wasn't fully completed
-            if (!wizardStatus.isComplete) {
-                router.push('/setup');
-                return;
-            }
-
-            // Route to Billing if they are still on 'guest' plan
-            // Note: If plan_type is missing, we also assume they need to pick a plan
-            if (shopify.plan_type === 'guest' || !shopify.plan_type) {
-                router.push('/setup/plans');
-                return;
-            }
+            // NOTE: The Server-Side layout.tsx guard handles routing for incomplete setup or missing plans.
+            // We no longer need to check `wizardStatus.isComplete` or `shopify.plan_type` here on the client.
 
             const newStores = {
                 shopify: {
