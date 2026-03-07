@@ -83,31 +83,41 @@ export async function middleware(request: NextRequest) {
             const returnUrl = encodeURIComponent(request.url);
             const authUrl = `https://api.mercsync.com/webhook/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
 
-            // We MUST return HTML here to break out of the iframe.
-            // A 307 HTTP redirect would try to load admin.shopify.com inside the iframe,
-            // triggering an X-Frame-Options: deny error.
+            // Shopify App Bridge Redirect / Top-Level Escape
+            // Kombinasyon: Hem header bazlı intercept (App bridge hook) hem de
+            // postMessage ile güvenli top-level yönlendirme (Popup blocker'a takılmamak için)
             const html = `
             <!DOCTYPE html>
             <html>
                 <head>
+                    <base target="_top">
                     <script type="text/javascript">
-                        if (window.top === window.self) {
+                        if (window === window.parent) {
                             window.location.href = "${authUrl}";
                         } else {
-                            window.top.location.href = "${authUrl}";
+                            // Shopify App Bridge Redirect Payload
+                            var payload = JSON.stringify({
+                                message: 'Shopify.API.remoteRedirect',
+                                data: { location: "${authUrl}" }
+                            });
+                            window.parent.postMessage(payload, 'https://admin.shopify.com');
                         }
                     </script>
                 </head>
                 <body>
-                    Redirecting to authentication...
+                    <p style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                        Redirecting to authentication via App Bridge...
+                    </p>
                 </body>
             </html>
             `;
 
             return new NextResponse(html, {
-                status: 200,
+                status: 403,
                 headers: {
                     'Content-Type': 'text/html',
+                    'X-Shopify-API-Request-Failure-Reauthorize': '1',
+                    'X-Shopify-API-Request-Failure-Reauthorize-Url': authUrl
                 },
             });
         }
