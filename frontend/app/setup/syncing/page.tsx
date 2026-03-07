@@ -3,11 +3,10 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import {
-    CheckCircle2, Loader2, Package,
-    ShoppingBag, Store, AlertCircle, ArrowRight
-} from 'lucide-react';
+import { CheckCircle2, Loader2, Package, ShoppingBag, Store, AlertCircle, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { setShopPlanPending } from '@/app/actions/shop';
+import { getShopDomain } from '@/utils/shopDomain';
 
 type SyncStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
@@ -318,7 +317,15 @@ export default function SyncingDashboard() {
                 {(isComplete || isFailed) && (
                     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md px-4 pb-6">
                         <button
-                            onClick={() => router.push(isComplete ? '/billing' : '/setup')}
+                            onClick={async () => {
+                                if (isComplete) {
+                                    const shopDomain = getShopDomain(searchParams) || '';
+                                    if (shopDomain) await setShopPlanPending(shopDomain);
+                                    router.push('/billing');
+                                } else {
+                                    router.push('/setup');
+                                }
+                            }}
                             className="w-full px-5 py-3.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors text-sm"
                         >
                             {isComplete ? (

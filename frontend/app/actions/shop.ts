@@ -289,3 +289,12 @@ export async function getShopifyLocations(ownerId?: string): Promise<{ success: 
         return { success: false, message: e.message }
     }
 }
+
+export async function setShopPlanPending(shopDomain: string) {
+    const supabase = createAdminClient();
+    await supabase
+        .from('shops')
+        .update({ plan_type: 'pending' })
+        .eq('shop_domain', shopDomain)
+        .or('plan_type.eq.guest,plan_type.eq.none,plan_type.is.null');
+}
