@@ -27,7 +27,9 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
 
     if (shopData) {
       // Eğer kurulum tamamlanmış ve plan aktifse ana panele
-      if (shopData.is_active && shopData.plan_type && shopData.plan_type !== 'none' && shopData.plan_type !== 'frozen') {
+      const incompletePlans = ['none', 'frozen', 'guest'];
+
+      if (shopData.is_active && shopData.plan_type && !incompletePlans.includes(shopData.plan_type)) {
         redirect(`/dashboard${queryString}`);
       } else {
         // Değilse kuruluma

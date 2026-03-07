@@ -88,8 +88,10 @@ export async function middleware(request: NextRequest) {
             // App Bridge kütüphanesini yükleyerek güvenli bir `open(url, '_top')` işlemi çalıştırıyoruz.
             const html = `
             <!DOCTYPE html>
-            <html>
+            <html lang="en">
                 <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
                     <base target="_top">
                     <!-- Shopify App Bridge v4 CDN -->
                     <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
@@ -102,11 +104,48 @@ export async function middleware(request: NextRequest) {
                             }
                         });
                     </script>
+                    <style>
+                        body {
+                            margin: 0;
+                            height: 100vh;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            background-color: #fafafa;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            color: #333;
+                        }
+                        .loader-container {
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            gap: 16px;
+                        }
+                        .spinner {
+                            width: 32px;
+                            height: 32px;
+                            border: 3px solid rgba(0, 0, 0, 0.1);
+                            border-radius: 50%;
+                            border-top-color: #000;
+                            animation: spin 1s ease-in-out infinite;
+                        }
+                        @keyframes spin {
+                            to { transform: rotate(360deg); }
+                        }
+                        p {
+                            margin: 0;
+                            font-size: 15px;
+                            font-weight: 500;
+                            color: #555;
+                            letter-spacing: -0.2px;
+                        }
+                    </style>
                 </head>
                 <body>
-                    <p style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-                        Redirecting to authentication via App Bridge...
-                    </p>
+                    <div class="loader-container">
+                        <div class="spinner"></div>
+                        <p>Authenticating workspace...</p>
+                    </div>
                 </body>
             </html>
             `;
