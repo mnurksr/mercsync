@@ -81,7 +81,35 @@ export async function middleware(request: NextRequest) {
         // Automatically bounce them to OAuth to seamlessly log them in, UNLESS they are already on the callback
         if (shop && !request.nextUrl.pathname.startsWith('/auth/shopify/callback')) {
             const returnUrl = encodeURIComponent(request.url);
-            return NextResponse.redirect(`https://api.mercsync.com/webhook/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`);
+            const authUrl = `https://api.mercsync.com/webhook/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+
+            // We MUST return HTML here to break out of the iframe.
+            // A 307 HTTP redirect would try to load admin.shopify.com inside the iframe,
+            // triggering an X-Frame-Options: deny error.
+            const html = `
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <script type="text/javascript">
+                        if (window.top === window.self) {
+                            window.location.href = "${authUrl}";
+                        } else {
+                            window.top.location.href = "${authUrl}";
+                        }
+                    </script>
+                </head>
+                <body>
+                    Redirecting to authentication...
+                </body>
+            </html>
+            `;
+
+            return new NextResponse(html, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/html',
+                },
+            });
         }
 
         // If not in iframe and trying to access a protected route, go to manual login
