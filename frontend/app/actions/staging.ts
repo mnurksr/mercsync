@@ -114,7 +114,7 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
     // Get full shop info using the ID we determined
     const { data: shop } = await supabase
         .from('shops')
-        .select('id, shopify_connected, etsy_connected, is_active, access_token, initial_product_counts')
+        .select('id, shopify_connected, etsy_connected, is_active, access_token, initial_product_counts, plan_type')
         .eq('id', shopId)
         .maybeSingle()
 
@@ -157,13 +157,16 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
     const etsyProductCount = etsyCount.count || 0
     const inventoryMappedCount = inventoryCount.count || 0
 
+    const hasStartedPlan = shop.plan_type && !['guest', 'none'].includes(shop.plan_type.toLowerCase());
+
     // Setup is complete when:
     // - Both platforms connected
     // - Both have products exported
     // - Products are mapped to inventory_items
-    const isComplete = shopifyConnected && etsyConnected &&
+    // OR if they already have a pending or active plan (they moved past the wizard)
+    const isComplete = hasStartedPlan || (shopifyConnected && etsyConnected &&
         shopifyProductCount > 0 && etsyProductCount > 0 &&
-        inventoryMappedCount > 0
+        inventoryMappedCount > 0)
 
     return {
         shopifyConnected,
