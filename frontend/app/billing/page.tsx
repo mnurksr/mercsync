@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/useToast';
 import { getShopDomain } from '@/utils/shopDomain';
 
@@ -154,30 +154,16 @@ export default function PlansPage() {
     };
 
     return (
-        <div className="h-[100dvh] w-full overflow-hidden bg-[#F6F6F7] flex flex-col items-center justify-center px-4 py-8 font-sans relative">
-            <AnimatePresence>
-                {isLoading && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-[#0f1115] flex flex-col items-center justify-center"
-                    >
-                        <Loader2 className="w-12 h-12 text-white animate-spin mb-6" style={{ animationDuration: '1.2s' }} />
-                        <h2 className="text-xl font-bold text-white mb-2">Processing Payment</h2>
-                        <p className="text-gray-400 text-sm">Please wait while we verify your subscription...</p>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+        <div className="h-[100dvh] w-full overflow-hidden bg-[#F6F6F7] flex flex-col items-center justify-center px-4 py-8 font-sans">
 
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-center mb-8 shrink-0"
+                className="text-center mb-10"
             >
-                <h1 className="text-2xl font-bold text-gray-900 mb-2 mt-2">Choose Your Plan</h1>
-                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Plan</h1>
+                <p className="text-sm text-gray-500 max-w-md">
                     Start syncing your inventory across platforms. All plans include a 7-day free trial.
                 </p>
             </motion.div>
