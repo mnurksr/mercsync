@@ -65,10 +65,18 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith('/dashboard/mapper') ||
         request.nextUrl.pathname.startsWith('/setup');
 
-    // If user is not signed in
-    if (!session) {
-        const shop = request.nextUrl.searchParams.get('shop');
+    const shop = request.nextUrl.searchParams.get('shop');
 
+    // 1. Akıllı Yönlendirme & Tanıtım Sayfasını Gizleme
+    // Eğer istek kök dizine (/) geliyorsa ve URL'de ?shop= varsa (Shopify içinden geliyorsa), 
+    // Landing Page'i hiç render etmeden doğrudan /dashboard rotasına yönlendir.
+    if (request.nextUrl.pathname === '/' && shop) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        return NextResponse.redirect(url);
+    }
+
+    if (!session) {
         // If they are in the Shopify iframe but lost their session (or it's their first load)
         // Automatically bounce them to OAuth to seamlessly log them in, UNLESS they are already on the callback
         if (shop && !request.nextUrl.pathname.startsWith('/auth/shopify/callback')) {
@@ -82,7 +90,7 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // If user is signed in and visits login or root, redirect to dashboard
+    // If user is signed in and visits login or root (and bypassed the shop check), redirect to dashboard
     if (session && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname === '/')) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';
