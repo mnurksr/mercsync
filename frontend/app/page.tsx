@@ -1,11 +1,41 @@
 import Link from 'next/link';
 import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/server';
+import { redirect } from 'next/navigation';
 
-export default function LandingPage() {
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('shop')) {
-    // If Shopify iframe loads the root, redirect directly to dashboard
-    window.location.href = '/dashboard' + window.location.search;
-    return null;
+export default async function LandingPage(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const searchParams = await props.searchParams;
+  const shop = searchParams?.shop;
+
+  // Akıllı Yönlendirme & Tanıtım Sayfasını Gizleme
+  if (typeof shop === 'string') {
+    const supabase = await createClient();
+    const { data: shopData } = await supabase
+      .from('shops')
+      .select('is_active, plan_type')
+      .eq('shop_domain', shop)
+      .single();
+
+    // Preserve URL params (including charge_id, host, etc) to prevent 404s breaking
+    const params = new URLSearchParams();
+    if (searchParams) {
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (typeof value === 'string') params.append(key, value);
+      });
+    }
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+
+    if (shopData) {
+      // Eğer kurulum tamamlanmış ve plan aktifse ana panele
+      if (shopData.is_active && shopData.plan_type && shopData.plan_type !== 'none' && shopData.plan_type !== 'frozen') {
+        redirect(`/dashboard${queryString}`);
+      } else {
+        // Değilse kuruluma
+        redirect(`/setup${queryString}`);
+      }
+    } else {
+      redirect(`/setup${queryString}`);
+    }
   }
 
   return (

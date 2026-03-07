@@ -63,11 +63,23 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith('/terms') ||
         request.nextUrl.pathname.startsWith('/pricing') ||
         request.nextUrl.pathname.startsWith('/dashboard/mapper') ||
-        request.nextUrl.pathname.startsWith('/setup')
+        request.nextUrl.pathname.startsWith('/setup');
 
-    // If user is not signed in and visits a protected route, redirect to login
-    if (!session && !isPublicRoute) {
-        return NextResponse.redirect(new URL('/login', request.url))
+    // If user is not signed in
+    if (!session) {
+        const shop = request.nextUrl.searchParams.get('shop');
+
+        // If they are in the Shopify iframe but lost their session (or it's their first load)
+        // Automatically bounce them to OAuth to seamlessly log them in, UNLESS they are already on the callback
+        if (shop && !request.nextUrl.pathname.startsWith('/auth/shopify/callback')) {
+            const returnUrl = encodeURIComponent(request.url);
+            return NextResponse.redirect(`https://api.mercsync.com/webhook/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`);
+        }
+
+        // If not in iframe and trying to access a protected route, go to manual login
+        if (!isPublicRoute) {
+            return NextResponse.redirect(new URL('/login', request.url));
+        }
     }
 
     // If user is signed in and visits login or root, redirect to dashboard
