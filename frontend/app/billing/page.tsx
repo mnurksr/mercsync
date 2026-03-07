@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
@@ -72,6 +72,42 @@ export default function PlansPage() {
     const searchParams = useSearchParams();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Clean up charge_id from URL without reloading and verify billing
+    useEffect(() => {
+        const chargeId = searchParams.get('charge_id');
+        const shopDomainUrl = searchParams.get('shop');
+
+        if (chargeId && shopDomainUrl) {
+            console.log('Returned from billing with charge_id:', chargeId);
+            setIsLoading(true);
+
+            // Verify with backend
+            fetch('/api/billing/verify-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ charge_id: chargeId, shop_domain: shopDomainUrl })
+            }).then(async res => {
+                const data = await res.json();
+                if (data.success) {
+                    toast.success("Subscription Activated. Welcome aboard!");
+                    // Redirect to dashboard now that plan is active
+                    router.push(`/dashboard?shop=${shopDomainUrl}`);
+                } else {
+                    toast.error("Subscription verification failed. Please try again.");
+                }
+            }).catch(e => {
+                console.error(e);
+                toast.error("Error verifying payment.");
+            }).finally(() => {
+                setIsLoading(false);
+                // Clean the URL using History API to prevent page reload
+                const newUrl = new URL(window.location.href);
+                newUrl.searchParams.delete('charge_id');
+                window.history.replaceState({}, '', newUrl.toString());
+            });
+        }
+    }, [searchParams, toast, router]);
 
     // Get shop domain — checks URL params first, then sessionStorage
     const shopDomain = getShopDomain(searchParams);

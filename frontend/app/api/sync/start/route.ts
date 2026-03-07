@@ -31,8 +31,14 @@ export async function POST(req: NextRequest) {
                 status: 'pending',
                 current_step: 0,
                 total_steps: 100,
-                message: 'Starting process...'
             }, { onConflict: 'id' });
+
+        // Change plan_type to 'pending' if it was guest, none, or null
+        await supabase
+            .from('shops')
+            .update({ plan_type: 'pending' })
+            .eq('owner_id', user_id)
+            .or('plan_type.eq.guest,plan_type.eq.none,plan_type.is.null');
 
         // 2. Respond immediately (like n8n's "Respond to Frontend" node)
         const response = NextResponse.json({

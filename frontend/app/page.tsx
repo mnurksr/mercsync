@@ -3,6 +3,7 @@ import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarC
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
+import { getSetupStatus } from '@/app/actions/staging';
 
 export default async function LandingPage(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const searchParams = await props.searchParams;
@@ -28,14 +29,14 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
     const queryString = params.toString() ? `?${params.toString()}` : '';
 
     if (shopData) {
-      // Eğer kurulum tamamlanmış ve plan aktifse ana panele
-      const incompletePlans = ['none', 'frozen', 'guest'];
+      const setupStatus = await getSetupStatus(shop);
 
-      if (shopData.is_active && shopData.plan_type && !incompletePlans.includes(shopData.plan_type)) {
-        redirect(`/dashboard${queryString}`);
-      } else {
-        // Değilse kuruluma
+      if (!setupStatus.isComplete) {
         redirect(`/setup${queryString}`);
+      } else if (!shopData.plan_type || shopData.plan_type === 'guest' || shopData.plan_type === 'none' || shopData.plan_type === 'pending') {
+        redirect(`/billing${queryString}`);
+      } else {
+        redirect(`/dashboard${queryString}`);
       }
     } else {
       redirect(`/setup${queryString}`);
