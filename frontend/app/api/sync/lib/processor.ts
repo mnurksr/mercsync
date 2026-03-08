@@ -750,11 +750,28 @@ async function cloneToEtsy(
         : undefined;
 
     // === VARIANT INJECTION: Append to existing Etsy listing ===
-    if (product.target_id) {
-        console.log(`[Sync] Variant injection: appending to Etsy listing ${product.target_id}`);
+    let targetListingId = product.target_id;
+
+    // Self-healing: If target_id is missing, try to find it from existing matches in DB
+    if (!targetListingId) {
+        const { data: matchedEtsyProduct } = await supabase
+            .from('staging_etsy_products')
+            .select('etsy_listing_id')
+            .eq('shop_id', shop.id)
+            .eq('shopify_variant_id', shopifyProduct.variants[0].id.toString())
+            .maybeSingle();
+
+        if (matchedEtsyProduct?.etsy_listing_id) {
+            targetListingId = matchedEtsyProduct.etsy_listing_id;
+            console.log(`[Sync] Found missing target_id via DB match: ${targetListingId}`);
+        }
+    }
+
+    if (targetListingId) {
+        console.log(`[Sync] Variant injection: appending to Etsy listing ${targetListingId}`);
 
         // Get current inventory
-        const currentInventory = await etsyApi.getInventory(product.target_id, shop.etsy_access_token);
+        const currentInventory = await etsyApi.getInventory(targetListingId, shop.etsy_access_token);
 
         // Use clone variants directly (user-verified data)
         const variantsToAdd = cloneVariants || product.variants || [];
@@ -839,7 +856,7 @@ async function cloneToEtsy(
             sku_on_property: activeProperties
         };
 
-        const etsyInventory = await etsyApi.updateInventory(product.target_id, shop.etsy_access_token, mergedPayload);
+        const etsyInventory = await etsyApi.updateInventory(targetListingId, shop.etsy_access_token, mergedPayload);
 
         // Update staging with actually created variants
         for (const etsyProduct of (etsyInventory.products || [])) {
@@ -860,7 +877,7 @@ async function cloneToEtsy(
                 .from('staging_etsy_products')
                 .upsert({
                     shop_id: shop.id,
-                    etsy_listing_id: product.target_id,
+                    etsy_listing_id: targetListingId,
                     etsy_variant_id: etsyProduct.product_id.toString(),
                     name: product.title,
                     sku: etsyProduct.sku || null,
