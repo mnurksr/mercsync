@@ -357,7 +357,24 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
     const upsertInvItem = async (sku: string, title: string, sId: string | null, sVarId: string | null, eId: string | null, eVarId: string | null) => {
         let invItemId = null;
         try {
-            const { data: existingItem } = await supabase.from('inventory_items').select('id').eq('sku', sku).maybeSingle();
+            let existingItem = null;
+
+            // Priority 1: Look by variant IDs
+            if (sVarId) {
+                const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('shopify_variant_id', sVarId).maybeSingle();
+                existingItem = data;
+            }
+            if (!existingItem && eVarId) {
+                const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('etsy_variant_id', eVarId).maybeSingle();
+                existingItem = data;
+            }
+
+            // Priority 2: Look by SKU (Only if it's a real SKU, not our fallback placeholder)
+            if (!existingItem && sku && !sku.startsWith('SKU-') && sku !== 'NO-SKU') {
+                const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('sku', sku).maybeSingle();
+                existingItem = data;
+            }
+
             const payload = { shop_id: shop.id, sku, name: title, shopify_product_id: sId, shopify_variant_id: sVarId, etsy_listing_id: eId, etsy_variant_id: eVarId };
 
             if (existingItem) {
@@ -397,7 +414,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         if (sp.etsy_variant_id) {
             // Matched via Shopify staging
             const ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
-            const sku = sp.sku || ep?.sku || `SKU-${sp.shopify_variant_id}`;
+            const rawSku = sp.sku || ep?.sku;
+            const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
             const invItemId = await upsertInvItem(sku, title, sp.shopify_product_id, sp.shopify_variant_id, ep?.etsy_listing_id || null, sp.etsy_variant_id);
 
             if (invItemId) {
@@ -409,7 +427,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             }
         } else {
             // Unmatched Shopify
-            const sku = sp.sku || `SKU-${sp.shopify_variant_id}`;
+            const rawSku = sp.sku;
+            const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
             const invItemId = await upsertInvItem(sku, title, sp.shopify_product_id, sp.shopify_variant_id, null, null);
             if (invItemId) {
                 await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
@@ -422,7 +441,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         if (processedEtsyVariantIds.has(ep.etsy_variant_id)) continue;
 
         const title = ep.name || ep.product_title || 'Unknown Product';
-        const sku = ep.sku || `SKU-${ep.etsy_variant_id}`;
+        const rawSku = ep.sku;
+        const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${ep.etsy_variant_id}` : rawSku;
 
         // Usually, these are unmatched. If there's an anomaly where shopify_variant_id exists but wasn't caught above, include it.
         const invItemId = await upsertInvItem(sku, title, null, ep.shopify_variant_id || null, ep.etsy_listing_id, ep.etsy_variant_id);
