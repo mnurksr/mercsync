@@ -62,14 +62,20 @@ type ParsedPayload = {
     stockUpdates: StockUpdate[];
     toShopify: CloneProduct[];
     toEtsy: CloneProduct[];
+    finalMatched: any[];
 };
 
 // ─────────────────────────────────────────────
 // Entry Point
-// ─────────────────────────────────────────────
+import fs from 'fs';
 
 export async function processSync(payload: SyncPayload) {
-    const { job_id, user_id } = payload;
+    const { job_id, user_id, initial_state, final_state } = payload;
+    console.log(`[Sync] processSync started for job ${job_id} with user ${user_id}`);
+    try {
+        fs.writeFileSync('/tmp/payload.json', JSON.stringify(payload, null, 2));
+    } catch (e) { }
+    console.dir({ initial_state, final_state }, { depth: null }); // DEBUG LOG
 
     try {
         // 1. Parse the payload (same logic as "Parse & Prepare Data1" in n8n)
@@ -94,7 +100,12 @@ export async function processSync(payload: SyncPayload) {
 
         let completedSteps = 0;
 
-        // ── Phase 1: Sync Stocks ──
+        // ── Phase 1.5: Save Staging Matches ──
+        await sendLog(job_id, 'Saving variant matches to staging tables...', 10, 100);
+        await saveStagingMatches(shop.id, parsed.finalMatched);
+        await sendLog(job_id, 'Variant matches saved.', 15, 100);
+
+        // ── Phase 2: Stock Syncs ──
         if (parsed.stockUpdates.length > 0) {
             await sendLog(job_id, 'Synchronizing inventory levels across platforms...', 5, 100);
 
@@ -273,8 +284,39 @@ function parsePayload(payload: SyncPayload): ParsedPayload {
         user_id,
         stockUpdates,
         toShopify: final_state?.queued_clones?.to_shopify || [],
-        toEtsy: final_state?.queued_clones?.to_etsy || []
+        toEtsy: final_state?.queued_clones?.to_etsy || [],
+        finalMatched: finalMatched // Pass this along for saveStagingMatches
     };
+}
+
+// ─────────────────────────────────────────────
+// Phase 1.5: Save Matched Variants to Staging
+// ─────────────────────────────────────────────
+
+async function saveStagingMatches(shopId: string, finalMatched: any[]) {
+    if (!finalMatched || finalMatched.length === 0) return;
+
+    for (const item of finalMatched) {
+        if (!item.shopify_variant_id || !item.etsy_variant_id) continue;
+
+        // Update Shopify Staging Product
+        const { error: shEr } = await supabase
+            .from('staging_shopify_products')
+            .update({ etsy_variant_id: item.etsy_variant_id })
+            .eq('shop_id', shopId)
+            .eq('shopify_variant_id', item.shopify_variant_id);
+
+        if (shEr) console.error(`[Sync] Failed to link Shopify variant ${item.shopify_variant_id} to Etsy ${item.etsy_variant_id}:`, shEr.message);
+
+        // Update Etsy Staging Product
+        const { error: etEr } = await supabase
+            .from('staging_etsy_products')
+            .update({ shopify_variant_id: item.shopify_variant_id })
+            .eq('shop_id', shopId)
+            .eq('etsy_variant_id', item.etsy_variant_id);
+
+        if (etEr) console.error(`[Sync] Failed to link Etsy variant ${item.etsy_variant_id} to Shopify ${item.shopify_variant_id}:`, etEr.message);
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -282,8 +324,6 @@ function parsePayload(payload: SyncPayload): ParsedPayload {
 // ─────────────────────────────────────────────
 
 async function finalizeInventory(shop: any, payload: SyncPayload) {
-    const { initial_state, final_state } = payload;
-
     // 1. Resolve Location ID.
     let mainLocationId = shop.main_location_id;
     if (!mainLocationId) {
@@ -302,90 +342,94 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         }
     }
 
-    const matched = final_state?.matched_inventory || [];
-    const unmatched = initial_state?.unmatched_inventory || [];
+    // 2. Fetch all staging products for this shop
+    const { data: shopifyProducts, error: shErr } = await supabase.from('staging_shopify_products').select('*').eq('shop_id', shop.id);
+    const { data: etsyProducts, error: etErr } = await supabase.from('staging_etsy_products').select('*').eq('shop_id', shop.id);
 
-    // Helper to process an array of items
-    const processItems = async (items: any[], isMatched: boolean) => {
-        for (const item of items) {
-            const variantId = isMatched ? (item.shopify_variant_id || item.etsy_variant_id) : item.variant_id;
-            const sku = item.sku || `SKU-${variantId}`;
-            const title = item.title || 'Unknown Product';
+    if (shErr) console.error('[Sync] Error fetching shopify staging:', shErr.message);
+    if (etErr) console.error('[Sync] Error fetching etsy staging:', etErr.message);
 
-            try {
-                // Upsert Inventory Item safely without requiring a DB unique constraint on sku
-                let invItemId = null;
-                const { data: existingItem } = await supabase
-                    .from('inventory_items')
-                    .select('id')
-                    .eq('sku', sku)
-                    .maybeSingle();
+    const sProds = shopifyProducts || [];
+    const eProds = etsyProducts || [];
 
-                const itemPayload = {
-                    shop_id: shop.id,
-                    sku: sku,
-                    name: title,
-                    shopify_product_id: item.shopify_id || item.product_id || null,
-                    shopify_variant_id: item.shopify_variant_id || (item.platform === 'shopify' ? item.variant_id : null) || null,
-                    etsy_listing_id: item.etsy_id || (item.platform === 'etsy' ? item.product_id : null) || null,
-                    etsy_variant_id: item.etsy_variant_id || (item.platform === 'etsy' ? item.variant_id : null) || null
-                };
+    const processedEtsyVariantIds = new Set<string>();
 
-                if (existingItem) {
-                    const { error } = await supabase.from('inventory_items').update(itemPayload).eq('id', existingItem.id);
-                    if (error) console.error(`[Sync] Failed to update inventory item ${sku}:`, error.message);
-                    invItemId = existingItem.id;
-                } else {
-                    const { data: newItem, error } = await supabase.from('inventory_items').insert(itemPayload).select('id').single();
-                    if (error) {
-                        console.error(`[Sync] Failed to insert inventory item ${sku}:`, error.message);
-                        continue;
-                    }
-                    if (newItem) invItemId = newItem.id;
+    const upsertInvItem = async (sku: string, title: string, sId: string | null, sVarId: string | null, eId: string | null, eVarId: string | null) => {
+        let invItemId = null;
+        try {
+            const { data: existingItem } = await supabase.from('inventory_items').select('id').eq('sku', sku).maybeSingle();
+            const payload = { shop_id: shop.id, sku, name: title, shopify_product_id: sId, shopify_variant_id: sVarId, etsy_listing_id: eId, etsy_variant_id: eVarId };
+
+            if (existingItem) {
+                const { error } = await supabase.from('inventory_items').update(payload).eq('id', existingItem.id);
+                if (error) console.error(`[Sync] Failed to update inventory item ${sku}:`, error.message);
+                invItemId = existingItem.id;
+            } else {
+                const { data: newItem, error } = await supabase.from('inventory_items').insert(payload).select('id').single();
+                if (error) {
+                    console.error(`[Sync] Failed to insert inventory item ${sku}:`, error.message);
+                } else if (newItem) {
+                    invItemId = newItem.id;
                 }
-                if (invItemId && mainLocationId) {
-                    // Update Levels
-                    if (isMatched) {
-                        if (item.shopify_variant_id) {
-                            const { error: err1 } = await supabase.from('inventory_levels').upsert({
-                                inventory_item_id: invItemId,
-                                location_id: mainLocationId,
-                                shop_id: shop.id,
-                                market_iso: 'SHOPIFY',
-                                available_stock: item.shopify_stock || 0
-                            }, { onConflict: 'inventory_item_id,location_id,market_iso' });
-                            if (err1) console.error(err1.message);
-                        }
-                        if (item.etsy_variant_id) {
-                            const { error: err2 } = await supabase.from('inventory_levels').upsert({
-                                inventory_item_id: invItemId,
-                                location_id: mainLocationId,
-                                shop_id: shop.id,
-                                market_iso: 'ETSY',
-                                available_stock: item.etsy_stock || 0
-                            }, { onConflict: 'inventory_item_id,location_id,market_iso' });
-                            if (err2) console.error(err2.message);
-                        }
-                    } else {
-                        const market = item.platform === 'shopify' ? 'SHOPIFY' : 'ETSY';
-                        const { error: err3 } = await supabase.from('inventory_levels').upsert({
-                            inventory_item_id: invItemId,
-                            location_id: mainLocationId,
-                            shop_id: shop.id,
-                            market_iso: market,
-                            available_stock: item.stock || 0
-                        }, { onConflict: 'inventory_item_id,location_id,market_iso' });
-                        if (err3) console.error(err3.message);
-                    }
-                }
-            } catch (err: any) {
-                console.error(`[Sync] Failed to finalize inventory for ${sku}:`, err.message);
             }
+        } catch (err: any) {
+            console.error(`[Sync] Caught error upserting item ${sku}:`, err.message);
         }
+        return invItemId;
     };
 
-    await processItems(matched, true);
-    await processItems(unmatched, false);
+    const upsertInvLevel = async (invItemId: string, market: 'SHOPIFY' | 'ETSY', stock: number) => {
+        if (!invItemId || !mainLocationId) return;
+        const { error } = await supabase.from('inventory_levels').upsert({
+            inventory_item_id: invItemId,
+            location_id: mainLocationId,
+            shop_id: shop.id,
+            market_iso: market,
+            available_stock: stock || 0
+        }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+        if (error) console.error(`[Sync] Failed to upsert ${market} level:`, error.message);
+    };
+
+    // 3. Process Shopify products
+    for (const sp of sProds) {
+        const title = sp.name || sp.product_title || 'Unknown Product';
+
+        if (sp.etsy_variant_id) {
+            // Matched via Shopify staging
+            const ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
+            const sku = sp.sku || ep?.sku || `SKU-${sp.shopify_variant_id}`;
+            const invItemId = await upsertInvItem(sku, title, sp.shopify_product_id, sp.shopify_variant_id, ep?.etsy_listing_id || null, sp.etsy_variant_id);
+
+            if (invItemId) {
+                await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
+                if (ep) {
+                    await upsertInvLevel(invItemId, 'ETSY', ep.stock_quantity);
+                    processedEtsyVariantIds.add(ep.etsy_variant_id);
+                }
+            }
+        } else {
+            // Unmatched Shopify
+            const sku = sp.sku || `SKU-${sp.shopify_variant_id}`;
+            const invItemId = await upsertInvItem(sku, title, sp.shopify_product_id, sp.shopify_variant_id, null, null);
+            if (invItemId) {
+                await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
+            }
+        }
+    }
+
+    // 4. Process remaining Etsy products
+    for (const ep of eProds) {
+        if (processedEtsyVariantIds.has(ep.etsy_variant_id)) continue;
+
+        const title = ep.name || ep.product_title || 'Unknown Product';
+        const sku = ep.sku || `SKU-${ep.etsy_variant_id}`;
+
+        // Usually, these are unmatched. If there's an anomaly where shopify_variant_id exists but wasn't caught above, include it.
+        const invItemId = await upsertInvItem(sku, title, null, ep.shopify_variant_id || null, ep.etsy_listing_id, ep.etsy_variant_id);
+        if (invItemId) {
+            await upsertInvLevel(invItemId, 'ETSY', ep.stock_quantity);
+        }
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -571,7 +615,8 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                         product_title: product.title,
                         variant_title: cv.title || 'Default',
                         description: product.description || '',
-                        location_inventory_map: JSON.stringify(locMap)
+                        location_inventory_map: JSON.stringify(locMap),
+                        etsy_variant_id: cv.source_variant_id // Link back to source
                     }, { onConflict: 'shopify_inventory_item_id' });
             } catch (e: any) {
                 console.warn(`[Sync] Failed to add variant ${cv.title}:`, e.message);
@@ -628,6 +673,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
     for (let i = 0; i < shopifyProduct.variants.length; i++) {
         const variant = shopifyProduct.variants[i];
         const stock = originalStocks[i] || 0;
+        const cv = cloneVariants ? cloneVariants[i] : null; // Get source mapping if available
         const locMap = shop.main_location_id
             ? [{ location_id: shop.main_location_id, available: stock }]
             : [];
@@ -648,7 +694,8 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                 product_title: shopifyProduct.title,
                 variant_title: variant.title,
                 description: shopifyProduct.body_html || '',
-                location_inventory_map: JSON.stringify(locMap)
+                location_inventory_map: JSON.stringify(locMap),
+                etsy_variant_id: cv ? cv.source_variant_id : dbRows[i]?.etsy_variant_id // Link back to source
             }, { onConflict: 'shopify_inventory_item_id' });
     }
 }
@@ -752,7 +799,10 @@ async function cloneToEtsy(
 
         // Insert new variants into staging_etsy_products
         const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
-        for (const etsyProduct of (etsyInventory.products || [])) {
+        for (let i = 0; i < (etsyInventory.products || []).length; i++) {
+            const etsyProduct = etsyInventory.products[i];
+            const cv = variantsToAdd[i]; // Get the source variant match
+
             const offering = etsyProduct.offerings[0];
             const actualPrice = typeof offering.price === 'object'
                 ? offering.price.amount / offering.price.divisor
@@ -779,7 +829,8 @@ async function cloneToEtsy(
                     product_title: product.title,
                     variant_title: variantTitle,
                     description: product.description || '',
-                    has_variations: etsyInventory.products.length > 1
+                    has_variations: etsyInventory.products.length > 1,
+                    shopify_variant_id: cv ? cv.source_variant_id : undefined // Link back to source
                 }, { onConflict: 'etsy_variant_id' });
         }
         return;
@@ -882,7 +933,12 @@ async function cloneToEtsy(
     // 8. Insert into staging_etsy_products
     const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
 
-    for (const etsyProduct of (etsyInventory.products || [])) {
+    for (let i = 0; i < (etsyInventory.products || []).length; i++) {
+        const etsyProduct = etsyInventory.products[i];
+
+        // Find matching source variant from payload or assume index match
+        const cv = cloneVariants ? cloneVariants[i] : (shopifyProduct.variants[i] ? { source_variant_id: shopifyProduct.variants[i].id.toString() } : null);
+
         const offering = etsyProduct.offerings[0];
         const actualPrice = typeof offering.price === 'object'
             ? offering.price.amount / offering.price.divisor
@@ -910,7 +966,8 @@ async function cloneToEtsy(
                 variant_title: variantTitle,
                 description: etsyListing.description,
                 has_variations: etsyInventory.products.length > 1,
-                url: etsyListing.url
+                url: etsyListing.url,
+                shopify_variant_id: cv ? cv.source_variant_id : undefined // Link back to source
             }, { onConflict: 'etsy_variant_id' });
     }
 }
