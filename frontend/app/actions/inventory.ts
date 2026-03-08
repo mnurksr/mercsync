@@ -3,14 +3,27 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
+export type PlatformVariant = {
+    id: string
+    title: string
+    sku: string | null
+    price: number
+    stock: number
+    imageUrl: string | null
+    isMatched: boolean
+    dbId: string
+}
+
 export type ListingItem = {
     id: string
     title: string
     imageUrl: string | null
     totalStock: number
     variantsCount: number
-    status: string
+    platformStatus: string
+    matchStatus: 'synced' | 'unmatched' | 'partially_matched'
     platform: 'shopify' | 'etsy'
+    variants: PlatformVariant[]
 }
 
 /**
@@ -65,6 +78,7 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
 
     (items || []).forEach(item => {
         const groupId = item[parentIdField] || item.id;
+        const isMatched = platform === 'shopify' ? !!item.etsy_variant_id : !!item.shopify_variant_id;
 
         if (!groups[groupId]) {
             groups[groupId] = {
@@ -73,27 +87,40 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
                 imageUrl: item.image_url,
                 totalStock: 0,
                 variantsCount: 0,
-                status: 'active',
-                platform
+                platformStatus: item.status || 'unknown',
+                matchStatus: 'synced',
+                platform,
+                variants: []
             };
         }
 
+        groups[groupId].variants.push({
+            id: platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id,
+            dbId: item.id,
+            title: item.variant_title || 'Default Title',
+            sku: item.sku,
+            price: item.price || 0,
+            stock: item.stock_quantity || 0,
+            imageUrl: item.image_url,
+            isMatched
+        });
+
         groups[groupId].totalStock += (item.stock_quantity || 0);
         groups[groupId].variantsCount += 1;
-
-        // If any variant has issues, flag it.
-        if (item.status !== 'active') {
-            groups[groupId].status = item.status;
-        }
     });
 
     const results = Object.values(groups);
 
-    // Compute derived statuses
+    // Compute derived match status
     results.forEach(r => {
-        if (r.totalStock <= 0) r.status = 'out';
-        else if (r.totalStock < 5) r.status = 'low';
-        else if (r.status === 'active') r.status = 'synced'; // General OK status
+        const matchedVariants = r.variants.filter(v => v.isMatched).length;
+        if (matchedVariants === 0) {
+            r.matchStatus = 'unmatched';
+        } else if (matchedVariants < r.variants.length) {
+            r.matchStatus = 'partially_matched';
+        } else {
+            r.matchStatus = 'synced';
+        }
     });
 
     return results.sort((a, b) => a.title.localeCompare(b.title));
@@ -104,15 +131,14 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
  */
 export async function getInventoryStats(platform: 'shopify' | 'etsy'): Promise<{
     total: number
-    lowStock: number
+    unmatched: number
     outOfStock: number
 }> {
     const items = await getPlatformListings(platform)
 
     return {
         total: items.length,
-        lowStock: items.filter(i => i.status === 'low').length,
-        outOfStock: items.filter(i => i.status === 'out').length
+        unmatched: items.filter(i => i.matchStatus === 'unmatched').length,
+        outOfStock: items.filter(i => i.totalStock <= 0).length
     }
 }
-
