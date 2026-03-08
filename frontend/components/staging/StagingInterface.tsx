@@ -2413,15 +2413,10 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             <button
                                 onClick={aiMatch}
                                 disabled={aiLoading}
-                                className="h-10 px-5 rounded-lg font-medium text-white flex items-center gap-2 disabled:opacity-60 transition-transform active:scale-95"
-                                style={{
-                                    background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)',
-                                    boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)'
-                                }}
+                                className="h-10 px-5 rounded-lg font-medium text-white flex items-center gap-2 disabled:opacity-60 transition-transform active:scale-95 bg-blue-600 hover:bg-blue-700 shadow-sm"
                             >
                                 {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                                AI Match
-                                <Sparkles className="w-4 h-4" />
+                                Auto Match
                             </button>
                             <button onClick={load} className="p-2.5 hover:bg-gray-100 rounded-lg">
                                 <RefreshCw className={`w-5 h-5 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
@@ -2446,7 +2441,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         )}
                         <button
                             onClick={handleContinueClick}
-                            disabled={matches.length === 0}
+                            disabled={matches.length === 0 || unmatchedShopifyGroups.length > 0 || unmatchedEtsyGroups.length > 0}
                             className="h-9 px-4 bg-green-600 text-white text-sm font-medium rounded-lg flex items-center gap-2 hover:bg-green-700 disabled:opacity-50"
                         >
                             <ArrowRight className="w-4 h-4" />
@@ -2458,12 +2453,12 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
             <div className="flex-1 w-full max-w-[1920px] mx-auto px-6 py-4 overflow-hidden min-h-0">
                 <div className="grid grid-cols-12 gap-6 h-full relative">
-                    {/* AI Match Lock Overlay */}
+                    {/* Auto Match Lock Overlay */}
                     {aiLoading && (
                         <div className="absolute inset-0 z-20 bg-white/40 backdrop-blur-[1px] flex items-center justify-center rounded-xl" style={{ pointerEvents: 'all' }}>
                             <div className="flex flex-col items-center gap-3 bg-white/90 px-8 py-6 rounded-2xl shadow-lg border border-gray-200">
-                                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                                <p className="text-sm font-semibold text-gray-700">AI Matching in progress...</p>
+                                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                                <p className="text-sm font-semibold text-gray-700">Auto Matching in progress...</p>
                                 <p className="text-xs text-gray-400">Please wait while we analyze your products</p>
                             </div>
                         </div>
@@ -2570,15 +2565,15 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                             </div>
                                             <h3 className="text-gray-900 font-medium mb-1">No Matches Yet</h3>
                                             <p className="text-gray-500 text-sm max-w-xs mb-4">
-                                                Drag products from the sides to link them, or use AI Match to auto-detect pairs.
+                                                Drag products from the sides to link them, or use Auto Match to auto-detect pairs.
                                             </p>
                                             <button
                                                 onClick={aiMatch}
                                                 disabled={aiLoading}
-                                                className="h-9 px-4 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-2"
+                                                className="h-9 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2"
                                             >
-                                                {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                                Run AI Match
+                                                {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                                                Auto Match
                                             </button>
                                         </div>
                                     )}

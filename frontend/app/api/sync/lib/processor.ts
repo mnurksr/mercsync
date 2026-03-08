@@ -210,6 +210,11 @@ export async function processSync(payload: SyncPayload) {
             }
         }
 
+        // ── Phase 4: Finalize Inventory Records ──
+        await sendLog(job_id, 'Finalizing inventory records...', 98, 100);
+        await finalizeInventory(shop, payload);
+        await sendLog(job_id, 'All operations completed successfully! ✓', 100, 100);
+
         // ── Done ──
         await markCompleted(job_id);
         console.log(`[Sync] Job ${job_id} completed successfully`);
@@ -270,6 +275,86 @@ function parsePayload(payload: SyncPayload): ParsedPayload {
         toShopify: final_state?.queued_clones?.to_shopify || [],
         toEtsy: final_state?.queued_clones?.to_etsy || []
     };
+}
+
+// ─────────────────────────────────────────────
+// Finalize Inventory (Save user-approved matches)
+// ─────────────────────────────────────────────
+
+async function finalizeInventory(shop: any, payload: SyncPayload) {
+    const { initial_state, final_state } = payload;
+
+    const matched = final_state?.matched_inventory || [];
+    const unmatched = initial_state?.unmatched_inventory || [];
+
+    // Helper to process an array of items
+    const processItems = async (items: any[], isMatched: boolean) => {
+        for (const item of items) {
+            const variantId = isMatched ? (item.shopify_variant_id || item.etsy_variant_id) : item.variant_id;
+            const sku = item.sku || `SKU-${variantId}`;
+            const title = item.title || 'Unknown Product';
+
+            try {
+                // Upsert Inventory Item
+                const { data: invItem, error } = await supabase
+                    .from('inventory_items')
+                    .upsert({
+                        shop_id: shop.id,
+                        sku: sku,
+                        name: title,
+                        shopify_product_id: item.shopify_id || item.product_id || null,
+                        shopify_variant_id: item.shopify_variant_id || (item.platform === 'shopify' ? item.variant_id : null) || null,
+                        etsy_listing_id: item.etsy_id || (item.platform === 'etsy' ? item.product_id : null) || null,
+                        etsy_variant_id: item.etsy_variant_id || (item.platform === 'etsy' ? item.variant_id : null) || null
+                    }, { onConflict: 'sku' })
+                    .select('id')
+                    .single();
+
+                if (error) {
+                    console.error(`[Sync] Failed to upsert inventory item ${sku}:`, error.message);
+                    continue;
+                }
+
+                if (invItem && shop.main_location_id) {
+                    // Update Levels
+                    if (isMatched) {
+                        if (item.shopify_variant_id) {
+                            await supabase.from('inventory_levels').upsert({
+                                inventory_item_id: invItem.id,
+                                location_id: shop.main_location_id,
+                                shop_id: shop.id,
+                                market_iso: 'SHOPIFY',
+                                available_stock: item.shopify_stock || 0
+                            }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+                        }
+                        if (item.etsy_variant_id) {
+                            await supabase.from('inventory_levels').upsert({
+                                inventory_item_id: invItem.id,
+                                location_id: shop.main_location_id,
+                                shop_id: shop.id,
+                                market_iso: 'ETSY',
+                                available_stock: item.etsy_stock || 0
+                            }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+                        }
+                    } else {
+                        const market = item.platform === 'shopify' ? 'SHOPIFY' : 'ETSY';
+                        await supabase.from('inventory_levels').upsert({
+                            inventory_item_id: invItem.id,
+                            location_id: shop.main_location_id,
+                            shop_id: shop.id,
+                            market_iso: market,
+                            available_stock: item.stock || 0
+                        }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+                    }
+                }
+            } catch (err: any) {
+                console.error(`[Sync] Failed to finalize inventory for ${sku}:`, err.message);
+            }
+        }
+    };
+
+    await processItems(matched, true);
+    await processItems(unmatched, false);
 }
 
 // ─────────────────────────────────────────────
