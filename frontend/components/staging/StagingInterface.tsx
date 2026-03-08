@@ -1110,12 +1110,31 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
                 // --- IMMEDIATELY SAVE MATCHES TO STAGING DB ---
                 try {
-                    const matchPayload = refreshedMatches.flatMap(m =>
-                        m.variantMatches.map(vm => ({
-                            shopify_variant_id: vm.shopify?.shopifyVariantId,
-                            etsy_variant_id: vm.etsy?.etsyVariantId
-                        }))
-                    ).filter(p => p.shopify_variant_id && p.etsy_variant_id);
+                    const matchPayload: { shopify_variant_id: string, etsy_variant_id: string }[] = [];
+
+                    refreshedMatches.forEach(m => {
+                        // 1. Explicit Variant Matches
+                        m.variantMatches.forEach(vm => {
+                            if (vm.shopify?.shopifyVariantId && vm.etsy?.etsyVariantId) {
+                                matchPayload.push({
+                                    shopify_variant_id: vm.shopify.shopifyVariantId,
+                                    etsy_variant_id: vm.etsy.etsyVariantId
+                                });
+                            }
+                        });
+
+                        // 2. Implicit 1-to-1 Matches (If a matched group has exactly 1 unmatched variant on both sides)
+                        if (!m.single && m.unmatchedShopifyVariants.length === 1 && m.unmatchedEtsyVariants.length === 1) {
+                            const sVariant = m.unmatchedShopifyVariants[0];
+                            const eVariant = m.unmatchedEtsyVariants[0];
+                            if (sVariant.shopifyVariantId && eVariant.etsyVariantId) {
+                                matchPayload.push({
+                                    shopify_variant_id: sVariant.shopifyVariantId,
+                                    etsy_variant_id: eVariant.etsyVariantId
+                                });
+                            }
+                        }
+                    });
 
                     if (matchPayload.length > 0) {
                         fetch('/api/sync/match', {
