@@ -730,10 +730,13 @@ async function cloneToEtsy(
     shippingProfileId: number | null,
     readinessStateId: number | null
 ) {
+    console.log(`[Sync] cloneToEtsy called for product: ${product.title}, target_id: ${product.target_id}`);
+
     // 1. GET live Shopify product data
     const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
     const liveData = await shopifyApi.getProduct(creds, product.source_id);
     const shopifyProduct = liveData.product;
+    const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
 
     // 2. Get stock quantities from staging DB
     const { data: dbStocks } = await supabase
@@ -759,31 +762,49 @@ async function cloneToEtsy(
         const optionName = shopifyProduct.options?.[0]?.name || 'Variation';
 
         // Merge existing products with new
-        const existingProducts = (currentInventory.products || []).map((p: any) => ({
-            sku: p.sku || '',
-            property_values: (p.property_values || []).map((prop: any) => {
-                const cleaned: any = {
-                    property_id: prop.property_id,
-                    value_ids: prop.value_ids,
-                    property_name: prop.property_name,
-                    values: prop.values
-                };
-                if (prop.scale_id !== null) cleaned.scale_id = prop.scale_id;
-                return cleaned;
-            }),
-            offerings: (p.offerings || []).map((off: any) => {
-                let priceVal = off.price;
-                if (typeof priceVal === 'object' && priceVal.amount !== undefined) {
-                    priceVal = priceVal.amount / priceVal.divisor;
-                }
-                return {
-                    price: priceVal,
-                    quantity: off.quantity,
-                    is_enabled: off.is_enabled,
-                    readiness_state_id: off.readiness_state_id
-                };
-            })
-        }));
+        // Etsy Requirement: If the listing was NOT variated but we are ADDING variations,
+        // the existing product (which had no properties) MUST be assigned the same property_id
+        // as the new ones, or Etsy will reject the update.
+        const isCurrentlyVariated = currentInventory.products?.some((p: any) => p.property_values?.length > 0);
+        const existingPropertyIds = isCurrentlyVariated
+            ? Array.from(new Set(currentInventory.products.flatMap((p: any) => p.property_values.map((pv: any) => pv.property_id))))
+            : [513];
+
+        const existingProducts = (currentInventory.products || []).map((p: any) => {
+            const props = (p.property_values || []).map((prop: any) => ({
+                property_id: prop.property_id,
+                value_ids: prop.value_ids,
+                property_name: prop.property_name,
+                values: prop.values,
+                ...(prop.scale_id !== null ? { scale_id: prop.scale_id } : {})
+            }));
+
+            // If it wasn't variated, inject the default variation property so we can add more
+            if (!isCurrentlyVariated) {
+                props.push({
+                    property_id: 513,
+                    property_name: optionName === 'Title' ? 'Variation' : optionName,
+                    values: ['Default']
+                });
+            }
+
+            return {
+                sku: p.sku || '',
+                property_values: props,
+                offerings: (p.offerings || []).map((off: any) => {
+                    let priceVal = off.price;
+                    if (typeof priceVal === 'object' && priceVal.amount !== undefined) {
+                        priceVal = priceVal.amount / priceVal.divisor;
+                    }
+                    return {
+                        price: priceVal,
+                        quantity: off.quantity,
+                        is_enabled: off.is_enabled,
+                        readiness_state_id: off.readiness_state_id
+                    };
+                })
+            };
+        });
 
         const newProducts = variantsToAdd.map((cv: any) => {
             const stock = Math.max(1, cv.stock || 1);
@@ -794,19 +815,22 @@ async function cloneToEtsy(
             };
             if (readinessStateId) offering.readiness_state_id = readinessStateId;
 
+            // Use same property IDs as existing products
+            const propertyValues = existingPropertyIds.map(propId => ({
+                property_id: propId,
+                property_name: propId === 513 && optionName === 'Title' ? 'Variation' : optionName,
+                values: [cv.title || 'Default']
+            }));
+
             return {
-                sku: cv.sku || `SKU-${Date.now()}`,
-                property_values: [{
-                    property_id: 513,
-                    property_name: optionName === 'Title' ? 'Variation' : optionName,
-                    values: [cv.title || 'Default']
-                }],
+                sku: cv.sku || `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                property_values: propertyValues,
                 offerings: [offering]
             };
         });
 
         const mergedProducts = [...existingProducts, ...newProducts];
-        const activeProperties = mergedProducts.some(p => p.property_values.length > 0) ? [513] : [];
+        const activeProperties = existingPropertyIds as number[];
 
         const mergedPayload = {
             products: mergedProducts,
@@ -817,12 +841,8 @@ async function cloneToEtsy(
 
         const etsyInventory = await etsyApi.updateInventory(product.target_id, shop.etsy_access_token, mergedPayload);
 
-        // Insert new variants into staging_etsy_products
-        const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
-        for (let i = 0; i < (etsyInventory.products || []).length; i++) {
-            const etsyProduct = etsyInventory.products[i];
-            const cv = variantsToAdd[i]; // Get the source variant match
-
+        // Update staging with actually created variants
+        for (const etsyProduct of (etsyInventory.products || [])) {
             const offering = etsyProduct.offerings[0];
             const actualPrice = typeof offering.price === 'object'
                 ? offering.price.amount / offering.price.divisor
@@ -832,6 +852,9 @@ async function cloneToEtsy(
             if (etsyProduct.property_values?.length > 0) {
                 variantTitle = etsyProduct.property_values.map((p: any) => p.values[0]).join(' / ');
             }
+
+            // Find if this was one of the newly added variants to link the shopify_variant_id
+            const matchedNewVariant = variantsToAdd.find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
 
             await supabase
                 .from('staging_etsy_products')
@@ -850,7 +873,7 @@ async function cloneToEtsy(
                     variant_title: variantTitle,
                     description: product.description || '',
                     has_variations: etsyInventory.products.length > 1,
-                    shopify_variant_id: cv ? cv.source_variant_id : undefined // Link back to source
+                    shopify_variant_id: matchedNewVariant ? matchedNewVariant.source_variant_id : undefined
                 }, { onConflict: 'etsy_variant_id' });
         }
         return;
@@ -951,7 +974,6 @@ async function cloneToEtsy(
     }
 
     // 8. Insert into staging_etsy_products
-    const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
 
     for (let i = 0; i < (etsyInventory.products || []).length; i++) {
         const etsyProduct = etsyInventory.products[i];
