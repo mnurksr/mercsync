@@ -32,6 +32,8 @@ export type StagingProduct = {
     shopifyProductId: string | null
     etsyListingId: string | null // For Etsy, listing_id is often the parent if variants exist
     variantTitle: string | null
+    shopifyVariantId: string | null
+    etsyVariantId: string | null
 }
 
 /**
@@ -252,7 +254,9 @@ export async function getStagingProducts(platform: 'shopify' | 'etsy', ownerId?:
         // Map new grouping fields
         shopifyProductId: item.shopify_product_id || null,
         etsyListingId: item.etsy_listing_id || null,
-        variantTitle: item.variant_title || item.option1 || null // Fallback to option1 if variant_title missing
+        variantTitle: item.variant_title || item.option1 || null, // Fallback to option1 if variant_title missing
+        shopifyVariantId: item.shopify_variant_id || null,
+        etsyVariantId: item.etsy_variant_id || null
     }))
 }
 

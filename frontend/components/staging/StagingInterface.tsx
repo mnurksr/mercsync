@@ -1112,8 +1112,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 try {
                     const matchPayload = refreshedMatches.flatMap(m =>
                         m.variantMatches.map(vm => ({
-                            shopify_variant_id: vm.shopify?.id,
-                            etsy_variant_id: vm.etsy?.id
+                            shopify_variant_id: vm.shopify?.shopifyVariantId,
+                            etsy_variant_id: vm.etsy?.etsyVariantId
                         }))
                     ).filter(p => p.shopify_variant_id && p.etsy_variant_id);
 
@@ -1729,8 +1729,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     .map(i => ({
                         shopify_id: i.shopify?.shopifyProductId,
                         etsy_id: i.etsy?.etsyListingId, // The parent listing ID
-                        shopify_variant_id: i.shopify?.id, // Using real ID instead of platformId array
-                        etsy_variant_id: i.etsy?.id, // Using real ID
+                        shopify_variant_id: i.shopify?.shopifyVariantId, // Using real ID instead of platformId array
+                        etsy_variant_id: i.etsy?.etsyVariantId, // Using real ID
                         shopify_stock: i.originalShopifyStock,
                         etsy_stock: i.originalEtsyStock,
                         title: i.shopify?.variantTitle || i.shopify?.name || i.etsy?.variantTitle || i.etsy?.name,
@@ -1742,7 +1742,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     g.items.filter(i => i.single).map((i: ReconcileItem) => ({
                         platform: i.single,
                         id: i.single === 'shopify' ? i.shopify?.shopifyProductId : i.etsy?.etsyListingId,
-                        variant_id: i.single === 'shopify' ? i.shopify?.id : i.etsy?.id,
+                        variant_id: i.single === 'shopify' ? i.shopify?.shopifyVariantId : i.etsy?.etsyVariantId,
                         stock: i.single === 'shopify' ? i.originalShopifyStock : i.originalEtsyStock,
                         title: i.single === 'shopify' ? (i.shopify?.variantTitle || i.shopify?.name) : (i.etsy?.variantTitle || i.etsy?.name),
                         sku: i.single === 'shopify' ? i.shopify?.sku : i.etsy?.sku
@@ -1757,8 +1757,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     .map(i => ({
                         shopify_id: i.shopify?.shopifyProductId,
                         etsy_id: i.etsy?.etsyListingId,
-                        shopify_variant_id: i.shopify?.id,
-                        etsy_variant_id: i.etsy?.id,
+                        shopify_variant_id: i.shopify?.shopifyVariantId,
+                        etsy_variant_id: i.etsy?.etsyVariantId,
                         shopify_stock: i.shopifyStock,
                         etsy_stock: i.etsyStock,
                         title: i.shopify?.variantTitle || i.shopify?.name || i.etsy?.variantTitle || i.etsy?.name,
