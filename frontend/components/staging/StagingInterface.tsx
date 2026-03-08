@@ -1107,6 +1107,31 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
                 setMatches(refreshedMatches);
                 setShowLocationModal(false);
+
+                // --- IMMEDIATELY SAVE MATCHES TO STAGING DB ---
+                try {
+                    const matchPayload = refreshedMatches.flatMap(m =>
+                        m.variantMatches.map(vm => ({
+                            shopify_variant_id: vm.shopify?.id,
+                            etsy_variant_id: vm.etsy?.id
+                        }))
+                    ).filter(p => p.shopify_variant_id && p.etsy_variant_id);
+
+                    if (matchPayload.length > 0) {
+                        fetch('/api/sync/match', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                shop_id: currentUserId,
+                                matches: matchPayload
+                            })
+                        }).catch(e => console.error('Failed to trigger background match save:', e));
+                    }
+                } catch (e) {
+                    console.error('Error orchestrating match payload:', e);
+                }
+                // ----------------------------------------------
+
                 openReconciliation(refreshedMatches);
             } else {
                 toast.error('Webhook request failed. Please try again.');
