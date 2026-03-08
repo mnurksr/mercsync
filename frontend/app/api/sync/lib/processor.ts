@@ -284,6 +284,24 @@ function parsePayload(payload: SyncPayload): ParsedPayload {
 async function finalizeInventory(shop: any, payload: SyncPayload) {
     const { initial_state, final_state } = payload;
 
+    // 1. Resolve Location ID.
+    let mainLocationId = shop.main_location_id;
+    if (!mainLocationId) {
+        const { data: locs } = await supabase.from('inventory_locations').select('id').eq('shop_id', shop.id).limit(1);
+        if (locs && locs.length > 0) {
+            mainLocationId = locs[0].id;
+        } else {
+            console.log(`[Sync] Creating default inventory location for shop ${shop.id}`);
+            const { data: newLoc } = await supabase.from('inventory_locations').insert({
+                shop_id: shop.id,
+                name: 'Main Location',
+                type: 'warehouse',
+                is_active: true
+            }).select('id').single();
+            if (newLoc) mainLocationId = newLoc.id;
+        }
+    }
+
     const matched = final_state?.matched_inventory || [];
     const unmatched = initial_state?.unmatched_inventory || [];
 
@@ -295,56 +313,69 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             const title = item.title || 'Unknown Product';
 
             try {
-                // Upsert Inventory Item
-                const { data: invItem, error } = await supabase
+                // Upsert Inventory Item safely without requiring a DB unique constraint on sku
+                let invItemId = null;
+                const { data: existingItem } = await supabase
                     .from('inventory_items')
-                    .upsert({
-                        shop_id: shop.id,
-                        sku: sku,
-                        name: title,
-                        shopify_product_id: item.shopify_id || item.product_id || null,
-                        shopify_variant_id: item.shopify_variant_id || (item.platform === 'shopify' ? item.variant_id : null) || null,
-                        etsy_listing_id: item.etsy_id || (item.platform === 'etsy' ? item.product_id : null) || null,
-                        etsy_variant_id: item.etsy_variant_id || (item.platform === 'etsy' ? item.variant_id : null) || null
-                    }, { onConflict: 'sku' })
                     .select('id')
-                    .single();
+                    .eq('sku', sku)
+                    .maybeSingle();
 
-                if (error) {
-                    console.error(`[Sync] Failed to upsert inventory item ${sku}:`, error.message);
-                    continue;
+                const itemPayload = {
+                    shop_id: shop.id,
+                    sku: sku,
+                    name: title,
+                    shopify_product_id: item.shopify_id || item.product_id || null,
+                    shopify_variant_id: item.shopify_variant_id || (item.platform === 'shopify' ? item.variant_id : null) || null,
+                    etsy_listing_id: item.etsy_id || (item.platform === 'etsy' ? item.product_id : null) || null,
+                    etsy_variant_id: item.etsy_variant_id || (item.platform === 'etsy' ? item.variant_id : null) || null
+                };
+
+                if (existingItem) {
+                    const { error } = await supabase.from('inventory_items').update(itemPayload).eq('id', existingItem.id);
+                    if (error) console.error(`[Sync] Failed to update inventory item ${sku}:`, error.message);
+                    invItemId = existingItem.id;
+                } else {
+                    const { data: newItem, error } = await supabase.from('inventory_items').insert(itemPayload).select('id').single();
+                    if (error) {
+                        console.error(`[Sync] Failed to insert inventory item ${sku}:`, error.message);
+                        continue;
+                    }
+                    if (newItem) invItemId = newItem.id;
                 }
-
-                if (invItem && shop.main_location_id) {
+                if (invItemId && mainLocationId) {
                     // Update Levels
                     if (isMatched) {
                         if (item.shopify_variant_id) {
-                            await supabase.from('inventory_levels').upsert({
-                                inventory_item_id: invItem.id,
-                                location_id: shop.main_location_id,
+                            const { error: err1 } = await supabase.from('inventory_levels').upsert({
+                                inventory_item_id: invItemId,
+                                location_id: mainLocationId,
                                 shop_id: shop.id,
                                 market_iso: 'SHOPIFY',
                                 available_stock: item.shopify_stock || 0
                             }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+                            if (err1) console.error(err1.message);
                         }
                         if (item.etsy_variant_id) {
-                            await supabase.from('inventory_levels').upsert({
-                                inventory_item_id: invItem.id,
-                                location_id: shop.main_location_id,
+                            const { error: err2 } = await supabase.from('inventory_levels').upsert({
+                                inventory_item_id: invItemId,
+                                location_id: mainLocationId,
                                 shop_id: shop.id,
                                 market_iso: 'ETSY',
                                 available_stock: item.etsy_stock || 0
                             }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+                            if (err2) console.error(err2.message);
                         }
                     } else {
                         const market = item.platform === 'shopify' ? 'SHOPIFY' : 'ETSY';
-                        await supabase.from('inventory_levels').upsert({
-                            inventory_item_id: invItem.id,
-                            location_id: shop.main_location_id,
+                        const { error: err3 } = await supabase.from('inventory_levels').upsert({
+                            inventory_item_id: invItemId,
+                            location_id: mainLocationId,
                             shop_id: shop.id,
                             market_iso: market,
                             available_stock: item.stock || 0
                         }, { onConflict: 'inventory_item_id,location_id,market_iso' });
+                        if (err3) console.error(err3.message);
                     }
                 }
             } catch (err: any) {
