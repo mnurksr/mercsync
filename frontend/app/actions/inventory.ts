@@ -3,22 +3,20 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
-export type InventoryItem = {
+export type ListingItem = {
     id: string
-    name: string
+    title: string
     imageUrl: string | null
-    shopifyStock: number
-    etsyStock: number
+    totalStock: number
+    variantsCount: number
     status: string
-    platform: 'shopify' | 'etsy' | 'both'
-    shopifyInventoryItemId: string | null
-    etsyVariantId: string | null
+    platform: 'shopify' | 'etsy'
 }
 
 /**
- * Get products from inventory_items table
+ * Get products from staging tables grouped by listing
  */
-export async function getInventoryItems(searchQuery?: string, ownerId?: string): Promise<InventoryItem[]> {
+export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQuery?: string, ownerId?: string): Promise<ListingItem[]> {
     let supabase;
     let resolvedOwnerId = ownerId;
 
@@ -41,77 +39,80 @@ export async function getInventoryItems(searchQuery?: string, ownerId?: string):
 
     if (!shop) return []
 
-    // Build query to inventory_items table
+    const tableName = platform === 'shopify' ? 'staging_shopify_products' : 'staging_etsy_products'
+    const parentIdField = platform === 'shopify' ? 'shopify_product_id' : 'etsy_listing_id'
+
     let query = supabase
-        .from('inventory_items')
-        .select('id, name, image_url, status, shopify_stock_snapshot, etsy_stock_snapshot, shopify_inventory_item_id, etsy_variant_id')
+        .from(tableName)
+        .select('*')
         .eq('shop_id', shop.id)
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
 
     if (searchQuery) {
-        query = query.ilike('name', `%${searchQuery}%`)
+        // Search by parent product title or variant SKU
+        query = query.or(`product_title.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%`)
     }
 
     const { data: items, error } = await query
 
     if (error) {
-        console.error('Error fetching inventory items:', error)
+        console.error(`Error fetching listings for ${platform}:`, error)
         return []
     }
 
-    const results = (items || []).map(item => {
-        // Determine platform based on ID fields
-        const hasShopify = !!item.shopify_inventory_item_id
-        const hasEtsy = !!item.etsy_variant_id
+    // Group variants into Listings
+    const groups: { [key: string]: ListingItem } = {};
 
-        let platform: 'shopify' | 'etsy' | 'both' = 'shopify'
-        if (hasShopify && hasEtsy) {
-            platform = 'both'
-        } else if (hasEtsy && !hasShopify) {
-            platform = 'etsy'
-        } else if (hasShopify && !hasEtsy) {
-            platform = 'shopify'
+    (items || []).forEach(item => {
+        const groupId = item[parentIdField] || item.id;
+
+        if (!groups[groupId]) {
+            groups[groupId] = {
+                id: groupId,
+                title: item.product_title || item.name || 'Unnamed Product',
+                imageUrl: item.image_url,
+                totalStock: 0,
+                variantsCount: 0,
+                status: 'active',
+                platform
+            };
         }
 
-        return {
-            id: item.id,
-            name: item.name || 'Unnamed Product',
-            imageUrl: item.image_url,
-            shopifyStock: item.shopify_stock_snapshot ?? 0,
-            etsyStock: item.etsy_stock_snapshot ?? 0,
-            status: item.status || 'unknown',
-            platform,
-            shopifyInventoryItemId: item.shopify_inventory_item_id,
-            etsyVariantId: item.etsy_variant_id
-        }
-    })
+        groups[groupId].totalStock += (item.stock_quantity || 0);
+        groups[groupId].variantsCount += 1;
 
-    // Sort: 'both' platform items first, then others
-    return results.sort((a, b) => {
-        if (a.platform === 'both' && b.platform !== 'both') return -1
-        if (a.platform !== 'both' && b.platform === 'both') return 1
-        return 0
-    })
+        // If any variant has issues, flag it.
+        if (item.status !== 'active') {
+            groups[groupId].status = item.status;
+        }
+    });
+
+    const results = Object.values(groups);
+
+    // Compute derived statuses
+    results.forEach(r => {
+        if (r.totalStock <= 0) r.status = 'out';
+        else if (r.totalStock < 5) r.status = 'low';
+        else if (r.status === 'active') r.status = 'synced'; // General OK status
+    });
+
+    return results.sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /**
- * Get inventory stats for KPI cards
+ * Get inventory stats for KPI cards based on the active platform
  */
-export async function getInventoryStats(): Promise<{
+export async function getInventoryStats(platform: 'shopify' | 'etsy'): Promise<{
     total: number
     lowStock: number
     outOfStock: number
-    shopifyOnly: number
-    etsyOnly: number
 }> {
-    const items = await getInventoryItems()
+    const items = await getPlatformListings(platform)
 
     return {
         total: items.length,
         lowStock: items.filter(i => i.status === 'low').length,
-        outOfStock: items.filter(i => i.status === 'out').length,
-        shopifyOnly: items.filter(i => i.platform === 'shopify').length,
-        etsyOnly: items.filter(i => i.platform === 'etsy').length
+        outOfStock: items.filter(i => i.status === 'out').length
     }
 }
 

@@ -1190,11 +1190,12 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         const sourceId = platform === 'shopify' ? group.items[0]?.shopify?.shopifyProductId : group.items[0]?.etsy?.etsyListingId;
 
         // Detect if this is a matched product with variant mismatch (target already exists)
+        // Ensure we pull the actual platform ID from the underlying products, not the group ID which could be a UUID fallback.
         let targetId: string | undefined;
-        if (target === 'shopify' && group.shopify) {
-            targetId = group.shopify.id; // Existing Shopify product ID
-        } else if (target === 'etsy' && group.etsy) {
-            targetId = group.etsy.id; // Existing Etsy listing ID
+        if (target === 'shopify' && group.shopify && group.shopify.variants.length > 0) {
+            targetId = group.shopify.variants[0].shopifyProductId || undefined;
+        } else if (target === 'etsy' && group.etsy && group.etsy.variants.length > 0) {
+            targetId = group.etsy.variants[0].etsyListingId || undefined;
         }
 
         const existing = sourceId ? crossListing[listKey].find(i => i.source_id === sourceId) : undefined;
