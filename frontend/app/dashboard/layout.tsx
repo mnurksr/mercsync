@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
+import DashboardShell from '@/components/dashboard/DashboardShell';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
     // RUNS ON THE SERVER = NO FLASHING OR JANK IN THE UI
@@ -21,7 +22,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         }
 
         // Passed all guards -> Render dashboard UI
-        return <>{children}</>;
+        return (
+            <DashboardShell>
+                {children}
+            </DashboardShell>
+        );
 
     } catch (e) {
         console.error('SERVER GUARD: Error checking dashboard state:', e);
