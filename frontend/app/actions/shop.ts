@@ -36,7 +36,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
         }
     }
 
-    let shopQuery = supabase.from('shops').select('shop_domain, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token');
+    let shopQuery = supabase.from('shops').select('shop_domain, shop_name, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token');
 
     if (testShopDomain) {
         // Test mode: bypass auth using admin client, query by shop domain
@@ -143,7 +143,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
 
             return {
                 connected: isConnected,
-                shop_domain: data.shop_domain,
+                shop_domain: data.shop_name || data.shop_domain, // Prefer Etsy shop name for display
                 last_sync: data.created_at ? new Date(data.created_at).toLocaleString() : 'Just now',
                 platform: 'etsy',
                 owner_id: data.owner_id,

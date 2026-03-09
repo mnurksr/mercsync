@@ -117,11 +117,16 @@ export async function getMe(accessToken: string) {
  */
 export async function getListingCounts(shopId: string | number, accessToken: string) {
     const states = ['active', 'draft', 'expired', 'sold_out', 'inactive'];
-    const counts: Record<string, number> = {};
+    const counts: Record<string, number> = {
+        active: 0, draft: 0, expired: 0, sold_out: 0, inactive: 0
+    };
+
+    console.log(`[Etsy API] Fetching counts for shop ${shopId}...`);
 
     await Promise.all(states.map(async (state) => {
         try {
             const res = await etsyFetch(`/shops/${shopId}/listings?state=${state}&limit=1`, accessToken);
+            console.log(`[Etsy API] Count for ${state}: ${res.count}`);
             counts[state] = res.count || 0;
         } catch (err) {
             console.error(`[Etsy] Failed to fetch counts for state ${state}:`, err);

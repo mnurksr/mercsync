@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         }
 
         // 4. Update Database (public.shops) - Manual Check-then-Save (Matches n8n logic and bypasses missing unique constraints)
-        const shopUpdate = {
+        const shopUpdate: any = {
             owner_id,
             etsy_connected: true,
             etsy_access_token: access_token,
@@ -59,13 +59,14 @@ export async function GET(req: NextRequest) {
             etsy_shop_id: shopData.shop_id.toString(),
             etsy_token_expires_at: expiresAt,
             is_active: true,
-            last_token_refresh_at: new Date().toISOString()
+            last_token_refresh_at: new Date().toISOString(),
+            shop_name: shopData.shop_name // Use Etsy shop name
         };
 
         // Check if a record already exists for this owner
         const { data: existingShop, error: fetchError } = await supabase
             .from('shops')
-            .select('id')
+            .select('id, initial_product_counts, shop_name')
             .eq('owner_id', owner_id)
             .maybeSingle();
 
@@ -107,41 +108,62 @@ export async function GET(req: NextRequest) {
 
         // 5. Fetch Listing Counts separately (Don't break the flow if this fails)
         try {
+            console.log('[Etsy Callback] Starting listing counts fetch...');
             const counts = await etsyApi.getListingCounts(shopData.shop_id, access_token);
-            await supabase
+
+            // Optimization: Etsy shop detail already has active count, use it as it's more reliable
+            if (shopData.listing_active_count !== undefined) {
+                console.log(`[Etsy Callback] Using active count from shop details: ${shopData.listing_active_count}`);
+                counts.active = shopData.listing_active_count;
+            }
+
+            // MERGE with existing counts to avoid overwriting Shopify data
+            const existingCounts = existingShop?.initial_product_counts || {};
+            const finalCounts = {
+                ...existingCounts,
+                etsy: counts
+            };
+
+            console.log('[Etsy Callback] Merged counts:', JSON.stringify(finalCounts));
+
+            const { error: countUpdateError } = await supabase
                 .from('shops')
                 .update({
-                    shop_name: shopData.shop_name,
-                    initial_product_counts: { etsy: counts }
+                    initial_product_counts: finalCounts
                 })
                 .eq('owner_id', owner_id);
+
+            if (countUpdateError) {
+                console.error('[Etsy Callback] Error updating listing counts in DB:', countUpdateError);
+            } else {
+                console.log('[Etsy Callback] Listing counts successfully merged and updated.');
+            }
         } catch (countError) {
-            console.error('[Etsy Callback] Error updating listing counts:', countError);
+            console.error('[Etsy Callback] Error during listing counts process:', countError);
             // Non-blocking error
         }
 
-        // 6. Redirect back to Shopify Admin App (Strictly match working n8n structure)
-        // We need the shop_domain to build the Shopify Admin URL. 
-        // We fetch it from the record we just updated.
+        // 6. Redirect back to Shopify Admin App
         const { data: finalShop } = await supabase
             .from('shops')
             .select('shop_domain')
             .eq('owner_id', owner_id)
-            .single();
+            .maybeSingle();
 
         const shopDomain = finalShop?.shop_domain;
         const clientId = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
 
-        // If we have shopDomain, redirect to Shopify Admin. Otherwise fallback.
+        // Construct redirection URL
         let finalRedirect = return_url;
         if (shopDomain && !finalRedirect) {
-            finalRedirect = `https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/apps/${process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1'}`;
+            const shopName = shopDomain.replace('.myshopify.com', '');
+            const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
+            finalRedirect = `https://admin.shopify.com/store/${shopName}/apps/${appHandle}`;
         } else if (!finalRedirect) {
-            finalRedirect = `${new URL(req.url).origin}/dashboard/settings`;
+            finalRedirect = `${new URL(req.url).origin}/setup`;
         }
 
-        console.log(`[Etsy Callback] Success for user ${owner_id}, shop ${shopData.shop_name}. Redirecting to ${finalRedirect}`);
-
+        console.log(`[Etsy Callback] Success for user ${owner_id}. Redirecting to ${finalRedirect}`);
         return NextResponse.redirect(finalRedirect);
 
     } catch (err: any) {
