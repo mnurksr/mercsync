@@ -11,6 +11,7 @@ import {
 import { useToast } from "@/components/ui/useToast";
 import { useAuth } from '@/components/AuthProvider';
 import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/components/dashboard/CloneModal';
+import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
 
 export default function ProductsPage() {
     const toast = useToast();
@@ -41,6 +42,9 @@ export default function ProductsPage() {
         sourceData: null,
         targetPlatform: 'shopify'
     });
+
+    const [syncJobId, setSyncJobId] = useState<string | null>(null);
+    const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -199,7 +203,8 @@ export default function ProductsPage() {
 
             if (!res.ok) throw new Error('Failed to start sync');
 
-            router.push(`/setup/syncing?job_id=${job_id}`);
+            setSyncJobId(job_id);
+            setIsProgressModalOpen(true);
         } catch (err) {
             console.error('Save error:', err);
             toast.error("Failed to start synchronization.");
@@ -504,11 +509,11 @@ export default function ProductsPage() {
                                                             onClick={(e) => handleCloneClick(item, e)}
                                                             disabled={item.matchStatus === 'synced'}
                                                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
-                                                                ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed opacity-0' // Hide for synced
+                                                                ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed grayscale'
                                                                 : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
                                                                 }`}
                                                         >
-                                                            <Copy className="w-3.5 h-3.5" />
+                                                            <Copy className="w-3.5 h-3.5 text-gray-400" />
                                                             Clone
                                                         </button>
                                                     )}
@@ -620,12 +625,21 @@ export default function ProductsPage() {
             {/* Modals */}
             <CloneModal
                 isOpen={cloneModal.isOpen}
-                onClose={() => setCloneModal({ isOpen: false, sourceData: null, targetPlatform: 'shopify' })}
+                onClose={() => setCloneModal({ isOpen: false, sourceData: null, targetPlatform: 'shopify', initialData: undefined, targetId: undefined })}
                 onConfirm={handleCloneConfirm}
                 sourceData={cloneModal.sourceData}
                 targetPlatform={cloneModal.targetPlatform}
                 initialData={cloneModal.initialData}
                 targetId={cloneModal.targetId}
+            />
+            <SyncProgressModal
+                isOpen={isProgressModalOpen}
+                jobId={syncJobId}
+                onClose={() => {
+                    setIsProgressModalOpen(false);
+                    loadData(); // Reload data after progress modal closes
+                    setCrossListing({ to_shopify: [], to_etsy: [] }); // Clear queue
+                }}
             />
         </div>
     );
