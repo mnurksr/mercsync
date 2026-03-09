@@ -95,7 +95,7 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
         });
 
         try {
-            const response = await fetch('https://api.mercsync.com/webhook/match-products', {
+            const response = await fetch('/api/mapper/match-products', {
                 method: 'POST',
                 body: formData,
             });

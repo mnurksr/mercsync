@@ -1,95 +1,119 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 
-export async function POST(request: Request) {
+const PLANS: Record<string, { name: string; price: number }> = {
+    starter: { name: 'Starter', price: 29 },
+    professional: { name: 'Professional', price: 79 },
+    enterprise: { name: 'Enterprise', price: 199 }
+};
+
+const SHOPIFY_API_VERSION = '2024-01';
+
+/**
+ * POST /api/create-payment
+ * Replaces: https://api.mercsync.com/webhook/generate-payment-link
+ */
+export async function POST(req: NextRequest) {
     try {
-        const body = await request.json();
+        const body = await req.json();
         const { user_id, product_id } = body;
 
         console.log('[API/create-payment] Received request for:', { user_id, product_id });
 
-        const webhookUrl = 'https://api.mercsync.com/webhook/generate-payment-link';
-
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ user_id, product_id }),
-        });
-
-        console.log('[API/create-payment] Webhook status:', response.status);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[API/create-payment] Webhook error:', errorText);
-            return NextResponse.json(
-                { error: `Webhook failed with status: ${response.status}`, details: errorText },
-                { status: response.status }
-            );
+        if (!user_id || !product_id) {
+            return NextResponse.json({ error: 'user_id and product_id are required' }, { status: 400 });
         }
 
-        const data = await response.json();
-        console.log('[API/create-payment] Webhook data:', JSON.stringify(data, null, 2));
+        const planKey = (product_id || 'starter').toLowerCase();
+        const planConfig = PLANS[planKey] || PLANS.starter;
 
-        // Helper function to recursively find a payment URL in any structure
-        const findPaymentUrl = (obj: any): string | null => {
-            if (!obj) return null;
+        const supabase = createAdminClient();
 
-            // Arrays: check each element
-            if (Array.isArray(obj)) {
-                for (const item of obj) {
-                    const url = findPaymentUrl(item);
-                    if (url) return url;
-                }
-                return null;
-            }
+        // Lookup shop credentials
+        const { data: shop, error: shopError } = await supabase
+            .from('shops')
+            .select('*')
+            .eq('owner_id', user_id)
+            .maybeSingle();
 
-            // Strings: checks if strictly the URL (unlikely for root object but possible)
-            if (typeof obj === 'string' && (obj.startsWith('http') || obj.startsWith('/'))) {
-                return obj;
-            }
+        if (shopError || !shop || !shop.access_token || !shop.shop_domain) {
+            console.error('[API/create-payment] Shop not found or not connected:', shopError);
+            return NextResponse.json({ error: 'Shop not found or Shopify not connected' }, { status: 404 });
+        }
 
-            // Objects: Check specific keys first, then recursive search
-            if (typeof obj === 'object') {
-                // Priority keys
-                if (obj.checkout_url) return obj.checkout_url;
-                if (obj.url) return obj.url;
-                if (obj.payment_link) return obj.payment_link;
+        // Prepare return URL
+        const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || "mercsync-1";
+        const shopifyAppUrl = `https://admin.shopify.com/store/${shop.shop_domain.replace('.myshopify.com', '')}/apps/${appHandle}`;
+        const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop.shop_domain}`;
 
-                // Recursive search in keys
-                for (const key in obj) {
-                    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                        const val = obj[key];
-                        // Avoid recursing into purely metadata-like strings/numbers if we can helps it,
-                        // but complex objects need search.
-                        if (typeof val === 'object' || Array.isArray(val)) {
-                            const found = findPaymentUrl(val);
-                            if (found) return found;
-                        }
+        const mutation = `
+            mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
+                appSubscriptionCreate(
+                    name: $name,
+                    returnUrl: $returnUrl,
+                    test: $test,
+                    lineItems: $lineItems
+                ) {
+                    confirmationUrl
+                    userErrors {
+                        field
+                        message
                     }
                 }
             }
+        `;
 
-            return null;
+        const variables = {
+            name: `MercSync ${planConfig.name}`,
+            returnUrl,
+            test: process.env.NODE_ENV !== 'production', // Use test mode outside production
+            lineItems: [
+                {
+                    plan: {
+                        appRecurringPricingDetails: {
+                            price: {
+                                amount: planConfig.price,
+                                currencyCode: 'USD'
+                            },
+                            interval: 'EVERY_30_DAYS'
+                        }
+                    }
+                }
+            ]
         };
 
-        const redirectUrl = findPaymentUrl(data);
+        const graphqlUrl = `https://${shop.shop_domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
 
-        if (!redirectUrl) {
-            console.error('[API/create-payment] No redirect URL found in response');
-            return NextResponse.json(
-                { error: 'No redirect URL found in webhook response', data },
-                { status: 500 }
-            );
+        const response = await fetch(graphqlUrl, {
+            method: 'POST',
+            headers: {
+                'X-Shopify-Access-Token': shop.access_token,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query: mutation, variables })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            return NextResponse.json({ error: `Shopify API error: ${response.status}`, details: errorText }, { status: 502 });
         }
 
-        return NextResponse.json({ url: redirectUrl });
+        const result = await response.json();
+        const confirmationUrl = result.data?.appSubscriptionCreate?.confirmationUrl;
 
-    } catch (error) {
+        if (!confirmationUrl) {
+            const errors = result.data?.appSubscriptionCreate?.userErrors;
+            console.error('[API/create-payment] Shopify User Errors:', errors);
+            return NextResponse.json({
+                error: 'Could not generate confirmation URL',
+                details: errors
+            }, { status: 500 });
+        }
+
+        return NextResponse.json({ url: confirmationUrl });
+
+    } catch (error: any) {
         console.error('[API/create-payment] Internal Error:', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
     }
 }

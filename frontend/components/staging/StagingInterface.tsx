@@ -737,7 +737,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 shopify_location_id: selectedLocation
             };
 
-            const req = await fetch('https://api.mercsync.com/webhook/location-id', {
+            const req = await fetch('/api/sync/location-id', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1123,7 +1123,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         setAiLoading(true);
 
         try {
-            const res = await fetch('https://api.mercsync.com/webhook/auto-match', {
+            const res = await fetch('/api/sync/auto-match', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: currentUserId })
