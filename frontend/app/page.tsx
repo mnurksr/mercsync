@@ -33,7 +33,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
 
       if (!setupStatus.isComplete) {
         redirect(`/setup${queryString}`);
-      } else if (!shopData.plan_type || shopData.plan_type === 'guest' || shopData.plan_type === 'none' || shopData.plan_type === 'pending') {
+      } else if (!shopData.plan_type || ['guest', 'none', 'pending', 'basic'].includes(shopData.plan_type.toLowerCase())) {
         redirect(`/billing${queryString}`);
       } else {
         redirect(`/dashboard${queryString}`);

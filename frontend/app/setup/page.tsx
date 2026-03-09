@@ -130,7 +130,13 @@ export default function SetupPage() {
             toast.error('User not authenticated. Please log in first.');
             return;
         }
-        window.location.href = `/api/auth/etsy/start?user_id=${resolvedUserId}`;
+        // Use window.top.location.href to break out of Shopify iframe for Etsy OAuth
+        // This prevents the 403 Forbidden error caused by iframe blocking.
+        if (window.top) {
+            window.top.location.href = `/api/auth/etsy/start?user_id=${resolvedUserId}`;
+        } else {
+            window.location.href = `/api/auth/etsy/start?user_id=${resolvedUserId}`;
+        }
     };
 
     const handleMatch = () => {
