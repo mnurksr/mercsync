@@ -296,5 +296,5 @@ export async function setShopPlanPending(shopDomain: string) {
         .from('shops')
         .update({ plan_type: 'pending' })
         .eq('shop_domain', shopDomain)
-        .or('plan_type.eq.guest,plan_type.eq.none,plan_type.is.null');
+        .or('plan_type.eq.guest,plan_type.eq.none,plan_type.eq.basic,plan_type.is.null');
 }
