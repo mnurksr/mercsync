@@ -24,7 +24,9 @@ export async function GET(req: NextRequest) {
         const state = encodeState(userId, verifier, returnUrl);
 
         // 3. Callback URL (Must match Etsy Dev Portal)
-        const redirectUri = `${new URL(req.url).origin}/api/auth/etsy/callback`;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+        const redirectUri = `${appUrl}/api/auth/etsy/callback`;
+
 
         // 4. Scopes
         const scopes = [

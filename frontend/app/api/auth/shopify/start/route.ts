@@ -32,8 +32,10 @@ export async function GET(req: NextRequest) {
         // 3. Scopes
         const scopes = 'read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_locations';
 
-        // 4. Callback URL
-        const redirectUri = `${new URL(req.url).origin}/api/auth/shopify/callback`;
+        // 4. Callback URL (Must match what is whitelisted in Shopify Partner Dashboard)
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+        const redirectUri = `${appUrl}/api/auth/shopify/callback`;
+
 
         // 5. Build Authorization URL
         const authUrl = new URL(`https://${shop}/admin/oauth/authorize`);
