@@ -12,9 +12,9 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
         }
 
-        const clientId = process.env.ETSY_CLIENT_ID;
+        const clientId = process.env.ETSY_API_KEY || process.env.ETSY_CLIENT_ID;
         if (!clientId) {
-            return NextResponse.json({ error: 'ETSY_CLIENT_ID not configured' }, { status: 500 });
+            return NextResponse.json({ error: 'ETSY_API_KEY not configured' }, { status: 500 });
         }
 
         // 1. Generate PKCE
