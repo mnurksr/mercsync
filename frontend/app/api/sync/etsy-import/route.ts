@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
                                 sku: variant.sku || listing.skus?.[0] || null,
                                 price: price,
                                 currency: currency,
-                                image_url: listing.Images?.[0]?.url_fullxfull || null,
+                                image_url: listing.images?.[0]?.url_fullxfull || null,
                                 stock_quantity: quantity,
                                 status: listing.state,
                                 product_title: listing.title,

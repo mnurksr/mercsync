@@ -147,7 +147,7 @@ export async function getListingsByState(
     offset: number = 0,
     limit: number = 100
 ): Promise<any> {
-    const url = `/shops/${shopId}/listings?state=${state}&limit=${limit}&offset=${offset}&includes=Images`;
+    const url = `/shops/${shopId}/listings?state=${state}&limit=${limit}&offset=${offset}&includes=images`;
     const data = await etsyFetch(url, accessToken);
 
     // If we have more pages, fetch them too? 
