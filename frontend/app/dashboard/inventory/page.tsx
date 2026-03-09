@@ -10,7 +10,7 @@ import {
 import { useToast } from "@/components/ui/useToast";
 
 export default function InventoryPage() {
-    const { toast } = useToast();
+    const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [items, setItems] = useState<InventoryItem[]>([]);
