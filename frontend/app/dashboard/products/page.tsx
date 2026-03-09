@@ -15,7 +15,7 @@ import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/compo
 export default function ProductsPage() {
     const toast = useToast();
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, supabase } = useAuth();
     const [activePlatform, setActivePlatform] = useState<'shopify' | 'etsy'>('shopify');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
@@ -171,14 +171,22 @@ export default function ProductsPage() {
     const saveChanges = async () => {
         setIsSaving(true);
         try {
-            if (!user?.id) {
-                toast.error("Please login to sync.");
+            // Robust auth check: Use state user first, then try to fetch session directly
+            let currentUserId = user?.id;
+
+            if (!currentUserId && supabase) {
+                const { data: { session } } = await supabase.auth.getSession();
+                currentUserId = session?.user?.id;
+            }
+
+            if (!currentUserId) {
+                toast.error("Please login to sync (Session not found).");
                 return;
             }
 
             const job_id = crypto.randomUUID();
             const payload = {
-                user_id: user.id,
+                user_id: currentUserId,
                 job_id,
                 initial_state: { matched_inventory: [], unmatched_inventory: [] },
                 final_state: {
@@ -275,27 +283,40 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Platform Toggle */}
-                <div className="bg-gray-100 p-1.5 rounded-xl flex items-center shadow-inner">
-                    <button
-                        onClick={() => setActivePlatform('shopify')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activePlatform === 'shopify'
-                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
-                            : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                    >
-                        <ShoppingBag className={`w-4 h-4 ${activePlatform === 'shopify' ? 'text-blue-600' : ''}`} />
-                        Shopify
-                    </button>
-                    <button
-                        onClick={() => setActivePlatform('etsy')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activePlatform === 'etsy'
-                            ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
-                            : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                    >
-                        <Store className={`w-4 h-4 ${activePlatform === 'etsy' ? 'text-orange-500' : ''}`} />
-                        Etsy
-                    </button>
+                {/* Header Actions */}
+                <div className="flex items-center gap-4">
+                    {selectedItems.size > 0 && (
+                        <button
+                            onClick={handleBulkClone}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all animate-in zoom-in-95"
+                        >
+                            <Copy className="w-4 h-4" />
+                            Add {selectedItems.size} to Queue
+                        </button>
+                    )}
+
+                    <div className="bg-gray-100 p-1.5 rounded-xl flex items-center shadow-inner">
+                        <button
+                            onClick={() => setActivePlatform('shopify')}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activePlatform === 'shopify'
+                                ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
+                                : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                        >
+                            <ShoppingBag className={`w-4 h-4 ${activePlatform === 'shopify' ? 'text-blue-600' : ''}`} />
+                            Shopify
+                        </button>
+                        <button
+                            onClick={() => setActivePlatform('etsy')}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activePlatform === 'etsy'
+                                ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/50'
+                                : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                        >
+                            <Store className={`w-4 h-4 ${activePlatform === 'etsy' ? 'text-orange-500' : ''}`} />
+                            Etsy
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -461,21 +482,7 @@ export default function ProductsPage() {
                                                     {getPlatformStatusBadge(item.platformStatus)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    {isQueued ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 rounded-md text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                                                                <Loader2 className="w-3 h-3 animate-spin" /> Queued
-                                                            </span>
-                                                            <button
-                                                                onClick={(e) => handleCloneClick(item, e)}
-                                                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-indigo-600"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        getMatchStatusBadge(item.matchStatus)
-                                                    )}
+                                                    {getMatchStatusBadge(item.matchStatus)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`text-sm font-bold ${item.totalStock <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
@@ -483,17 +490,33 @@ export default function ProductsPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button
-                                                        onClick={(e) => handleCloneClick(item, e)}
-                                                        disabled={item.matchStatus === 'synced'}
-                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
-                                                            ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
-                                                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
-                                                            }`}
-                                                    >
-                                                        <Copy className="w-3.5 h-3.5" />
-                                                        Clone
-                                                    </button>
+                                                    {isQueued ? (
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                                                                Queued
+                                                            </span>
+                                                            <button
+                                                                onClick={(e) => handleCloneClick(item, e)}
+                                                                className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors shadow-sm"
+                                                                title="Edit queue details"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={(e) => handleCloneClick(item, e)}
+                                                            disabled={item.matchStatus === 'synced'}
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
+                                                                ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed opacity-0' // Hide for synced
+                                                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                                                                }`}
+                                                        >
+                                                            <Copy className="w-3.5 h-3.5" />
+                                                            Clone
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
 
@@ -560,71 +583,40 @@ export default function ProductsPage() {
                     </table>
                 </div>
 
-                {/* Bulk Action & Confirmation Floating Bar */}
-                {(selectedItems.size > 0 || totalQueued > 0) && (
+                {/* Simplified Confirmation Floating Bar */}
+                {totalQueued > 0 && (
                     <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5">
-                        <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl border border-gray-800 flex items-center gap-8 min-w-[500px]">
-                            {/* Selected Counter (If any) */}
-                            {selectedItems.size > 0 && (
-                                <div className="flex items-center gap-3 pr-8 border-r border-gray-800">
-                                    <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-xs">
-                                        {selectedItems.size}
-                                    </div>
-                                    <div className="text-sm">
-                                        <p className="font-bold">Selected</p>
-                                        <button
-                                            onClick={handleBulkClone}
-                                            className="text-indigo-400 hover:text-indigo-300 font-semibold text-[11px] underline underline-offset-2"
-                                        >
-                                            Add to Queue
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
+                        <div className="bg-gray-900/95 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-12 ring-1 ring-white/20">
                             {/* Queued Items Counter */}
-                            <div className="flex items-center gap-3 flex-1">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${totalQueued > 0 ? 'bg-emerald-500' : 'bg-gray-700'}`}>
-                                    {totalQueued}
+                            <div className="flex items-center gap-4">
+                                <div className="relative">
+                                    <div className="w-10 h-10 rounded-full bg-indigo-500 font-bold text-sm flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                        {totalQueued}
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-400 rounded-full animate-ping"></div>
                                 </div>
-                                <div className="text-sm">
-                                    <p className="font-bold">Queued for Sync</p>
-                                    <p className="text-gray-400 text-xs">{totalQueued > 0 ? 'Ready to synchronize' : 'No clones queued yet'}</p>
+                                <div>
+                                    <p className="font-bold text-sm tracking-tight text-white/90">Queued for Sync</p>
+                                    <p className="text-gray-400 text-[11px] font-medium uppercase tracking-wider">Ready to synchronize</p>
                                 </div>
                             </div>
 
-                            {/* Final Action Buttons */}
                             <div className="flex items-center gap-3">
-                                {totalQueued > 0 && (
-                                    <button
-                                        onClick={() => setCrossListing({ to_shopify: [], to_etsy: [] })}
-                                        className="px-4 py-2.5 text-xs font-bold text-gray-400 hover:text-white"
-                                    >
-                                        Clear
-                                    </button>
-                                )}
+                                <button
+                                    onClick={() => setCrossListing({ to_shopify: [], to_etsy: [] })}
+                                    className="px-4 py-2.5 text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                                >
+                                    Clear
+                                </button>
                                 <button
                                     onClick={saveChanges}
-                                    disabled={totalQueued === 0 || isSaving}
-                                    className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${totalQueued > 0
-                                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 active:scale-95'
-                                        : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                                        }`}
+                                    disabled={isSaving}
+                                    className="px-8 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30 active:scale-95 whitespace-nowrap"
                                 >
                                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                     Confirm & Sync Clones
                                 </button>
                             </div>
-
-                            {/* Close selection button (mini) */}
-                            {selectedItems.size > 0 && (
-                                <button
-                                    onClick={() => setSelectedItems(new Set())}
-                                    className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 hover:bg-red-600 transition-colors"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            )}
                         </div>
                     </div>
                 )}
