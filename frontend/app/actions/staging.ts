@@ -118,7 +118,7 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
     // Get full shop info using the ID we determined
     const { data: shop } = await supabase
         .from('shops')
-        .select('id, shopify_connected, etsy_connected, is_active, access_token, initial_product_counts, plan_type')
+        .select('id, shop_domain, shopify_connected, etsy_connected, is_active, access_token, etsy_access_token, initial_product_counts, plan_type')
         .eq('id', shopId)
         .maybeSingle()
 
@@ -136,10 +136,9 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
         }
     }
 
-    // Connection status with backwards compatibility
-    const shopifyConnected = shop.shopify_connected === true ||
-        (shop.is_active === true && !!shop.access_token)
-    const etsyConnected = shop.etsy_connected === true
+    // Connection status: Trust the token presence as the source of truth
+    const shopifyConnected = !!shop.access_token && !!shop.shop_domain
+    const etsyConnected = !!shop.etsy_access_token
 
     // Count staging products
     const [shopifyCount, etsyCount, inventoryCount] = await Promise.all([

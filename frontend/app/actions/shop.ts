@@ -83,12 +83,8 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 }
             }
 
-            // Connection logic with backwards compatibility:
-            // 1. If shopify_connected is explicitly true -> connected
-            // 2. Fallback: if is_active=true AND access_token exists -> connected (old n8n behavior)
-            const isConnected =
-                data.shopify_connected === true ||
-                (data.is_active === true && !!data.access_token && !!data.shop_domain);
+            // Connection logic: Trust the token presence as the ultimate source of truth
+            const isConnected = !!data.access_token && !!data.shop_domain;
 
             return {
                 connected: isConnected,
@@ -98,8 +94,8 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 owner_id: data.owner_id,
                 plan_type: data.plan_type,
                 debugMessage: isConnected
-                    ? `Connected (shopify_connected=${data.shopify_connected}, is_active=${data.is_active})`
-                    : `Not connected. shopify_connected=${data.shopify_connected}, is_active=${data.is_active}, has_token=${!!data.access_token}`
+                    ? `Connected (has_token=${!!data.access_token})`
+                    : `Not connected. has_token=${!!data.access_token}`
             }
         }
 
@@ -134,12 +130,8 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 }
             }
 
-            // Connection logic:
-            // 1. If etsy_connected is explicitly true -> connected
-            // 2. Fallback: if etsy_access_token exists -> connected (old behavior)
-            const isConnected =
-                data.etsy_connected === true ||
-                (data.etsy_access_token && data.etsy_access_token.length > 0);
+            // Connection logic: Trust the token presence
+            const isConnected = !!data.etsy_access_token && data.etsy_access_token.length > 0;
 
             return {
                 connected: isConnected,
@@ -149,8 +141,8 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 owner_id: data.owner_id,
                 plan_type: data.plan_type,
                 debugMessage: isConnected
-                    ? `Connected (etsy_connected=${data.etsy_connected}, has_token=${!!data.etsy_access_token})`
-                    : `Not connected. etsy_connected=${data.etsy_connected}, has_token=${!!data.etsy_access_token}`
+                    ? `Connected (has_token=${!!data.etsy_access_token})`
+                    : `Not connected. has_token=${!!data.etsy_access_token}`
             }
         }
 
