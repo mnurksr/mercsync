@@ -50,10 +50,7 @@ export async function GET(req: NextRequest) {
             }, { status: 404 });
         }
 
-        // 4. Fetch Listing Counts
-        const counts = await etsyApi.getListingCounts(shopData.shop_id, access_token);
-
-        // 5. Update Database (public.shops)
+        // 4. Update Database (public.shops) - Main Credentials First (Exact n8n Match)
         const shopUpdate = {
             owner_id,
             etsy_connected: true,
@@ -62,9 +59,7 @@ export async function GET(req: NextRequest) {
             etsy_shop_id: shopData.shop_id.toString(),
             etsy_token_expires_at: expiresAt,
             is_active: true,
-            last_token_refresh_at: new Date().toISOString(),
-            shop_name: shopData.shop_name,
-            initial_product_counts: { etsy: counts }
+            last_token_refresh_at: new Date().toISOString()
         };
 
         const { error: upsertError } = await supabase
@@ -73,7 +68,27 @@ export async function GET(req: NextRequest) {
 
         if (upsertError) {
             console.error('[Etsy Callback] DB Upsert Error:', upsertError);
-            throw new Error('Failed to save Etsy credentials to database');
+            return NextResponse.json({
+                error: 'Failed to save Etsy credentials to database',
+                details: upsertError.message,
+                debug: upsertError,
+                owner_id: owner_id
+            }, { status: 500 });
+        }
+
+        // 5. Fetch Listing Counts separately (Don't break the flow if this fails)
+        try {
+            const counts = await etsyApi.getListingCounts(shopData.shop_id, access_token);
+            await supabase
+                .from('shops')
+                .update({
+                    shop_name: shopData.shop_name,
+                    initial_product_counts: { etsy: counts }
+                })
+                .eq('owner_id', owner_id);
+        } catch (countError) {
+            console.error('[Etsy Callback] Error updating listing counts:', countError);
+            // Non-blocking error
         }
 
         // 6. Redirect back to Shopify Admin App (Strictly match working n8n structure)
