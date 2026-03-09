@@ -26,15 +26,14 @@ export async function GET(req: NextRequest) {
         // 1. Generate Nonce
         const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        // 2. Encode State
-        const state = encodeState(userId || '', nonce, returnUrl);
+        // 2. Encode State (n8n structure: only userId and nonce)
+        const state = encodeState(userId || '', nonce);
 
         // 3. Scopes (Match n8n working structure: comma-separated)
         const scopes = 'read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_locations';
 
-        // 4. Callback URL (Matches Shopify Dashboard screenshot with trailing slash)
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
-        const redirectUri = `${appUrl}/api/auth/shopify/callback/`;
+        // 4. Callback URL (Hardcoded to production to match your working n8n structure and dashboard whitelist)
+        const redirectUri = `https://mercsync.com/api/auth/shopify/callback/`;
 
         console.log(`[Shopify Auth] Generated Redirect URI: ${redirectUri}`);
         console.log(`[Shopify Auth] Whitelisted Domain in Env: ${process.env.NEXT_PUBLIC_APP_URL}`);

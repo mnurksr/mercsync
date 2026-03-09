@@ -80,9 +80,10 @@ export async function GET(req: NextRequest) {
             throw new Error('Failed to save Shopify credentials');
         }
 
-        // 8. Redirect back to Shopify Admin App or Return URL
+        // 8. Redirect back to Shopify Admin App (Strictly match working n8n structure)
         const clientId = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
-        const finalRedirect = return_url || `https://${shop}/admin/apps/${clientId}`;
+        const finalRedirect = `https://${shop}/admin/apps/${clientId}`;
+
 
         console.log(`[Shopify Callback] Success for shop ${shop}. Redirecting to ${finalRedirect}`);
 
