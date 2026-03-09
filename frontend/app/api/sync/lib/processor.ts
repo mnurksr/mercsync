@@ -892,6 +892,15 @@ async function cloneToEtsy(
                     has_variations: etsyInventory.products.length > 1,
                     shopify_variant_id: matchedNewVariant ? matchedNewVariant.source_variant_id : undefined
                 }, { onConflict: 'etsy_variant_id' });
+
+            // [FIX] Bidirectional Link: Update Shopify side so dashboard shows "Matched"
+            if (matchedNewVariant?.source_variant_id) {
+                await supabase
+                    .from('staging_shopify_products')
+                    .update({ etsy_variant_id: etsyProduct.product_id.toString() })
+                    .eq('shop_id', shop.id)
+                    .eq('shopify_variant_id', matchedNewVariant.source_variant_id);
+            }
         }
         return;
     }
@@ -1028,5 +1037,14 @@ async function cloneToEtsy(
                 url: etsyListing.url,
                 shopify_variant_id: cv ? cv.source_variant_id : undefined // Link back to source
             }, { onConflict: 'etsy_variant_id' });
+
+        // [FIX] Bidirectional Link: Update Shopify side so dashboard shows "Matched"
+        if (cv?.source_variant_id) {
+            await supabase
+                .from('staging_shopify_products')
+                .update({ etsy_variant_id: etsyProduct.product_id.toString() })
+                .eq('shop_id', shop.id)
+                .eq('shopify_variant_id', cv.source_variant_id);
+        }
     }
 }
