@@ -164,10 +164,12 @@ const matchVariants = (shopify: ProductGroup | null, etsy: ProductGroup | null) 
     const sVars = [...(shopify!.variants || [])];
     const eVars = [...(etsy!.variants || [])];
 
+    const normalize = (str: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     // 1. Match by SKU
     for (let i = 0; i < sVars.length; i++) {
         const s = sVars[i];
-        if (s.sku) {
+        if (s.sku && s.sku !== 'NO-SKU') {
             const eIndex = eVars.findIndex(e => e.sku === s.sku);
             if (eIndex !== -1) {
                 matches.push({ shopify: s, etsy: eVars[eIndex] });
@@ -176,6 +178,28 @@ const matchVariants = (shopify: ProductGroup | null, etsy: ProductGroup | null) 
                 eVars.splice(eIndex, 1);
             }
         }
+    }
+
+    // 2. Match by Title (Normalized)
+    for (let i = 0; i < sVars.length; i++) {
+        const s = sVars[i];
+        const sTitle = normalize(s.variantTitle || s.name || '');
+        if (sTitle && sTitle !== 'defaulttitle') {
+            const eIndex = eVars.findIndex(e => normalize(e.variantTitle || e.name || '') === sTitle);
+            if (eIndex !== -1) {
+                matches.push({ shopify: s, etsy: eVars[eIndex] });
+                sVars.splice(i, 1);
+                i--;
+                eVars.splice(eIndex, 1);
+            }
+        }
+    }
+
+    // 3. Single Variant Fallback
+    if (sVars.length === 1 && eVars.length === 1) {
+        matches.push({ shopify: sVars[0], etsy: eVars[0] });
+        sVars.splice(0, 1);
+        eVars.splice(0, 1);
     }
 
     return {
