@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
                                 shop_id: dbShopId,
                                 etsy_listing_id: listing.listing_id.toString(),
                                 etsy_variant_id: variant.product_id.toString(),
-                                name: listing.title,
+                                name: variantTitle === "Default Title" ? listing.title : `${listing.title} - ${variantTitle}`,
                                 sku: variant.sku || listing.skus?.[0] || null,
                                 price: price,
                                 currency: currency,

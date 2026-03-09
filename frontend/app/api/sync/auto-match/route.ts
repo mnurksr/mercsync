@@ -2,34 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 
 /**
- * Normalizes a string for comparison
+ * Normalizes a string for comparison (N8N Aligned)
  */
 function normalize(str: string) {
-    return str.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
+    return (str || "").toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
 /**
- * Calculates similarity score between two strings
+ * Calculates similarity score between two strings (N8N Jaccard)
  */
 function getSimilarity(s1: string, s2: string) {
     const n1 = normalize(s1);
     const n2 = normalize(s2);
+    if (!n1 || !n2) return 0;
     if (n1 === n2) return 100;
 
-    const words1 = n1.split(' ').filter(w => w.length >= 3);
-    const words2 = n2.split(' ').filter(w => w.length >= 3);
+    const set1 = new Set(n1.split(' '));
+    const set2 = new Set(n2.split(' '));
 
-    if (words1.length === 0 || words2.length === 0) return 0;
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
 
-    let matches = 0;
-    for (const w1 of words1) {
-        if (words2.includes(w1)) matches++;
-    }
-
-    return (matches * 2) / (words1.length + words2.length) * 100;
+    return (intersection.size / union.size) * 100;
 }
 
 export async function POST(req: NextRequest) {
@@ -113,36 +110,62 @@ export async function POST(req: NextRequest) {
                 const matchedSVarIds = new Set<string>();
                 const matchedEVarIds = new Set<string>();
 
-                // Match variants within group
+                // Match variants within group (N8N Aligned)
                 for (const sVar of sVariants) {
                     const sVarId = sVar.shopify_variant_id;
-                    const sVTitle = normalize(sVar.variant_title || '');
+                    const sFullName = normalize(sVar.name || sVar.product_title || '');
 
-                    let matchedEVar: any = null;
+                    let bestMatch: any = null;
+                    let highestScore = 0;
+                    let matchReason = "";
 
-                    // 1. Exact SKU Match
+                    // 1. SKU Match (Highest Priority)
                     if (sVar.sku && sVar.sku !== 'NO-SKU') {
-                        matchedEVar = eVariants.find(ev => ev.sku === sVar.sku && !matchedEVarIds.has(ev.etsy_variant_id));
+                        const eVar = eVariants.find(ev => ev.sku === sVar.sku && !matchedEVarIds.has(ev.etsy_variant_id));
+                        if (eVar) {
+                            bestMatch = eVar;
+                            highestScore = 1000; // Force SKU match
+                            matchReason = "SKU Match";
+                        }
                     }
 
-                    // 2. Exact Title Match (Normalized)
-                    if (!matchedEVar && sVTitle && sVTitle !== 'default title') {
-                        matchedEVar = eVariants.find(ev => normalize(ev.variant_title || '') === sVTitle && !matchedEVarIds.has(ev.etsy_variant_id));
+                    // 2. Similarity Match (Exact or Jaccard)
+                    if (!bestMatch) {
+                        for (const eVar of eVariants) {
+                            if (matchedEVarIds.has(eVar.etsy_variant_id)) continue;
+
+                            const eFullName = normalize(eVar.name || '');
+                            if (sFullName === eFullName) {
+                                bestMatch = eVar;
+                                highestScore = 100;
+                                matchReason = "Exact Title Match";
+                                break;
+                            }
+
+                            const score = getSimilarity(sFullName, eFullName);
+                            if (score > highestScore && score >= 60) {
+                                highestScore = score;
+                                bestMatch = eVar;
+                                matchReason = "Semantic Title Match";
+                            }
+                        }
                     }
 
                     // 3. Single Variant Fallback
-                    if (!matchedEVar && sVariants.length === 1 && eVariants.length === 1) {
-                        matchedEVar = eVariants[0];
+                    if (!bestMatch && sVariants.length === 1 && eVariants.length === 1) {
+                        bestMatch = eVariants[0];
+                        matchReason = "Single Variant Fallback";
                     }
 
-                    if (matchedEVar) {
+                    if (bestMatch) {
                         variantMatches.push({
                             type: 'MATCHED',
                             s_variant_id: sVarId,
-                            e_variant_id: matchedEVar.etsy_variant_id
+                            e_variant_id: bestMatch.etsy_variant_id,
+                            reason: matchReason
                         });
                         matchedSVarIds.add(sVarId);
-                        matchedEVarIds.add(matchedEVar.etsy_variant_id);
+                        matchedEVarIds.add(bestMatch.etsy_variant_id);
                     }
                 }
 
