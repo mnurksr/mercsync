@@ -104,7 +104,7 @@ export default function SettingsPage() {
         }
         const shop = encodeURIComponent(cleanShopName);
 
-        window.location.href = `https://api.mercsync.com/webhook/auth/shopify/start?user_id=${userId}&shop=${shop}&return_url=${returnUrl}`;
+        window.location.href = `/api/auth/shopify/start?user_id=${userId}&shop=${shop}&return_url=${returnUrl}`;
     };
 
     const handleConnectEtsy = () => {
@@ -116,7 +116,7 @@ export default function SettingsPage() {
         const returnUrl = encodeURIComponent(`${window.location.origin}/auth/etsy/callback`);
         const userId = user?.id || '';
         const shop = encodeURIComponent(shopName.trim());
-        window.location.href = `https://api.mercsync.com/webhook/auth/etsy/start?user_id=${userId}&shop=${shop}&return_url=${returnUrl}`;
+        window.location.href = `/api/auth/etsy/start?user_id=${userId}&shop=${shop}&return_url=${returnUrl}`;
     };
 
     const [disconnectTarget, setDisconnectTarget] = useState<'shopify' | 'etsy' | null>(null);

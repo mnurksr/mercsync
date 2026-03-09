@@ -8,7 +8,7 @@
 const ETSY_BASE = 'https://openapi.etsy.com/v3/application';
 
 function getApiKey(): string {
-    return process.env.ETSY_API_KEY || '';
+    return process.env.ETSY_API_KEY || '0y4c7v5r8ijsp7zvvtrg8fbu:cs8c7xrvx6';
 }
 
 async function etsyFetch(endpoint: string, accessToken: string, options: RequestInit = {}) {
@@ -30,6 +30,122 @@ async function etsyFetch(endpoint: string, accessToken: string, options: Request
     }
 
     return res.json();
+}
+
+/**
+ * Exchange Authorization Code for Access Token (OAuth 2.0 PKCE)
+ */
+export async function exchangeToken(code: string, verifier: string, redirectUri: string) {
+    const clientId = process.env.ETSY_CLIENT_ID;
+    if (!clientId) throw new Error('ETSY_CLIENT_ID is not configured');
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'authorization_code');
+    params.append('code', code);
+    params.append('redirect_uri', redirectUri);
+    params.append('client_id', clientId);
+    params.append('code_verifier', verifier);
+
+    const res = await fetch('https://api.etsy.com/v3/public/oauth/token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Etsy Token Exchange error (${res.status}): ${errorText}`);
+    }
+
+    return res.json();
+}
+
+/**
+ * Refresh Access Token
+ */
+export async function refreshToken(refreshToken: string) {
+    const clientId = process.env.ETSY_CLIENT_ID;
+    if (!clientId) throw new Error('ETSY_CLIENT_ID is not configured');
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'refresh_token');
+    params.append('refresh_token', refreshToken);
+    params.append('client_id', clientId);
+
+    const res = await fetch('https://api.etsy.com/v3/public/oauth/token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Etsy Token Refresh error (${res.status}): ${errorText}`);
+    }
+
+    return res.json();
+}
+
+/**
+ * Get Authenticated User's Shop Details
+ */
+export async function getMe(accessToken: string) {
+    // Extract user ID from token (Etsy tokens contain user ID before the first dot)
+    const userId = accessToken.split('.')[0];
+    return etsyFetch(`/users/${userId}/shops`, accessToken);
+}
+
+/**
+ * Get listing counts for a shop across all possible states
+ */
+export async function getListingCounts(shopId: string | number, accessToken: string) {
+    const states = ['active', 'draft', 'expired', 'sold_out', 'inactive'];
+    const counts: Record<string, number> = {};
+
+    await Promise.all(states.map(async (state) => {
+        try {
+            const res = await etsyFetch(`/shops/${shopId}/listings?state=${state}&limit=1`, accessToken);
+            counts[state] = res.count || 0;
+        } catch (err) {
+            console.error(`[Etsy] Failed to fetch counts for state ${state}:`, err);
+            counts[state] = 0;
+        }
+    }));
+
+    return counts;
+}
+/**
+ * Fetch all listings for a shop filtered by state
+ * Includes recursive pagination
+ */
+export async function getListingsByState(
+    shopId: string | number,
+    accessToken: string,
+    state: string = 'active',
+    offset: number = 0,
+    limit: number = 100
+): Promise<any> {
+    const url = `/shops/${shopId}/listings?state=${state}&limit=${limit}&offset=${offset}&includes=Images`;
+    const data = await etsyFetch(url, accessToken);
+
+    // If we have more pages, fetch them too? 
+    // Usually better to let the caller handle pagination or do it recursively here.
+    // Let's do it recursively for convenience in the import flow.
+    const results = data.results || [];
+    if (results.length === limit && data.count > offset + limit) {
+        const nextData = await getListingsByState(shopId, accessToken, state, offset + limit, limit);
+        return {
+            ...data,
+            results: [...results, ...nextData.results],
+            count: data.count
+        };
+    }
+
+    return data;
 }
 
 /**

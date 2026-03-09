@@ -130,7 +130,7 @@ export default function ShopifyCallbackPage() {
                             <button
                                 onClick={() => {
                                     const returnUrl = encodeURIComponent(`${window.location.origin}/auth/shopify/callback`);
-                                    window.location.href = `https://api.mercsync.com/webhook/auth/shopify/start?return_url=${returnUrl}`;
+                                    window.location.href = `/api/auth/shopify/start?return_url=${returnUrl}`;
                                 }}
                                 className="px-6 py-3 bg-[#95BF47] hover:bg-[#7ea23d] text-white font-semibold rounded-xl transition-colors"
                             >

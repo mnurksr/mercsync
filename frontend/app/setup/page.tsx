@@ -130,7 +130,7 @@ export default function SetupPage() {
             toast.error('User not authenticated. Please log in first.');
             return;
         }
-        window.open(`https://api.mercsync.com/webhook/auth/etsy/start?user_id=${resolvedUserId}`, '_blank');
+        window.location.href = `/api/auth/etsy/start?user_id=${resolvedUserId}`;
     };
 
     const handleMatch = () => {
@@ -159,7 +159,7 @@ export default function SetupPage() {
                     options: { shopify: shopifyFilters }
                 };
                 importPromises.push(
-                    fetch('https://api.mercsync.com/webhook/shopify-import', {
+                    fetch('/api/sync/shopify-import', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(shopifyPayload)
@@ -174,7 +174,7 @@ export default function SetupPage() {
                     filters: etsyFilters
                 };
                 importPromises.push(
-                    fetch('https://api.mercsync.com/webhook/etsy-import', {
+                    fetch('/api/sync/etsy-import', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(etsyPayload)

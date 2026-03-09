@@ -56,7 +56,7 @@ export default function IntegrationsPage() {
 
     const handleConnect = (platform: string) => {
         // n8n Webhook Start URLs
-        const BASE_WEBHOOK = 'https://api.mercsync.com/webhook/auth';
+        const BASE_WEBHOOK = '/api/auth';
         let authUrl = '';
 
         if (platform === 'shopify') {

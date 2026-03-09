@@ -41,7 +41,7 @@ export default function AuthPage() {
         const returnUrl = encodeURIComponent(`${window.location.origin}/dashboard`); // Or wherever you want them to land after auth
 
         // Redirect to authentication webhook
-        window.location.href = `https://api.mercsync.com/webhook/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+        window.location.href = `/api/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
     };
 
     return (
