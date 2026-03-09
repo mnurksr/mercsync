@@ -41,6 +41,14 @@ export type InventoryItem = {
 }
 
 /**
+ * Get the current user ID securely via server context
+ */
+export async function getUserId(): Promise<string | null> {
+    const { ownerId } = await getValidatedUserContext()
+    return ownerId
+}
+
+/**
  * Get products from staging tables grouped by listing
  */
 export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQuery?: string, ownerId?: string): Promise<ListingItem[]> {

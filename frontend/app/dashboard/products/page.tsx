@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getPlatformListings, getInventoryStats, type ListingItem } from '../../actions/inventory';
+import { getPlatformListings, getInventoryStats, getUserId, type ListingItem } from '../../actions/inventory';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
@@ -171,13 +171,8 @@ export default function ProductsPage() {
     const saveChanges = async () => {
         setIsSaving(true);
         try {
-            // Robust auth check: Use state user first, then try to fetch session directly
-            let currentUserId = user?.id;
-
-            if (!currentUserId && supabase) {
-                const { data: { session } } = await supabase.auth.getSession();
-                currentUserId = session?.user?.id;
-            }
+            // Robust auth check: Use server action getUserId() to bypass iframe cookie issues
+            const currentUserId = await getUserId();
 
             if (!currentUserId) {
                 toast.error("Please login to sync (Session not found).");
