@@ -59,14 +59,13 @@ export async function GET(req: NextRequest) {
             etsy_shop_id: shopData.shop_id.toString(),
             etsy_token_expires_at: expiresAt,
             is_active: true,
-            last_token_refresh_at: new Date().toISOString(),
-            shop_name: shopData.shop_name // Use Etsy shop name
+            last_token_refresh_at: new Date().toISOString()
         };
 
         // Check if a record already exists for this owner
         const { data: existingShop, error: fetchError } = await supabase
             .from('shops')
-            .select('id, initial_product_counts, shop_name')
+            .select('id, initial_product_counts')
             .eq('owner_id', owner_id)
             .maybeSingle();
 
