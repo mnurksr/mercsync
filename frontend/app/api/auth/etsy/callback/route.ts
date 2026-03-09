@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
             }, { status: 404 });
         }
 
-        // 4. Update Database (public.shops) - Main Credentials First (Exact n8n Match)
+        // 4. Update Database (public.shops) - Manual Check-then-Save (Matches n8n logic and bypasses missing unique constraints)
         const shopUpdate = {
             owner_id,
             etsy_connected: true,
@@ -62,17 +62,46 @@ export async function GET(req: NextRequest) {
             last_token_refresh_at: new Date().toISOString()
         };
 
-        const { error: upsertError } = await supabase
+        // Check if a record already exists for this owner
+        const { data: existingShop, error: fetchError } = await supabase
             .from('shops')
-            .upsert(shopUpdate, { onConflict: 'owner_id' });
+            .select('id')
+            .eq('owner_id', owner_id)
+            .maybeSingle();
 
-        if (upsertError) {
-            console.error('[Etsy Callback] DB Upsert Error:', upsertError);
+        if (fetchError) {
+            console.error('[Etsy Callback] DB Fetch Error:', fetchError);
+            return NextResponse.json({
+                error: 'Database check failed',
+                details: fetchError.message,
+                debug: fetchError
+            }, { status: 500 });
+        }
+
+        let dbOperationError;
+        if (existingShop) {
+            console.log(`[Etsy Callback] Updating existing shop record ${existingShop.id} for owner ${owner_id}`);
+            const { error: updateError } = await supabase
+                .from('shops')
+                .update(shopUpdate)
+                .eq('id', existingShop.id);
+            dbOperationError = updateError;
+        } else {
+            console.log(`[Etsy Callback] Inserting new shop record for owner ${owner_id}`);
+            const { error: insertError } = await supabase
+                .from('shops')
+                .insert(shopUpdate);
+            dbOperationError = insertError;
+        }
+
+        if (dbOperationError) {
+            console.error('[Etsy Callback] DB Save Error:', dbOperationError);
             return NextResponse.json({
                 error: 'Failed to save Etsy credentials to database',
-                details: upsertError.message,
-                debug: upsertError,
-                owner_id: owner_id
+                details: dbOperationError.message,
+                debug: dbOperationError,
+                owner_id: owner_id,
+                is_update: !!existingShop
             }, { status: 500 });
         }
 
