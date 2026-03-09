@@ -31,7 +31,7 @@ export function generatePKCE() {
  */
 export function encodeState(userId: string, verifier: string, returnUrl?: string) {
     const payload = {
-        user_id: userId,
+        owner_id: userId,
         verifier: verifier,
         timestamp: Date.now(),
         return_url: returnUrl
