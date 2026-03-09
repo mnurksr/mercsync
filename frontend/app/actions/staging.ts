@@ -84,6 +84,7 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
             .maybeSingle()
 
         if (!shop) {
+            console.log(`[getSetupStatus] No shop found for ownerId ${context.ownerId}, returning incomplete status.`);
             return {
                 shopifyConnected: false,
                 shopifyExported: false,
@@ -112,6 +113,7 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
             initialProductCounts: null
         }
     }
+
 
     // Get full shop info using the ID we determined
     const { data: shop } = await supabase
@@ -161,14 +163,20 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
 
     const hasStartedPlan = shop.plan_type && !['guest', 'none'].includes(shop.plan_type.toLowerCase());
 
-    // Setup is complete when:
-    // - Both platforms connected
-    // - Both have products exported
-    // - Products are mapped to inventory_items
-    // OR if they already have a pending or active plan (they moved past the wizard)
     const isComplete = hasStartedPlan || (shopifyConnected && etsyConnected &&
         shopifyProductCount > 0 && etsyProductCount > 0 &&
         inventoryMappedCount > 0)
+
+    console.log(`[getSetupStatus] Debug Result for shopId ${shopId}:`, {
+        shopifyConnected,
+        etsyConnected,
+        shopifyProductCount,
+        etsyProductCount,
+        inventoryMappedCount,
+        hasStartedPlan,
+        plan_type: shop.plan_type,
+        isComplete
+    });
 
     return {
         shopifyConnected,

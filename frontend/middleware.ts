@@ -94,16 +94,9 @@ export async function middleware(request: NextRequest) {
     }
 
     // AUTH REDIRECT LOGIC
-    // ONLY auto-redirect from login to dashboard if we are SURE we are in a valid Shopify session context
-    // (Meaning we have a shop param AND access). 
-    // If a user visits /login directly from the web, we DON'T redirect them, allowing them to start over.
-    if (hasAccess && request.nextUrl.pathname.startsWith('/login')) {
-        if (shopParam || session) {
-            const url = request.nextUrl.clone();
-            url.pathname = '/dashboard';
-            return NextResponse.redirect(url);
-        }
-    }
+    // We no longer auto-redirect to /dashboard from here. 
+    // The specific page layouts (layout.tsx) handle the internal routing 
+    // based on setup completion and plan status.
 
     return response
 }

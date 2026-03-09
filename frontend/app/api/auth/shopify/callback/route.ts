@@ -72,7 +72,12 @@ export async function GET(req: NextRequest) {
                 shopify_connected: true,
                 shopify_scope: scopes,
                 last_token_refresh_at: new Date().toISOString(),
-                initial_product_counts: { shopify: counts }
+                initial_product_counts: { shopify: counts },
+                // RESET TO FRESH STATE: Match n8n "guest" branding and clear Etsy legacy data
+                plan_type: 'guest',
+                etsy_connected: false,
+                etsy_access_token: null,
+                etsy_refresh_token: null
             }, { onConflict: 'shop_domain' });
 
         if (upsertError) {
