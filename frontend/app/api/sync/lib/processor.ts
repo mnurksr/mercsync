@@ -912,7 +912,11 @@ async function cloneToEtsy(
         dbStocks || [],
         shippingProfileId,
         readinessStateId,
-        cloneVariants
+        cloneVariants,
+        {
+            title: product.title,
+            description: product.description
+        }
     );
 
     // 4. Create listing on Etsy

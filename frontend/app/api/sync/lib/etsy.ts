@@ -222,7 +222,8 @@ export function buildListingPayload(
     dbStocks: { shopify_variant_id: string; stock_quantity: number }[],
     shippingProfileId: number | null,
     readinessStateId: number | null,
-    cloneVariants?: { title: string; sku: string; price: number; stock: number }[]
+    cloneVariants?: { title: string; sku: string; price: number; stock: number }[],
+    overrides?: { title?: string; description?: string }
 ): { listingPayload: any; inventoryPayload: any } {
     // Build stock map from DB
     const stockMap: Record<string, number> = {};
@@ -285,8 +286,8 @@ export function buildListingPayload(
     // Build listing payload
     const listingPayload: any = {
         quantity: Math.min(999, Math.max(1, totalStock)),
-        title: (shopifyProduct.title || 'Default Title').substring(0, 140),
-        description: (shopifyProduct.body_html || 'No description')
+        title: (overrides?.title || shopifyProduct.title || 'Default Title').substring(0, 140),
+        description: (overrides?.description || shopifyProduct.body_html || 'No description')
             .replace(/(<([^>]+)>)/gi, '')
             .substring(0, 500),
         price: parseFloat(shopifyProduct.variants[0].price),

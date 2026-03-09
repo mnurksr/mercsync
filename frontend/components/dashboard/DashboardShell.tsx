@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
     LayoutDashboard, LogOut, Settings, Bell,
-    RefreshCw, Box, History
+    RefreshCw, Box, History, Layers
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { usePathname, useRouter } from 'next/navigation';
@@ -28,6 +28,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     const navLinks = [
         { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
         { href: '/dashboard/products', label: 'Products', icon: Box },
+        { href: '/dashboard/inventory', label: 'Inventory', icon: Layers },
         { href: '/dashboard/history', label: 'Sync History', icon: History },
         { href: '/dashboard/settings', label: 'Integrations', icon: Settings },
     ];
@@ -53,8 +54,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                                 key={link.href}
                                 href={link.href}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isActive
-                                        ? 'bg-blue-50 text-blue-700'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    ? 'bg-blue-50 text-blue-700'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
                                 <Icon className="w-5 h-5" />
