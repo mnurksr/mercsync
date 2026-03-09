@@ -30,20 +30,25 @@ export async function GET(req: NextRequest) {
         const expiresAt = new Date(Date.now() + (expires_in * 1000)).toISOString();
 
         // 3. Fetch Shop Details
+        // 3. Fetch Shop Details
         const meRes = await etsyApi.getMe(access_token);
 
-        // n8n workflow assumes shopData has shop_id and shop_name directly.
-        // Etsy v3 usually returns { count, results: [...] }
-        const results = meRes.results || [];
-        if (results.length === 0) {
-            console.error('[Etsy Callback] No shops found. Full response:', JSON.stringify(meRes));
+        // Handle both collection { results: [] } and direct object responses
+        let shopData = null;
+        if (meRes.results && Array.isArray(meRes.results) && meRes.results.length > 0) {
+            shopData = meRes.results[0];
+        } else if (meRes.shop_id) {
+            shopData = meRes;
+        }
+
+        if (!shopData) {
+            console.error('[Etsy Callback] No shop data found in response:', JSON.stringify(meRes));
             return NextResponse.json({
                 error: 'No Etsy shop found for this account',
-                details: 'The Etsy API returned zero shops for this user ID. Please ensure your Etsy account has an active shop.',
+                details: 'The Etsy API response did not contain a valid shop ID.',
                 debug: meRes
             }, { status: 404 });
         }
-        const shopData = results[0];
 
         // 4. Fetch Listing Counts
         const counts = await etsyApi.getListingCounts(shopData.shop_id, access_token);
