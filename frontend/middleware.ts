@@ -62,20 +62,19 @@ export async function middleware(request: NextRequest) {
         request.nextUrl.pathname.startsWith('/privacy') ||
         request.nextUrl.pathname.startsWith('/terms') ||
         request.nextUrl.pathname.startsWith('/pricing') ||
-        request.nextUrl.pathname.startsWith('/dashboard/mapper') ||
-        request.nextUrl.pathname.startsWith('/setup');
+        request.nextUrl.pathname.startsWith('/dashboard/mapper');
 
-    const shop = request.nextUrl.searchParams.get('shop');
+    const shopParam = request.nextUrl.searchParams.get('shop');
 
     // NATIVE SESSIONLESS AUTHENTICATION BRIDGE
     // Store the shop domain in a secure cookie to allow embedded users to browse the dashboard 
     // seamlessly without requiring a Supabase Auth session.
     let mercsyncShopCookie = request.cookies.get('mercsync_shop')?.value;
 
-    if (shop) {
+    if (shopParam) {
         // Shopify iframe always provides ?shop=xyz
-        mercsyncShopCookie = shop;
-        response.cookies.set('mercsync_shop', shop, {
+        mercsyncShopCookie = shopParam;
+        response.cookies.set('mercsync_shop', shopParam, {
             path: '/',
             maxAge: 60 * 60 * 24 * 30, // 30 days
             sameSite: 'none',
@@ -84,17 +83,26 @@ export async function middleware(request: NextRequest) {
     }
 
     // Determine if user has ANY form of access: either a traditional Supabase session, OR our Shopify cookie
-    const hasAccess = session || mercsyncShopCookie;
+    const hasAccess = !!(session || mercsyncShopCookie);
 
+    // CRITICAL: Protect internal routes
     if (!hasAccess && !isPublicRoute) {
-        return NextResponse.redirect(new URL('/login', request.url))
+        const loginUrl = new URL('/login', request.url);
+        // If we were trying to access a shop-specific setup/dashboard, preserve the shop param
+        if (shopParam) loginUrl.searchParams.set('shop', shopParam);
+        return NextResponse.redirect(loginUrl);
     }
 
-    // If user is signed in (or has shop cookie) and visits login, redirect to dashboard
+    // AUTH REDIRECT LOGIC
+    // ONLY auto-redirect from login to dashboard if we are SURE we are in a valid Shopify session context
+    // (Meaning we have a shop param AND access). 
+    // If a user visits /login directly from the web, we DON'T redirect them, allowing them to start over.
     if (hasAccess && request.nextUrl.pathname.startsWith('/login')) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        return NextResponse.redirect(url);
+        if (shopParam || session) {
+            const url = request.nextUrl.clone();
+            url.pathname = '/dashboard';
+            return NextResponse.redirect(url);
+        }
     }
 
     return response
