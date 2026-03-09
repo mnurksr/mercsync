@@ -116,17 +116,33 @@ export async function POST(req: NextRequest) {
                 // Match variants within group
                 for (const sVar of sVariants) {
                     const sVarId = sVar.shopify_variant_id;
+                    const sVTitle = normalize(sVar.variant_title || '');
+
+                    let matchedEVar: any = null;
+
+                    // 1. Exact SKU Match
                     if (sVar.sku && sVar.sku !== 'NO-SKU') {
-                        const eVar = eVariants.find(ev => ev.sku === sVar.sku);
-                        if (eVar) {
-                            variantMatches.push({
-                                type: 'MATCHED',
-                                s_variant_id: sVarId,
-                                e_variant_id: eVar.etsy_variant_id
-                            });
-                            matchedSVarIds.add(sVarId);
-                            matchedEVarIds.add(eVar.etsy_variant_id);
-                        }
+                        matchedEVar = eVariants.find(ev => ev.sku === sVar.sku && !matchedEVarIds.has(ev.etsy_variant_id));
+                    }
+
+                    // 2. Exact Title Match (Normalized)
+                    if (!matchedEVar && sVTitle && sVTitle !== 'default title') {
+                        matchedEVar = eVariants.find(ev => normalize(ev.variant_title || '') === sVTitle && !matchedEVarIds.has(ev.etsy_variant_id));
+                    }
+
+                    // 3. Single Variant Fallback
+                    if (!matchedEVar && sVariants.length === 1 && eVariants.length === 1) {
+                        matchedEVar = eVariants[0];
+                    }
+
+                    if (matchedEVar) {
+                        variantMatches.push({
+                            type: 'MATCHED',
+                            s_variant_id: sVarId,
+                            e_variant_id: matchedEVar.etsy_variant_id
+                        });
+                        matchedSVarIds.add(sVarId);
+                        matchedEVarIds.add(matchedEVar.etsy_variant_id);
                     }
                 }
 
