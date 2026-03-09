@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid state parameters' }, { status: 400 });
         }
 
-        // 2. Exchange Token
-        const redirectUri = `${new URL(req.url).origin}/api/auth/etsy/callback`;
+        // 2. Exchange Token (Must exactly match the redirect_uri sent in the start route)
+        const redirectUri = `https://mercsync.com/api/auth/etsy/callback`;
         const authData = await etsyApi.exchangeToken(code, verifier, redirectUri);
 
         const { access_token, refresh_token, expires_in } = authData;
@@ -62,11 +62,24 @@ export async function GET(req: NextRequest) {
             throw new Error('Failed to save Etsy credentials to database');
         }
 
-        // 6. Redirect back to App / Return URL
-        // If return_url is relative, make it absolute or use it directly if it's external
-        let finalRedirect = return_url || '/dashboard/settings';
-        if (finalRedirect.startsWith('/')) {
-            finalRedirect = `${new URL(req.url).origin}${finalRedirect}`;
+        // 6. Redirect back to Shopify Admin App (Strictly match working n8n structure)
+        // We need the shop_domain to build the Shopify Admin URL. 
+        // We fetch it from the record we just updated.
+        const { data: finalShop } = await supabase
+            .from('shops')
+            .select('shop_domain')
+            .eq('owner_id', owner_id)
+            .single();
+
+        const shopDomain = finalShop?.shop_domain;
+        const clientId = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
+
+        // If we have shopDomain, redirect to Shopify Admin. Otherwise fallback.
+        let finalRedirect = return_url;
+        if (shopDomain && !finalRedirect) {
+            finalRedirect = `https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/apps/${process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1'}`;
+        } else if (!finalRedirect) {
+            finalRedirect = `${new URL(req.url).origin}/dashboard/settings`;
         }
 
         console.log(`[Etsy Callback] Success for user ${owner_id}, shop ${shopData.shop_name}. Redirecting to ${finalRedirect}`);

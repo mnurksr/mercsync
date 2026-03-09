@@ -23,23 +23,12 @@ export async function GET(req: NextRequest) {
         // 2. Encode State (stores userId and verifier for callback)
         const state = encodeState(userId, verifier, returnUrl);
 
-        // 3. Callback URL (Must match Etsy Dev Portal)
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
-        const redirectUri = `${appUrl}/api/auth/etsy/callback`;
+        // 3. Callback URL (Must exactly match Etsy Dev Portal whitelist)
+        // Hardcoding production URL to match working n8n structure and avoid localhost issues in iframes.
+        const redirectUri = `https://mercsync.com/api/auth/etsy/callback`;
 
-
-        // 4. Scopes
-        const scopes = [
-            'shops_r',
-            'shops_w',
-            'listings_r',
-            'listings_w',
-            'listings_d',
-            'transactions_r',
-            'transactions_w',
-            'email_r',
-            'profile_r'
-        ].join(' ');
+        // 4. Scopes (Match n8n working structure exactly)
+        const scopes = 'shops_r shops_w listings_r listings_w listings_d transactions_r transactions_w email_r profile_r';
 
         // 5. Build Authorization URL
         const authUrl = new URL('https://www.etsy.com/oauth/connect');
