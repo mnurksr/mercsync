@@ -164,7 +164,23 @@ const matchVariants = (shopify: ProductGroup | null, etsy: ProductGroup | null) 
     const sVars = [...(shopify!.variants || [])];
     const eVars = [...(etsy!.variants || [])];
 
-    const normalize = (str: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalize = (str: string) => (str || "").toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const getSimilarity = (s1: string, s2: string) => {
+        const n1 = normalize(s1);
+        const n2 = normalize(s2);
+        if (!n1 || !n2) return 0;
+        if (n1 === n2) return 100;
+
+        const set1 = new Set(n1.split(' '));
+        const set2 = new Set(n2.split(' '));
+        const intersection = new Set([...set1].filter(x => set2.has(x)));
+        const union = new Set([...set1, ...set2]);
+        return (intersection.size / union.size) * 100;
+    };
 
     // 1. Match by SKU
     for (let i = 0; i < sVars.length; i++) {
@@ -180,17 +196,42 @@ const matchVariants = (shopify: ProductGroup | null, etsy: ProductGroup | null) 
         }
     }
 
-    // 2. Match by Title (Normalized)
+    // 2. Exact Title Match (Normalized)
     for (let i = 0; i < sVars.length; i++) {
         const s = sVars[i];
-        const sTitle = normalize(s.variantTitle || s.name || '');
-        if (sTitle && sTitle !== 'defaulttitle') {
-            const eIndex = eVars.findIndex(e => normalize(e.variantTitle || e.name || '') === sTitle);
+        const sFullName = normalize(s.name || '');
+        if (sFullName) {
+            const eIndex = eVars.findIndex(e => normalize(e.name || '') === sFullName);
             if (eIndex !== -1) {
                 matches.push({ shopify: s, etsy: eVars[eIndex] });
                 sVars.splice(i, 1);
                 i--;
                 eVars.splice(eIndex, 1);
+            }
+        }
+    }
+
+    // 3. Semantic Title Match (Jaccard)
+    for (let i = 0; i < sVars.length; i++) {
+        const s = sVars[i];
+        const sFullName = normalize(s.name || '');
+        if (sFullName) {
+            let bestIdx = -1;
+            let bestScore = 0;
+
+            for (let j = 0; j < eVars.length; j++) {
+                const score = getSimilarity(sFullName, eVars[j].name || '');
+                if (score > bestScore && score >= 60) {
+                    bestScore = score;
+                    bestIdx = j;
+                }
+            }
+
+            if (bestIdx !== -1) {
+                matches.push({ shopify: s, etsy: eVars[bestIdx] });
+                sVars.splice(i, 1);
+                i--;
+                eVars.splice(bestIdx, 1);
             }
         }
     }
