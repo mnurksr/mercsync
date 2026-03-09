@@ -1,26 +1,46 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { getPlatformListings, getInventoryStats, type ListingItem } from '../../actions/inventory';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
-    ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy
+    ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy, Pencil, RefreshCw
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
+import { useAuth } from '@/components/AuthProvider';
+import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/components/dashboard/CloneModal';
 
 export default function ProductsPage() {
     const toast = useToast();
+    const router = useRouter();
+    const { user } = useAuth();
     const [activePlatform, setActivePlatform] = useState<'shopify' | 'etsy'>('shopify');
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
 
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     const [items, setItems] = useState<ListingItem[]>([]);
     const [stats, setStats] = useState({ total: 0, unmatched: 0, outOfStock: 0 });
 
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+
+    // Queuing State
+    const [crossListing, setCrossListing] = useState<{ to_shopify: CrossListingItem[], to_etsy: CrossListingItem[] }>({ to_shopify: [], to_etsy: [] });
+    const [cloneModal, setCloneModal] = useState<{
+        isOpen: boolean;
+        sourceData: CloneSourceData | null;
+        targetPlatform: 'shopify' | 'etsy';
+        initialData?: CrossListingItem;
+        targetId?: string;
+    }>({
+        isOpen: false,
+        sourceData: null,
+        targetPlatform: 'shopify'
+    });
 
     useEffect(() => {
         loadData();
@@ -82,6 +102,147 @@ export default function ProductsPage() {
         return item.platformStatus === filterStatus;
     });
 
+    const isItemQueued = (sourceId: string) => {
+        return crossListing.to_shopify.some(i => i.source_id === sourceId) ||
+            crossListing.to_etsy.some(i => i.source_id === sourceId);
+    };
+
+    const getQueuedItem = (sourceId: string) => {
+        return crossListing.to_shopify.find(i => i.source_id === sourceId) ||
+            crossListing.to_etsy.find(i => i.source_id === sourceId);
+    };
+
+    const handleCloneClick = (item: ListingItem, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+
+        const sourcePlatform = activePlatform;
+        const targetPlatform = sourcePlatform === 'shopify' ? 'etsy' : 'shopify';
+        const listKey = targetPlatform === 'shopify' ? 'to_shopify' : 'to_etsy';
+
+        const existing = crossListing[listKey].find(i => i.source_id === item.id);
+
+        const sourceData: CloneSourceData = {
+            title: item.title,
+            platform: sourcePlatform,
+            sourceId: item.id,
+            imageUrl: item.imageUrl || '',
+            sku: item.variants?.[0]?.sku || '',
+            price: item.variants?.[0]?.price || 0,
+            stock: item.totalStock,
+            description: '', // Initial fetch might not have description, backend will use it if provided
+            variants: item.variants.map(v => ({
+                platformId: v.id,
+                variantTitle: v.title,
+                sku: v.sku || '',
+                price: v.price,
+                stockQuantity: v.stock
+            }))
+        };
+
+        setCloneModal({
+            isOpen: true,
+            sourceData,
+            targetPlatform,
+            initialData: existing,
+            targetId: item.id // Use listing ID as target parent hint if potentially matched
+        });
+    };
+
+    const handleCloneConfirm = (data: CrossListingItem) => {
+        const listKey = cloneModal.targetPlatform === 'shopify' ? 'to_shopify' : 'to_etsy';
+
+        setCrossListing(prev => {
+            const newList = [...prev[listKey]];
+            const idx = newList.findIndex(i => i.source_id === data.source_id);
+
+            if (idx > -1) {
+                newList[idx] = data;
+            } else {
+                newList.push(data);
+            }
+
+            return { ...prev, [listKey]: newList };
+        });
+
+        setCloneModal({ isOpen: false, sourceData: null, targetPlatform: 'shopify' });
+        toast.success(`${data.title} added to clone queue.`);
+    };
+
+    const saveChanges = async () => {
+        setIsSaving(true);
+        try {
+            if (!user?.id) {
+                toast.error("Please login to sync.");
+                return;
+            }
+
+            const job_id = crypto.randomUUID();
+            const payload = {
+                user_id: user.id,
+                job_id,
+                initial_state: { matched_inventory: [], unmatched_inventory: [] },
+                final_state: {
+                    matched_inventory: [],
+                    queued_clones: crossListing
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            const res = await fetch('/api/sync/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error('Failed to start sync');
+
+            router.push(`/setup/syncing?job_id=${job_id}`);
+        } catch (err) {
+            console.error('Save error:', err);
+            toast.error("Failed to start synchronization.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleBulkClone = () => {
+        const selectedListings = filteredItems.filter(i => selectedItems.has(i.id) && i.matchStatus !== 'synced');
+        if (selectedListings.length === 0) return;
+
+        // For bulk, we'll just add them to the queue with default mappings
+        setCrossListing(prev => {
+            const targetPlatform = activePlatform === 'shopify' ? 'etsy' : 'shopify';
+            const listKey = targetPlatform === 'shopify' ? 'to_shopify' : 'to_etsy';
+            const newList = [...prev[listKey]];
+
+            selectedListings.forEach(item => {
+                if (!newList.some(i => i.source_id === item.id)) {
+                    newList.push({
+                        source_id: item.id,
+                        title: item.title,
+                        sku: item.variants?.[0]?.sku || '',
+                        price: item.variants?.[0]?.price || 0,
+                        stock: item.totalStock,
+                        image: item.imageUrl || '',
+                        variants: item.variants.map(v => ({
+                            source_variant_id: v.id,
+                            title: v.title,
+                            sku: v.sku || '',
+                            price: v.price,
+                            stock: v.stock,
+                            selected: true
+                        }))
+                    });
+                }
+            });
+
+            return { ...prev, [listKey]: newList };
+        });
+
+        toast.success(`Added ${selectedListings.length} items to clone queue.`);
+        setSelectedItems(new Set());
+    };
+
     const getMatchStatusBadge = (status: string) => {
         switch (status) {
             case 'synced':
@@ -102,17 +263,7 @@ export default function ProductsPage() {
         return <span className="text-xs font-semibold text-gray-500 capitalize">{status}</span>;
     };
 
-    const handleCloneSingle = (item: ListingItem, e: React.MouseEvent) => {
-        e.stopPropagation();
-        toast.success(`Queued ${item.title} to clone missing variants.`);
-        // TODO: Map to actual backend endpoint / sync block
-    };
-
-    const handleBulkClone = () => {
-        toast.success(`Queued ${selectedItems.size} listings to clone missing variants.`);
-        setSelectedItems(new Set());
-        // TODO: Map to actual backend bulk endpoint
-    };
+    const totalQueued = crossListing.to_shopify.length + crossListing.to_etsy.length;
 
     return (
         <div className="max-w-6xl mx-auto w-full pb-32">
@@ -268,6 +419,8 @@ export default function ProductsPage() {
                                 filteredItems.map((item) => {
                                     const isExpanded = expandedRows.has(item.id);
                                     const isSelected = selectedItems.has(item.id);
+                                    const queuedItem = getQueuedItem(item.id);
+                                    const isQueued = !!queuedItem;
 
                                     return (
                                         <React.Fragment key={item.id}>
@@ -292,7 +445,7 @@ export default function ProductsPage() {
                                                         </div>
                                                         <div>
                                                             <p className="text-sm font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-1 break-all pr-4">
-                                                                {item.title}
+                                                                {isQueued ? queuedItem.title : item.title}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-1">
                                                                 <span className="text-[11px] font-medium text-gray-500 tracking-wide uppercase">
@@ -308,7 +461,21 @@ export default function ProductsPage() {
                                                     {getPlatformStatusBadge(item.platformStatus)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    {getMatchStatusBadge(item.matchStatus)}
+                                                    {isQueued ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 rounded-md text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                                                <Loader2 className="w-3 h-3 animate-spin" /> Queued
+                                                            </span>
+                                                            <button
+                                                                onClick={(e) => handleCloneClick(item, e)}
+                                                                className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-indigo-600"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        getMatchStatusBadge(item.matchStatus)
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`text-sm font-bold ${item.totalStock <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
@@ -316,15 +483,17 @@ export default function ProductsPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    {item.matchStatus !== 'synced' && (
-                                                        <button
-                                                            onClick={(e) => handleCloneSingle(item, e)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 shadow-sm text-xs font-semibold text-gray-700 rounded-lg hover:bg-gray-50 hover:text-indigo-600 transition-all"
-                                                        >
-                                                            <Copy className="w-3.5 h-3.5" />
-                                                            Clone Missing
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={(e) => handleCloneClick(item, e)}
+                                                        disabled={item.matchStatus === 'synced'}
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
+                                                            ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
+                                                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                                                            }`}
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5" />
+                                                        Clone
+                                                    </button>
                                                 </td>
                                             </tr>
 
@@ -391,45 +560,86 @@ export default function ProductsPage() {
                     </table>
                 </div>
 
-                {/* Bulks Action Floating Bar */}
-                {selectedItems.size > 0 && (() => {
-                    const isAllUnmatched = Array.from(selectedItems).every(id => {
-                        const item = filteredItems.find(i => i.id === id);
-                        return item && item.matchStatus === 'unmatched';
-                    });
+                {/* Bulk Action & Confirmation Floating Bar */}
+                {(selectedItems.size > 0 || totalQueued > 0) && (
+                    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5">
+                        <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl border border-gray-800 flex items-center gap-8 min-w-[500px]">
+                            {/* Selected Counter (If any) */}
+                            {selectedItems.size > 0 && (
+                                <div className="flex items-center gap-3 pr-8 border-r border-gray-800">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-xs">
+                                        {selectedItems.size}
+                                    </div>
+                                    <div className="text-sm">
+                                        <p className="font-bold">Selected</p>
+                                        <button
+                                            onClick={handleBulkClone}
+                                            className="text-indigo-400 hover:text-indigo-300 font-semibold text-[11px] underline underline-offset-2"
+                                        >
+                                            Add to Queue
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
-                    return (
-                        <div className="absolute top-0 left-0 right-0 p-3 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between z-10 animate-in slide-in-from-top-2">
-                            <div className="flex items-center gap-3 pl-2">
-                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">
-                                    {selectedItems.size}
-                                </span>
-                                <span className="text-sm font-semibold text-indigo-900">Listings Selected</span>
+                            {/* Queued Items Counter */}
+                            <div className="flex items-center gap-3 flex-1">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${totalQueued > 0 ? 'bg-emerald-500' : 'bg-gray-700'}`}>
+                                    {totalQueued}
+                                </div>
+                                <div className="text-sm">
+                                    <p className="font-bold">Queued for Sync</p>
+                                    <p className="text-gray-400 text-xs">{totalQueued > 0 ? 'Ready to synchronize' : 'No clones queued yet'}</p>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
+
+                            {/* Final Action Buttons */}
+                            <div className="flex items-center gap-3">
+                                {totalQueued > 0 && (
+                                    <button
+                                        onClick={() => setCrossListing({ to_shopify: [], to_etsy: [] })}
+                                        className="px-4 py-2.5 text-xs font-bold text-gray-400 hover:text-white"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                                <button
+                                    onClick={saveChanges}
+                                    disabled={totalQueued === 0 || isSaving}
+                                    className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${totalQueued > 0
+                                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 active:scale-95'
+                                        : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                        }`}
+                                >
+                                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                    Confirm & Sync Clones
+                                </button>
+                            </div>
+
+                            {/* Close selection button (mini) */}
+                            {selectedItems.size > 0 && (
                                 <button
                                     onClick={() => setSelectedItems(new Set())}
-                                    className="px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                                    className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20 hover:bg-red-600 transition-colors"
                                 >
-                                    Cancel
+                                    <X className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                    onClick={handleBulkClone}
-                                    disabled={!isAllUnmatched}
-                                    className={`flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm transition-all ${isAllUnmatched
-                                            ? 'bg-indigo-600 hover:bg-indigo-700'
-                                            : 'bg-indigo-300 cursor-not-allowed'
-                                        }`}
-                                    title={!isAllUnmatched ? "You can only bulk clone unmatched products." : ""}
-                                >
-                                    <Copy className="w-4 h-4" />
-                                    Bulk Clone Missing
-                                </button>
-                            </div>
+                            )}
                         </div>
-                    );
-                })()}
+                    </div>
+                )}
             </div>
+
+            {/* Modals */}
+            <CloneModal
+                isOpen={cloneModal.isOpen}
+                onClose={() => setCloneModal({ isOpen: false, sourceData: null, targetPlatform: 'shopify' })}
+                onConfirm={handleCloneConfirm}
+                sourceData={cloneModal.sourceData}
+                targetPlatform={cloneModal.targetPlatform}
+                initialData={cloneModal.initialData}
+                targetId={cloneModal.targetId}
+            />
         </div>
     );
 }
