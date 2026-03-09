@@ -15,12 +15,13 @@ function getApiKey(): string {
 async function etsyFetch(endpoint: string, accessToken: string, options: RequestInit = {}) {
     const url = `${ETSY_BASE}${endpoint}`;
 
+    const isGet = !options.method || options.method.toUpperCase() === 'GET';
     const res = await fetch(url, {
         ...options,
         headers: {
             'x-api-key': getApiKey(),
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+            ...(isGet ? {} : { 'Content-Type': 'application/json' }),
             ...options.headers,
         },
     });
@@ -103,7 +104,12 @@ export async function refreshToken(refreshToken: string) {
 export async function getMe(accessToken: string) {
     // Extract user ID from token (Etsy tokens contain user ID before the first dot)
     const userId = accessToken.split('.')[0];
-    return etsyFetch(`/users/${userId}/shops`, accessToken);
+    console.log(`[Etsy API] Fetching shops for user_id extracted from token: ${userId}`);
+
+    const res = await etsyFetch(`/users/${userId}/shops`, accessToken);
+    console.log(`[Etsy API] getMe response for ${userId}:`, JSON.stringify(res));
+
+    return res;
 }
 
 /**
