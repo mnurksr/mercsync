@@ -1224,8 +1224,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             if (group.variants && Array.isArray(group.variants)) {
                                 group.variants.forEach((vMatch: any) => {
                                     if (vMatch.type === 'MATCHED') {
-                                        const sVar = sGroup.variants.find(v => v.platformId === vMatch.s_variant_id);
-                                        const eVar = eGroup.variants.find(v => v.platformId === vMatch.e_variant_id);
+                                        const sVar = sGroup.variants.find(v => v.shopifyVariantId === vMatch.s_variant_id);
+                                        const eVar = eGroup.variants.find(v => v.etsyVariantId === vMatch.e_variant_id);
 
                                         if (sVar && eVar) {
                                             variantMatches.push({
