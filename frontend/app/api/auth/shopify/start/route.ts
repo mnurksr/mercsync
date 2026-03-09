@@ -29,12 +29,15 @@ export async function GET(req: NextRequest) {
         // 2. Encode State
         const state = encodeState(userId || '', nonce, returnUrl);
 
-        // 3. Scopes
-        const scopes = 'read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_locations';
+        // 3. Scopes (Shopify standard uses space-separated scopes)
+        const scopes = 'read_products write_products read_orders write_orders read_inventory write_inventory read_locations';
 
         // 4. Callback URL (Must match what is whitelisted in Shopify Partner Dashboard)
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
         const redirectUri = `${appUrl}/api/auth/shopify/callback`;
+
+        console.log(`[Shopify Auth] Generated Redirect URI: ${redirectUri}`);
+        console.log(`[Shopify Auth] Whitelisted Domain in Env: ${process.env.NEXT_PUBLIC_APP_URL}`);
 
 
         // 5. Build Authorization URL
