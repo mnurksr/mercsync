@@ -12,10 +12,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
         }
 
-        const clientId = process.env.ETSY_API_KEY || process.env.ETSY_CLIENT_ID;
-        if (!clientId) {
+        const rawId = process.env.ETSY_API_KEY || process.env.ETSY_CLIENT_ID;
+        if (!rawId) {
             return NextResponse.json({ error: 'ETSY_API_KEY not configured' }, { status: 500 });
         }
+        const clientId = rawId.split(':')[0].trim();
 
         // 1. Generate PKCE
         const { verifier, challenge } = generatePKCE();

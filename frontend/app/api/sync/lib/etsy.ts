@@ -8,7 +8,8 @@
 const ETSY_BASE = 'https://openapi.etsy.com/v3/application';
 
 function getApiKey(): string {
-    return process.env.ETSY_API_KEY || '0y4c7v5r8ijsp7zvvtrg8fbu:cs8c7xrvx6';
+    const rawKey = process.env.ETSY_API_KEY || '0y4c7v5r8ijsp7zvvtrg8fbu:cs8c7xrvx6';
+    return rawKey.split(':')[0].trim();
 }
 
 async function etsyFetch(endpoint: string, accessToken: string, options: RequestInit = {}) {
@@ -36,8 +37,9 @@ async function etsyFetch(endpoint: string, accessToken: string, options: Request
  * Exchange Authorization Code for Access Token (OAuth 2.0 PKCE)
  */
 export async function exchangeToken(code: string, verifier: string, redirectUri: string) {
-    const clientId = process.env.ETSY_CLIENT_ID;
-    if (!clientId) throw new Error('ETSY_CLIENT_ID is not configured');
+    const rawId = process.env.ETSY_CLIENT_ID || process.env.ETSY_API_KEY;
+    if (!rawId) throw new Error('ETSY_CLIENT_ID is not configured');
+    const clientId = rawId.split(':')[0].trim();
 
     const params = new URLSearchParams();
     params.append('grant_type', 'authorization_code');
@@ -66,8 +68,9 @@ export async function exchangeToken(code: string, verifier: string, redirectUri:
  * Refresh Access Token
  */
 export async function refreshToken(refreshToken: string) {
-    const clientId = process.env.ETSY_CLIENT_ID;
-    if (!clientId) throw new Error('ETSY_CLIENT_ID is not configured');
+    const rawId = process.env.ETSY_CLIENT_ID || process.env.ETSY_API_KEY;
+    if (!rawId) throw new Error('ETSY_CLIENT_ID is not configured');
+    const clientId = rawId.split(':')[0].trim();
 
     const params = new URLSearchParams();
     params.append('grant_type', 'refresh_token');
