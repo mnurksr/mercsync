@@ -63,3 +63,15 @@ export function decodeState(state: string) {
         throw new Error('Invalid state parameter');
     }
 }
+
+/**
+ * Validates a Shopify Webhook HMAC
+ */
+export function validateWebhookHMAC(rawBody: string, hmacHeader: string, secret: string): boolean {
+    const hash = crypto
+        .createHmac('sha256', secret)
+        .update(rawBody, 'utf8')
+        .digest('base64');
+
+    return hash === hmacHeader;
+}

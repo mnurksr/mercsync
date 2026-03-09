@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
         const counts = await shopifyApi.getListingCounts(creds);
 
         // 6. Register Webhooks (Async)
-        const origin = new URL(req.url).origin;
-        await shopifyApi.registerWebhooks(creds, origin);
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+        await shopifyApi.registerWebhooks(creds, appUrl);
 
         // 7. Upsert to DB
         // initial_product_counts should be a JSON object like { shopify: { active: X, ... } }
@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
         console.log(`[Shopify Callback] Success for shop ${shop}. Redirecting to ${finalRedirect}`);
 
         return NextResponse.redirect(finalRedirect);
+
 
     } catch (err: any) {
         console.error('[Shopify Callback] Error:', err);
