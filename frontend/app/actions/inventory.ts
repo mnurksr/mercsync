@@ -46,6 +46,7 @@ export type InventoryItem = {
     etsy_variant_id: string | null
     shopify_product_id: string | null
     etsy_listing_id: string | null
+    shop_id: string
 }
 
 /**
@@ -260,7 +261,8 @@ export async function getInventoryItems(searchQuery?: string): Promise<Inventory
             shopify_variant_id: item.shopify_variant_id,
             etsy_variant_id: item.etsy_variant_id,
             shopify_product_id: item.shopify_product_id,
-            etsy_listing_id: item.etsy_listing_id
+            etsy_listing_id: item.etsy_listing_id,
+            shop_id: shop.id
         }
     })
 }
@@ -295,5 +297,69 @@ export async function forceSyncStock(inventoryItemId?: string): Promise<{ succes
         return { success: true, message: 'Sync triggered successfully' }
     } catch (err) {
         return { success: false, message: 'Failed to trigger sync' }
+    }
+}
+
+/**
+ * Update stock for an inventory item and propagate to all platforms
+ */
+export async function updateInventoryStock(inventoryItemId: string, newStock: number): Promise<{ success: boolean; message: string }> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return { success: false, message: 'Not authenticated' }
+
+    try {
+        // 1. Get the item and its shop/location
+        const { data: item, error: itemErr } = await supabase
+            .from('inventory_items')
+            .select(`
+                id, shop_id,
+                shopify_variant_id, etsy_variant_id,
+                shopify_product_id, etsy_listing_id,
+                shops ( main_location_id )
+            `)
+            .eq('id', inventoryItemId)
+            .single()
+
+        if (itemErr || !item) return { success: false, message: 'Item not found' }
+
+        const shopId = item.shop_id
+        let locationId = (item.shops as any)?.main_location_id
+
+        if (locationId && locationId.includes(',')) {
+            locationId = locationId.split(',')[0].trim()
+        }
+
+        if (!locationId) {
+            const { data: loc } = await supabase.from('inventory_locations').select('id').eq('shop_id', shopId).limit(1).maybeSingle()
+            locationId = loc?.id
+        }
+
+        if (!locationId) return { success: false, message: 'No inventory location found for this shop' }
+
+        // 2. Update inventory_levels (Master Record)
+        // Note: For now we assume SHOPIFY market represents the master warehouse for sync purposes 
+        // in our current multi-platform logic, but we should really update all levels or have a master level.
+        const { error: levelErr } = await supabase
+            .from('inventory_levels')
+            .update({ available_stock: newStock, updated_at: new Date().toISOString() })
+            .eq('inventory_item_id', inventoryItemId)
+            .eq('location_id', locationId)
+
+        if (levelErr) {
+            console.error('Error updating inventory level:', levelErr)
+            return { success: false, message: 'Failed to update database record' }
+        }
+
+        // 3. Trigger background sync via the same mechanism as forceSyncStock
+        // In this implementation, updating updated_at on inventory_items triggers the sync worker
+        await supabase
+            .from('inventory_items')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', inventoryItemId)
+
+        return { success: true, message: `Stock updated to ${newStock} and synchronization started.` }
+    } catch (err) {
+        console.error('Update inventory error:', err)
+        return { success: false, message: 'An unexpected error occurred' }
     }
 }
