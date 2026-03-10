@@ -219,7 +219,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return []
 
-    const { data: shop } = await supabase.from('shops').select('id, shopify_domain').eq('owner_id', ownerId).single()
+    const { data: shop } = await supabase.from('shops').select('id, shop_domain').eq('owner_id', ownerId).single()
     if (!shop) return []
 
     let baseQuery = supabase
@@ -263,7 +263,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         shopify_product_id: item.shopify_product_id,
         etsy_listing_id: item.etsy_listing_id,
         shop_id: shop.id,
-        shop_domain: shop.shopify_domain
+        shop_domain: shop.shop_domain
     }))
 }
 
