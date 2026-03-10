@@ -324,8 +324,12 @@ async function saveStagingMatches(shopId: string, finalMatched: any[]) {
 // ─────────────────────────────────────────────
 
 async function finalizeInventory(shop: any, payload: SyncPayload) {
-    // 1. Resolve Location ID.
+    // 1. Resolve Location ID. Pick the FIRST one as primary if it's a list.
     let mainLocationId = shop.main_location_id;
+    if (mainLocationId && mainLocationId.toString().includes(',')) {
+        mainLocationId = mainLocationId.toString().split(',')[0].trim();
+    }
+
     if (!mainLocationId) {
         const { data: locs } = await supabase.from('inventory_locations').select('id').eq('shop_id', shop.id).limit(1);
         if (locs && locs.length > 0) {
@@ -470,10 +474,11 @@ async function syncShopifyStock(shop: any, update: StockUpdate) {
     }
 
     // Call Shopify API
+    const primaryLocationId = shop.main_location_id?.toString().split(',')[0].trim();
     try {
         await shopifyApi.setInventoryLevel(
             { shopDomain: shop.shop_domain, accessToken: shop.access_token },
-            shop.main_location_id,
+            primaryLocationId,
             stagingRow.shopify_inventory_item_id,
             update.new_stock
         );
@@ -487,7 +492,7 @@ async function syncShopifyStock(shop: any, update: StockUpdate) {
             // Retry setting inventory
             await shopifyApi.setInventoryLevel(
                 { shopDomain: shop.shop_domain, accessToken: shop.access_token },
-                shop.main_location_id,
+                primaryLocationId,
                 stagingRow.shopify_inventory_item_id,
                 update.new_stock
             );
@@ -577,6 +582,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
         // Use clone variant data directly (has correct title/sku/price/stock from user)
         const variantsToProcess = cloneVariants || product.variants || [];
 
+        const primaryLocationId = shop.main_location_id?.toString().split(',')[0].trim();
         for (const cv of variantsToProcess) {
             const variantPayload = {
                 option1: cv.title || 'Default Title',
@@ -595,7 +601,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                 try {
                     await shopifyApi.setInventoryLevel(
                         creds,
-                        shop.main_location_id,
+                        primaryLocationId,
                         variant.inventory_item_id,
                         cv.stock || 0
                     );
@@ -605,7 +611,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                         await shopifyApi.enableInventoryTracking(creds, variant.inventory_item_id);
                         await shopifyApi.setInventoryLevel(
                             creds,
-                            shop.main_location_id,
+                            primaryLocationId,
                             variant.inventory_item_id,
                             cv.stock || 0
                         );
@@ -615,8 +621,8 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                 }
 
                 // Insert into staging table
-                const locMap = shop.main_location_id
-                    ? [{ location_id: shop.main_location_id, available: cv.stock || 0 }]
+                const locMap = primaryLocationId
+                    ? [{ location_id: primaryLocationId, available: cv.stock || 0 }]
                     : [];
 
                 await supabase
@@ -656,6 +662,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
     const shopifyProduct = created.product;
 
     // 4. Set inventory levels for each variant
+    const primaryLocId = shop.main_location_id?.toString().split(',')[0].trim();
     for (let i = 0; i < shopifyProduct.variants.length; i++) {
         const variant = shopifyProduct.variants[i];
         const stock = originalStocks[i] || 0;
@@ -665,7 +672,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
         try {
             await shopifyApi.setInventoryLevel(
                 creds,
-                shop.main_location_id,
+                primaryLocId,
                 variant.inventory_item_id,
                 stock
             );
@@ -676,7 +683,7 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                 try {
                     await shopifyApi.setInventoryLevel(
                         creds,
-                        shop.main_location_id,
+                        primaryLocId,
                         variant.inventory_item_id,
                         stock
                     );
@@ -689,13 +696,14 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
         }
     }
 
+    const primaryLocationId = shop.main_location_id?.toString().split(',')[0].trim();
     // 5. Insert into staging_shopify_products
     for (let i = 0; i < shopifyProduct.variants.length; i++) {
         const variant = shopifyProduct.variants[i];
         const stock = originalStocks[i] || 0;
         const cv = cloneVariants ? cloneVariants[i] : null; // Get source mapping if available
-        const locMap = shop.main_location_id
-            ? [{ location_id: shop.main_location_id, available: stock }]
+        const locMap = primaryLocationId
+            ? [{ location_id: primaryLocationId, available: stock }]
             : [];
 
         await supabase

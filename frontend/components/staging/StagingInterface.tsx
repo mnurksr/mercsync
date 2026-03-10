@@ -736,7 +736,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     // Location Modal State
     const [showLocationModal, setShowLocationModal] = useState(false);
     const [locations, setLocations] = useState<any[]>([]);
-    const [selectedLocation, setSelectedLocation] = useState<string>('');
+    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
     const [loadingLocations, setLoadingLocations] = useState(false);
     const [submittingLocation, setSubmittingLocation] = useState(false);
 
@@ -776,7 +776,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             if (res.success && res.data) {
                 setLocations(res.data);
                 if (res.data.length > 0) {
-                    setSelectedLocation(res.data[0].id.toString());
+                    setSelectedLocationIds([res.data[0].id.toString()]);
                 }
             } else {
                 toast.error(res.message || 'Failed to load locations.');
@@ -790,8 +790,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     };
 
     const submitLocationAndContinue = async () => {
-        if (!selectedLocation) {
-            toast.warning('Please select a location.');
+        if (selectedLocationIds.length === 0) {
+            toast.warning('Please select at least one location.');
             return;
         }
 
@@ -799,7 +799,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         try {
             const payload = {
                 owner_id: currentUserId,
-                shopify_location_id: selectedLocation
+                shopify_location_ids: selectedLocationIds
             };
 
             const req = await fetch('/api/sync/location-id', {
@@ -2481,7 +2481,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         </div>
 
                         <p className="text-sm text-gray-500 mb-6">
-                            Please select your primary Shopify location for inventory synchronization.
+                            Etsy'deki stoklarınızı hangi Shopify lokasyonlarından besleyelim? (Birden fazla seçebilirsiniz)
                         </p>
 
                         {loadingLocations ? (
@@ -2490,25 +2490,44 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                    <select
-                                        value={selectedLocation}
-                                        onChange={(e) => setSelectedLocation(e.target.value)}
-                                        className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    >
-                                        <option value="" disabled>Select a location...</option>
-                                        {locations.map((loc) => (
-                                            <option key={loc.id} value={loc.id.toString()}>
-                                                {loc.name} {loc.address1 ? `(${loc.address1})` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                                <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                                    {locations.map((loc) => {
+                                        const isSelected = selectedLocationIds.includes(loc.id.toString());
+                                        return (
+                                            <div
+                                                key={loc.id}
+                                                onClick={() => {
+                                                    setSelectedLocationIds(prev =>
+                                                        isSelected
+                                                            ? prev.filter(id => id !== loc.id.toString())
+                                                            : [...prev, loc.id.toString()]
+                                                    );
+                                                }}
+                                                className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${isSelected
+                                                    ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600/10'
+                                                    : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600' : 'bg-white border border-gray-300'
+                                                        }`}>
+                                                        {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className={`text-sm font-semibold truncate ${isSelected ? 'text-indigo-900' : 'text-gray-700'}`}>
+                                                            {loc.name}
+                                                        </p>
+                                                        {loc.address1 && <p className="text-[11px] text-gray-400 truncate">{loc.address1}</p>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
 
                                 <button
                                     onClick={submitLocationAndContinue}
-                                    disabled={submittingLocation || !selectedLocation}
+                                    disabled={submittingLocation || selectedLocationIds.length === 0}
                                     className="w-full h-11 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
                                 >
                                     {submittingLocation ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}

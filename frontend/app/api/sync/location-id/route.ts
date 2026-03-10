@@ -10,13 +10,18 @@ export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
     try {
         const body = await req.json();
-        const { owner_id, shopify_location_id } = body;
+        const { owner_id, shopify_location_ids } = body;
 
-        if (!owner_id || !shopify_location_id) {
-            return NextResponse.json({ error: 'owner_id and shopify_location_id are required' }, { status: 400 });
+        // Backward compatibility for single ID
+        const locationIds = Array.isArray(shopify_location_ids)
+            ? shopify_location_ids
+            : [body.shopify_location_id].filter(Boolean);
+
+        if (!owner_id || locationIds.length === 0) {
+            return NextResponse.json({ error: 'owner_id and shopify_location_ids are required' }, { status: 400 });
         }
 
-        console.log(`[API/sync/location-id] Updating stock for location ${shopify_location_id}, owner ${owner_id}`);
+        console.log(`[API/sync/location-id] Updating stock for locations ${locationIds.join(', ')}, owner ${owner_id}`);
 
         // 1. Get Shop Data
         const { data: shop, error: shopError } = await supabase
@@ -29,27 +34,42 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Shop not found' }, { status: 404 });
         }
 
+        // Update main_location_id in shops table with all selected IDs (comma-separated)
+        const locationStr = locationIds.join(',');
+        await supabase
+            .from('shops')
+            .update({ main_location_id: locationStr })
+            .eq('id', shop.id);
+
         const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
-        // 2. Fetch inventory levels for this location
-        const inventoryLevelsData = await shopifyApi.getInventoryLevels(creds, shopify_location_id);
+        // 2. Fetch inventory levels for all selected locations
+        const inventoryLevelsData = await shopifyApi.getInventoryLevels(creds, locationIds);
         const levels = inventoryLevelsData.inventory_levels || [];
 
-        console.log(`[API/sync/location-id] Found ${levels.length} levels for location ${shopify_location_id}`);
+        console.log(`[API/sync/location-id] Found ${levels.length} levels for locations ${locationIds.join(',')}`);
 
-        // 3. Update Staging Products
-        // We do this in small batches to avoid Supabase connection issues or timeouts
+        // 3. Aggregate stock by inventory_item_id
+        const stockMap: Record<string, number> = {};
+        levels.forEach((level: any) => {
+            const itemId = level.inventory_item_id.toString();
+            const available = level.available || 0;
+            stockMap[itemId] = (stockMap[itemId] || 0) + available;
+        });
+
+        const aggregatedItems = Object.keys(stockMap);
+
+        // 4. Update Staging Products
         const chunkSize = 50;
-        for (let i = 0; i < levels.length; i += chunkSize) {
-            const chunk = levels.slice(i, i + chunkSize);
-            await Promise.all(chunk.map(async (level: any) => {
-                const itemId = level.inventory_item_id.toString();
-                const stock = level.available || 0;
+        for (let i = 0; i < aggregatedItems.length; i += chunkSize) {
+            const chunk = aggregatedItems.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(async (itemId: string) => {
+                const totalStock = stockMap[itemId];
 
                 await supabase
                     .from('staging_shopify_products')
                     .update({
-                        stock_quantity: stock,
+                        stock_quantity: totalStock,
                         updated_at: new Date().toISOString()
                     })
                     .eq('shopify_inventory_item_id', itemId);
@@ -58,7 +78,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            message: `Updated ${levels.length} inventory levels for location ${shopify_location_id}`
+            message: `Updated stock levels for ${aggregatedItems.length} items across ${locationIds.length} locations.`
         });
 
     } catch (err: any) {
