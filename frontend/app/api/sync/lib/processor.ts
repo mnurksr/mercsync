@@ -375,6 +375,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             etsy_stock_snapshot?: number;
             shopify_updated_at?: string;
             etsy_updated_at?: string;
+            location_inventory_map?: any;
         }
     ) => {
         let invItemId = null;
@@ -413,6 +414,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 etsy_stock_snapshot: metadata?.etsy_stock_snapshot || 0,
                 shopify_updated_at: metadata?.shopify_updated_at,
                 etsy_updated_at: metadata?.etsy_updated_at,
+                location_inventory_map: metadata?.location_inventory_map || {},
                 updated_at: new Date().toISOString()
             };
 
@@ -449,6 +451,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 shopify_stock_snapshot: sp.stock_quantity,
                 shopify_updated_at: sp.updated_at,
                 master_stock: sp.stock_quantity,
+                location_inventory_map: sp.location_inventory_map || {},
             };
 
             // Look for Etsy match in staging

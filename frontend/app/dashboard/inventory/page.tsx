@@ -49,9 +49,15 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
 
     if (!isOpen || !item) return null;
 
-    // Simulate/Calculate live Shopify stock based on selected locations
-    // In a real scenario, we might fetch live per-location stock here if not already in snapshots
-    const liveShopifyStock = item.shopify_stock_snapshot;
+    // Calculate live Shopify stock based on selected locations
+    const liveShopifyStock = useMemo(() => {
+        if (!item.location_inventory_map || selectedLocations.length === 0) return 0;
+        return selectedLocations.reduce((sum, locId) => {
+            const qty = item.location_inventory_map[locId] || 0;
+            return sum + qty;
+        }, 0);
+    }, [item.location_inventory_map, selectedLocations]);
+
     const liveEtsyStock = item.etsy_stock_snapshot;
 
     const finalStockToApply = syncSource === 'shopify'
@@ -70,7 +76,12 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
         }
     };
 
-    const isLatestShopify = (item.shopify_updated_at || 0) > (item.etsy_updated_at || 0);
+    const isLatestShopify = useMemo(() => {
+        const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
+        const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
+        if (sTime === 0 && eTime === 0) return true; // Default to Shopify
+        return sTime >= eTime;
+    }, [item.shopify_updated_at, item.etsy_updated_at]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
@@ -217,6 +228,7 @@ export default function InventoryPage() {
 
     // Selection State
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [pendingBulkAction, setPendingBulkAction] = useState<'shopify' | 'etsy' | 'latest' | null>(null);
 
     // Sync Modal State
     const [syncModalOpen, setSyncModalOpen] = useState(false);
@@ -356,7 +368,7 @@ export default function InventoryPage() {
             {/* Inventory Table */}
             <div className="bg-white rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden relative">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[1100px]">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                 <th className="pl-8 pr-4 py-6 w-10">
@@ -364,13 +376,13 @@ export default function InventoryPage() {
                                         {selectedIds.length === items.length && items.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                                     </button>
                                 </th>
-                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Listing</th>
-                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">SKU</th>
-                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
-                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Master</th>
-                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Snapshots</th>
-                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Links</th>
-                                <th className="pl-4 pr-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Action</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Listing</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">SKU</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Master</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Snapshots</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Links</th>
+                                <th className="pl-2 pr-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">
@@ -439,7 +451,7 @@ export default function InventoryPage() {
                                             <td className="px-4 py-4 text-center">
                                                 <span className="text-base font-black text-gray-900">{item.master_stock}</span>
                                             </td>
-                                            <td className="px-4 py-4 text-center">
+                                            <td className="px-2 py-4 text-center">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center justify-center gap-2 text-[10px] font-bold">
                                                         <span className="text-blue-600">S: {item.shopify_stock_snapshot}</span>
@@ -505,31 +517,60 @@ export default function InventoryPage() {
                         </div>
 
                         <div className="flex items-center gap-2 pr-4">
-                            <button
-                                onClick={() => handleBulkSync('shopify')}
-                                className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
-                            >
-                                <ShoppingBag className="w-5 h-5 text-blue-400" />
-                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Shopify Source</span>
-                            </button>
-                            <button
-                                onClick={() => handleBulkSync('etsy')}
-                                className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
-                            >
-                                <Store className="w-5 h-5 text-orange-400" />
-                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Etsy Source</span>
-                            </button>
-                            <button
-                                onClick={() => handleBulkSync('latest')}
-                                className="flex flex-col items-center gap-1.5 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-2xl transition-all shadow-xl shadow-indigo-900/50"
-                            >
-                                <History className="w-5 h-5 text-white" />
-                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Latest Source</span>
-                            </button>
+                            {!pendingBulkAction ? (
+                                <>
+                                    <button
+                                        onClick={() => setPendingBulkAction('shopify')}
+                                        className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
+                                    >
+                                        <ShoppingBag className="w-5 h-5 text-blue-400" />
+                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Shopify Source</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setPendingBulkAction('etsy')}
+                                        className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
+                                    >
+                                        <Store className="w-5 h-5 text-orange-400" />
+                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Etsy Source</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setPendingBulkAction('latest')}
+                                        className="flex flex-col items-center gap-1.5 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all"
+                                    >
+                                        <History className="w-5 h-5 text-indigo-400" />
+                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Latest Source</span>
+                                    </button>
+                                </>
+                            ) : (
+                                <div className="flex items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/10">
+                                        <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">Apply:</span>
+                                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{pendingBulkAction} source</span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            handleBulkSync(pendingBulkAction);
+                                            setPendingBulkAction(null);
+                                        }}
+                                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase rounded-xl shadow-xl shadow-indigo-900/40 active:scale-95 transition-all"
+                                    >
+                                        Confirm Sync
+                                    </button>
+                                    <button
+                                        onClick={() => setPendingBulkAction(null)}
+                                        className="text-[10px] font-black text-white/40 hover:text-white uppercase tracking-widest underline underline-offset-4"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <button
-                            onClick={() => setSelectedIds([])}
+                            onClick={() => {
+                                setSelectedIds([]);
+                                setPendingBulkAction(null);
+                            }}
                             className="p-3 text-white/40 hover:text-white transition-colors mr-2"
                         >
                             <X className="w-6 h-6" />

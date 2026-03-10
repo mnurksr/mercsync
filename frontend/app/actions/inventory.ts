@@ -52,6 +52,7 @@ export type InventoryItem = {
     etsy_stock_snapshot: number
     shopify_updated_at: string | null
     etsy_updated_at: string | null
+    location_inventory_map: any
 }
 
 /**
@@ -230,7 +231,8 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
             shopify_updated_at, etsy_updated_at,
             updated_at,
             shopify_variant_id, etsy_variant_id, 
-            shopify_product_id, etsy_listing_id
+            shopify_product_id, etsy_listing_id,
+            location_inventory_map
         `)
         .eq('shop_id', shop.id)
         .order('name', { ascending: true })
@@ -262,6 +264,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         etsy_variant_id: item.etsy_variant_id,
         shopify_product_id: item.shopify_product_id,
         etsy_listing_id: item.etsy_listing_id,
+        location_inventory_map: item.location_inventory_map || {},
         shop_id: shop.id,
         shop_domain: shop.shop_domain
     }))
