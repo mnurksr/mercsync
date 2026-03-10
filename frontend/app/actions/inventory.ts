@@ -42,6 +42,8 @@ export type InventoryItem = {
     reserved_stock: number
     on_hand_stock: number
     updated_at: string
+    image_url: string | null
+    status: string | null
     shopify_variant_id: string | null
     etsy_variant_id: string | null
     shopify_product_id: string | null
@@ -208,63 +210,54 @@ export async function getInventoryStats(platform: 'shopify' | 'etsy'): Promise<{
 }
 
 /**
- * Get master inventory items from inventory_items and levels
+ * Fetch master inventory items for a shop
  */
-export async function getInventoryItems(searchQuery?: string): Promise<InventoryItem[]> {
+export async function getInventoryItems(query?: string): Promise<InventoryItem[]> {
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return []
 
-    const { data: shop } = await supabase
-        .from('shops')
-        .select('id')
-        .eq('owner_id', ownerId)
-        .maybeSingle()
-
+    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', ownerId).single()
     if (!shop) return []
 
-    let query = supabase
+    let baseQuery = supabase
         .from('inventory_items')
         .select(`
-            id, sku, name, updated_at,
-            shopify_variant_id, etsy_variant_id,
-            shopify_product_id, etsy_listing_id,
-            inventory_levels (
-                available_stock,
-                reserved_stock
-            )
+            id, sku, name, image_url, status,
+            available_stock, reserved_stock, on_hand_stock, 
+            updated_at,
+            shopify_variant_id, etsy_variant_id, 
+            shopify_product_id, etsy_listing_id
         `)
         .eq('shop_id', shop.id)
-        .order('updated_at', { ascending: false })
+        .order('name', { ascending: true })
 
-    if (searchQuery) {
-        query = query.or(`sku.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%`)
+    if (query) {
+        baseQuery = baseQuery.or(`sku.ilike.%${query}%,name.ilike.%${query}%`)
     }
 
-    const { data, error } = await query
-    if (error || !data) {
-        console.error('Error fetching inventory items:', error)
+    const { data, error } = await baseQuery
+
+    if (error) {
+        console.error('Error fetching inventory:', error)
         return []
     }
 
-    return data.map((item: any) => {
-        const available = item.inventory_levels?.reduce((sum: number, l: any) => sum + (l.available_stock || 0), 0) || 0
-        const reserved = item.inventory_levels?.reduce((sum: number, l: any) => sum + (l.reserved_stock || 0), 0) || 0
-
-        return {
-            id: item.id,
-            sku: item.sku,
-            name: item.name,
-            available_stock: available,
-            reserved_stock: reserved,
-            on_hand_stock: available + reserved,
-            updated_at: item.updated_at,
-            shopify_variant_id: item.shopify_variant_id,
-            etsy_variant_id: item.etsy_variant_id,
-            shopify_product_id: item.shopify_product_id,
-            etsy_listing_id: item.etsy_listing_id,
-            shop_id: shop.id
-        }
-    })
+    return (data || []).map((item: any) => ({
+        id: item.id,
+        sku: item.sku || 'NO-SKU',
+        name: item.name || 'Unnamed Product',
+        image_url: item.image_url,
+        status: item.status,
+        available_stock: item.available_stock || 0,
+        reserved_stock: item.reserved_stock || 0,
+        on_hand_stock: item.on_hand_stock || 0,
+        updated_at: item.updated_at,
+        shopify_variant_id: item.shopify_variant_id,
+        etsy_variant_id: item.etsy_variant_id,
+        shopify_product_id: item.shopify_product_id,
+        etsy_listing_id: item.etsy_listing_id,
+        shop_id: shop.id
+    }))
 }
 
 /**
@@ -308,54 +301,20 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
     if (!ownerId) return { success: false, message: 'Not authenticated' }
 
     try {
-        // 1. Get the item and its shop/location
-        const { data: item, error: itemErr } = await supabase
+        // Update the master record directly in inventory_items
+        const { error: updateErr } = await supabase
             .from('inventory_items')
-            .select(`
-                id, shop_id,
-                shopify_variant_id, etsy_variant_id,
-                shopify_product_id, etsy_listing_id,
-                shops ( main_location_id )
-            `)
+            .update({
+                available_stock: newStock,
+                on_hand_stock: newStock, // Assuming reserved is 0 for simple updates
+                updated_at: new Date().toISOString()
+            })
             .eq('id', inventoryItemId)
-            .single()
 
-        if (itemErr || !item) return { success: false, message: 'Item not found' }
-
-        const shopId = item.shop_id
-        let locationId = (item.shops as any)?.main_location_id
-
-        if (locationId && locationId.includes(',')) {
-            locationId = locationId.split(',')[0].trim()
-        }
-
-        if (!locationId) {
-            const { data: loc } = await supabase.from('inventory_locations').select('id').eq('shop_id', shopId).limit(1).maybeSingle()
-            locationId = loc?.id
-        }
-
-        if (!locationId) return { success: false, message: 'No inventory location found for this shop' }
-
-        // 2. Update inventory_levels (Master Record)
-        // Note: For now we assume SHOPIFY market represents the master warehouse for sync purposes 
-        // in our current multi-platform logic, but we should really update all levels or have a master level.
-        const { error: levelErr } = await supabase
-            .from('inventory_levels')
-            .update({ available_stock: newStock, updated_at: new Date().toISOString() })
-            .eq('inventory_item_id', inventoryItemId)
-            .eq('location_id', locationId)
-
-        if (levelErr) {
-            console.error('Error updating inventory level:', levelErr)
+        if (updateErr) {
+            console.error('Error updating inventory item:', updateErr)
             return { success: false, message: 'Failed to update database record' }
         }
-
-        // 3. Trigger background sync via the same mechanism as forceSyncStock
-        // In this implementation, updating updated_at on inventory_items triggers the sync worker
-        await supabase
-            .from('inventory_items')
-            .update({ updated_at: new Date().toISOString() })
-            .eq('id', inventoryItemId)
 
         return { success: true, message: `Stock updated to ${newStock} and synchronization started.` }
     } catch (err) {

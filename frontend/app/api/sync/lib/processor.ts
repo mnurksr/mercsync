@@ -358,7 +358,21 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
 
     const processedEtsyVariantIds = new Set<string>();
 
-    const upsertInvItem = async (sku: string, title: string, sId: string | null, sVarId: string | null, eId: string | null, eVarId: string | null) => {
+    const upsertInvItem = async (
+        sku: string,
+        title: string,
+        sId: string | null,
+        sVarId: string | null,
+        eId: string | null,
+        eVarId: string | null,
+        metadata?: {
+            image_url?: string | null;
+            status?: string | null;
+            shopify_inventory_item_id?: string | null;
+            available_stock?: number;
+            reserved_stock?: number;
+        }
+    ) => {
         let invItemId = null;
         try {
             let existingItem = null;
@@ -379,7 +393,23 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 existingItem = data;
             }
 
-            const payload = { shop_id: shop.id, sku, name: title, shopify_product_id: sId, shopify_variant_id: sVarId, etsy_listing_id: eId, etsy_variant_id: eVarId };
+            const payload = {
+                shop_id: shop.id,
+                owner_id: shop.owner_id,
+                sku,
+                name: title,
+                shopify_product_id: sId,
+                shopify_variant_id: sVarId,
+                etsy_listing_id: eId,
+                etsy_variant_id: eVarId,
+                image_url: metadata?.image_url,
+                status: metadata?.status || 'active',
+                shopify_inventory_item_id: metadata?.shopify_inventory_item_id,
+                available_stock: metadata?.available_stock || 0,
+                reserved_stock: metadata?.reserved_stock || 0,
+                on_hand_stock: (metadata?.available_stock || 0) + (metadata?.reserved_stock || 0),
+                updated_at: new Date().toISOString()
+            };
 
             if (existingItem) {
                 const { error } = await supabase.from('inventory_items').update(payload).eq('id', existingItem.id);
@@ -401,12 +431,15 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
 
     const upsertInvLevel = async (invItemId: string, market: 'SHOPIFY' | 'ETSY', stock: number) => {
         if (!invItemId || !mainLocationId) return;
+        // Also update inventory_levels for backward compatibility if needed, 
+        // but inventory_items is now our primary source for available_stock.
         const { error } = await supabase.from('inventory_levels').upsert({
             inventory_item_id: invItemId,
             location_id: mainLocationId,
             shop_id: shop.id,
             market_iso: market,
-            available_stock: stock || 0
+            available_stock: stock || 0,
+            updated_at: new Date().toISOString()
         }, { onConflict: 'inventory_item_id,location_id,market_iso' });
         if (error) console.error(`[Sync] Failed to upsert ${market} level:`, error.message);
     };
@@ -415,12 +448,33 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
     for (const sp of sProds) {
         const title = sp.name || sp.product_title || 'Unknown Product';
 
+        const metadata = {
+            image_url: sp.image_url,
+            status: sp.status,
+            shopify_inventory_item_id: sp.shopify_inventory_item_id,
+            available_stock: sp.stock_quantity,
+            reserved_stock: 0
+        };
+
         if (sp.etsy_variant_id) {
             // Matched via Shopify staging
             const ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
             const rawSku = sp.sku || ep?.sku;
             const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
-            const invItemId = await upsertInvItem(sku, title, sp.shopify_product_id, sp.shopify_variant_id, ep?.etsy_listing_id || null, sp.etsy_variant_id);
+
+            // Use Etsy status/image if Shopify is missing
+            if (!metadata.image_url && ep?.image_url) metadata.image_url = ep.image_url;
+            if (!metadata.status && ep?.status) metadata.status = ep.status;
+
+            const invItemId = await upsertInvItem(
+                sku,
+                title,
+                sp.shopify_product_id,
+                sp.shopify_variant_id,
+                ep?.etsy_listing_id || null,
+                sp.etsy_variant_id,
+                metadata
+            );
 
             if (invItemId) {
                 await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
@@ -433,7 +487,15 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             // Unmatched Shopify
             const rawSku = sp.sku;
             const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
-            const invItemId = await upsertInvItem(sku, title, sp.shopify_product_id, sp.shopify_variant_id, null, null);
+            const invItemId = await upsertInvItem(
+                sku,
+                title,
+                sp.shopify_product_id,
+                sp.shopify_variant_id,
+                null,
+                null,
+                metadata
+            );
             if (invItemId) {
                 await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
             }
@@ -448,8 +510,23 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         const rawSku = ep.sku;
         const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${ep.etsy_variant_id}` : rawSku;
 
+        const metadata = {
+            image_url: ep.image_url,
+            status: ep.status,
+            available_stock: ep.stock_quantity,
+            reserved_stock: 0
+        };
+
         // Usually, these are unmatched. If there's an anomaly where shopify_variant_id exists but wasn't caught above, include it.
-        const invItemId = await upsertInvItem(sku, title, null, ep.shopify_variant_id || null, ep.etsy_listing_id, ep.etsy_variant_id);
+        const invItemId = await upsertInvItem(
+            sku,
+            title,
+            null,
+            ep.shopify_variant_id || null,
+            ep.etsy_listing_id,
+            ep.etsy_variant_id,
+            metadata
+        );
         if (invItemId) {
             await upsertInvLevel(invItemId, 'ETSY', ep.stock_quantity);
         }
