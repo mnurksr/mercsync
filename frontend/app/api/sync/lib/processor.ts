@@ -350,8 +350,9 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
     const { data: shopifyProducts, error: shErr } = await supabase.from('staging_shopify_products').select('*').eq('shop_id', shop.id);
     const { data: etsyProducts, error: etErr } = await supabase.from('staging_etsy_products').select('*').eq('shop_id', shop.id);
 
-    if (shErr) console.error('[Sync] Error fetching shopify staging:', shErr.message);
-    if (etErr) console.error('[Sync] Error fetching etsy staging:', etErr.message);
+    console.log(`[Sync] finalizeInventory: Found ${shopifyProducts?.length || 0} Shopify staging products and ${etsyProducts?.length || 0} Etsy staging products`);
+    if (shErr) console.error('[Sync] Error fetching Shopify staging:', shErr);
+    if (etErr) console.error('[Sync] Error fetching Etsy staging:', etErr);
 
     const sProds = shopifyProducts || [];
     const eProds = etsyProducts || [];
@@ -390,7 +391,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 existingItem = data;
             }
 
-            // Priority 2: Look by SKU (Only if it's a real SKU, not our fallback placeholder)
+            // Priority 2: Look by SKU
             if (!existingItem && sku && !sku.startsWith('SKU-') && sku !== 'NO-SKU') {
                 const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('sku', sku).maybeSingle();
                 existingItem = data;
@@ -419,12 +420,14 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             if (existingItem) {
                 const { error } = await supabase.from('inventory_items').update(payload).eq('id', existingItem.id);
                 if (error) console.error(`[Sync] Failed to update inventory item ${sku}:`, error.message);
+                else console.log(`[Sync] Updated inventory item: ${sku}`);
                 invItemId = existingItem.id;
             } else {
                 const { data: newItem, error } = await supabase.from('inventory_items').insert(payload).select('id').single();
                 if (error) {
                     console.error(`[Sync] Failed to insert inventory item ${sku}:`, error.message);
                 } else if (newItem) {
+                    console.log(`[Sync] Inserted new inventory item: ${sku}`);
                     invItemId = newItem.id;
                 }
             }
@@ -434,95 +437,84 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         return invItemId;
     };
 
-
-    // 3. Process Shopify products
+    // 2. Process Shopify Products (Matched and Unmatched)
     for (const sp of sProds) {
-        const title = sp.name || sp.product_title || 'Unknown Product';
+        try {
+            const title = sp.name;
+            const metadata: any = {
+                image_url: sp.image_url,
+                shopify_inventory_item_id: sp.shopify_inventory_item_id,
+                shopify_stock_snapshot: sp.stock_quantity,
+                shopify_updated_at: sp.updated_at,
+                master_stock: sp.stock_quantity,
+            };
 
-        const metadata: any = {
-            image_url: sp.image_url,
-            shopify_inventory_item_id: sp.shopify_inventory_item_id,
-            shopify_stock_snapshot: sp.stock_quantity,
-            shopify_updated_at: sp.updated_at || new Date().toISOString(),
-            master_stock: sp.stock_quantity,
-        };
-
-        if (sp.etsy_variant_id) {
-            // Matched via Shopify staging
+            // Look for Etsy match in staging
             const ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
-            const rawSku = sp.sku || ep?.sku;
-            const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
 
-            // Use Etsy image if Shopify is missing
-            if (!metadata.image_url && ep?.image_url) metadata.image_url = ep.image_url;
-
-            // Discrepancy Detection: 
-            // If shopify stock !== etsy stock, status is Action Required
-            if (ep && sp.stock_quantity !== ep.stock_quantity) {
-                metadata.status = 'Action Required';
-            } else {
-                metadata.status = 'Matching';
-            }
+            let eId = null;
+            let eVarId = sp.etsy_variant_id; // Use the ID from Shopify staging if present
 
             if (ep) {
+                eId = ep.etsy_listing_id;
+                eVarId = ep.etsy_variant_id;
                 metadata.etsy_stock_snapshot = ep.stock_quantity;
-                metadata.etsy_updated_at = ep.updated_at || new Date().toISOString();
+                metadata.etsy_updated_at = ep.updated_at;
+                metadata.status = (sp.stock_quantity === ep.stock_quantity) ? 'Matching' : 'Action Required';
+                processedEtsyVariantIds.add(ep.etsy_variant_id);
+            } else {
+                metadata.status = 'Matching'; // Unmatched Shopify is solo source
             }
 
-            const invItemId = await upsertInvItem(
-                sku,
-                title,
-                sp.shopify_product_id,
-                sp.shopify_variant_id,
-                ep?.etsy_listing_id || null,
-                sp.etsy_variant_id,
-                metadata
-            );
-        } else {
-            // Unmatched Shopify
             const rawSku = sp.sku;
             const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
-            metadata.status = 'Matching'; // Single source is by definition matching
 
-            const invItemId = await upsertInvItem(
+            await upsertInvItem(
                 sku,
                 title,
                 sp.shopify_product_id,
                 sp.shopify_variant_id,
-                null,
-                null,
+                eId,
+                eVarId,
                 metadata
             );
+        } catch (err: any) {
+            console.error(`[Sync] finalizeInventory: Error processing Shopify item ${sp.sku}:`, err.message);
         }
     }
 
-    // 4. Process remaining Etsy products
+    // 3. Process remaining Etsy Products
     for (const ep of eProds) {
         if (processedEtsyVariantIds.has(ep.etsy_variant_id)) continue;
 
-        const title = ep.name || ep.product_title || 'Unknown Product';
-        const rawSku = ep.sku;
-        const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${ep.etsy_variant_id}` : rawSku;
+        try {
+            const rawSku = ep.sku;
+            const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${ep.etsy_variant_id}` : rawSku;
+            const title = ep.name;
 
-        const metadata = {
-            image_url: ep.image_url,
-            status: 'Matching',
-            etsy_stock_snapshot: ep.stock_quantity,
-            etsy_updated_at: ep.updated_at || new Date().toISOString(),
-            master_stock: ep.stock_quantity,
-        };
+            const metadata = {
+                image_url: ep.image_url,
+                status: 'Matching',
+                etsy_stock_snapshot: ep.stock_quantity,
+                etsy_updated_at: ep.updated_at,
+                master_stock: ep.stock_quantity,
+            };
 
-        // Usually, these are unmatched. If there's an anomaly where shopify_variant_id exists but wasn't caught above, include it.
-        const invItemId = await upsertInvItem(
-            sku,
-            title,
-            null,
-            ep.shopify_variant_id || null,
-            ep.etsy_listing_id,
-            ep.etsy_variant_id,
-            metadata
-        );
+            await upsertInvItem(
+                sku,
+                title,
+                null,
+                null,
+                ep.etsy_listing_id,
+                ep.etsy_variant_id,
+                metadata
+            );
+        } catch (err: any) {
+            console.error(`[Sync] finalizeInventory: Error processing Etsy item ${ep.sku}:`, err.message);
+        }
     }
+
+    console.log(`[Sync] finalizeInventory: Completed for shop ${shop.id}`);
 }
 
 // ─────────────────────────────────────────────
