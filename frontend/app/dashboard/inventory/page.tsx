@@ -22,7 +22,7 @@ function StockEditModal({ isOpen, onClose, onConfirm, item }: StockEditModalProp
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        if (item) setNewStock(item.available_stock);
+        if (item) setNewStock(item.master_stock);
     }, [item]);
 
     if (!isOpen || !item) return null;
@@ -171,10 +171,9 @@ export default function InventoryPage() {
         }
     };
 
-    const getStockStatus = (available: number) => {
-        if (available <= 0) return { label: 'Out of Stock', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-        if (available < 5) return { label: 'Low Stock', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
-        return { label: 'In Stock', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
+    const getStockStatus = (status: string | null) => {
+        if (status === 'Mismatch') return { label: 'Mismatch', color: 'bg-red-50 text-red-600 ring-red-500/20' };
+        return { label: 'Matching', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
     };
 
     return (
@@ -250,7 +249,7 @@ export default function InventoryPage() {
                                 </tr>
                             ) : (
                                 items.map((item) => {
-                                    const status = getStockStatus(item.available_stock);
+                                    const displayStatus = getStockStatus(item.status);
                                     return (
                                         <tr key={item.id} className="hover:bg-indigo-50/10 transition-colors group">
                                             <td className="pl-6 pr-4 py-4">
@@ -283,12 +282,12 @@ export default function InventoryPage() {
                                                 <span className="text-xs font-black text-gray-500 tracking-tight bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">{item.sku || 'NO-SKU'}</span>
                                             </td>
                                             <td className="px-4 py-4 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ring-1 ${status.color}`}>
-                                                    {status.label}
+                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ring-1 ${displayStatus.color}`}>
+                                                    {displayStatus.label}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4 text-center">
-                                                <span className="text-base font-black text-gray-900">{item.available_stock}</span>
+                                                <span className="text-base font-black text-gray-900">{item.master_stock}</span>
                                             </td>
                                             <td className="pl-4 pr-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">

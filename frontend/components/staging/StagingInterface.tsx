@@ -2481,7 +2481,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         </div>
 
                         <p className="text-sm text-gray-500 mb-6">
-                            Etsy'deki stoklarınızı hangi Shopify lokasyonlarından besleyelim? (Birden fazla seçebilirsiniz)
+                            Which Shopify locations should supply your Etsy stock? (You can select multiple)
                         </p>
 
                         {loadingLocations ? (

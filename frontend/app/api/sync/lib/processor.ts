@@ -369,8 +369,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             image_url?: string | null;
             status?: string | null;
             shopify_inventory_item_id?: string | null;
-            available_stock?: number;
-            reserved_stock?: number;
+            master_stock?: number;
         }
     ) => {
         let invItemId = null;
@@ -403,11 +402,9 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 etsy_listing_id: eId,
                 etsy_variant_id: eVarId,
                 image_url: metadata?.image_url,
-                status: metadata?.status || 'active',
+                status: metadata?.status || 'Matching',
                 shopify_inventory_item_id: metadata?.shopify_inventory_item_id,
-                available_stock: metadata?.available_stock || 0,
-                reserved_stock: metadata?.reserved_stock || 0,
-                on_hand_stock: (metadata?.available_stock || 0) + (metadata?.reserved_stock || 0),
+                master_stock: metadata?.master_stock || 0,
                 updated_at: new Date().toISOString()
             };
 
@@ -448,12 +445,10 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
     for (const sp of sProds) {
         const title = sp.name || sp.product_title || 'Unknown Product';
 
-        const metadata = {
+        const metadata: any = {
             image_url: sp.image_url,
-            status: sp.status,
             shopify_inventory_item_id: sp.shopify_inventory_item_id,
-            available_stock: sp.stock_quantity,
-            reserved_stock: 0
+            master_stock: sp.stock_quantity,
         };
 
         if (sp.etsy_variant_id) {
@@ -462,9 +457,16 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             const rawSku = sp.sku || ep?.sku;
             const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
 
-            // Use Etsy status/image if Shopify is missing
+            // Use Etsy image if Shopify is missing
             if (!metadata.image_url && ep?.image_url) metadata.image_url = ep.image_url;
-            if (!metadata.status && ep?.status) metadata.status = ep.status;
+
+            // Discrepancy Detection: 
+            // If shopify stock !== etsy stock, status is Mismatch
+            if (ep && sp.stock_quantity !== ep.stock_quantity) {
+                metadata.status = 'Mismatch';
+            } else {
+                metadata.status = 'Matching';
+            }
 
             const invItemId = await upsertInvItem(
                 sku,
@@ -487,6 +489,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             // Unmatched Shopify
             const rawSku = sp.sku;
             const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${sp.shopify_variant_id}` : rawSku;
+            metadata.status = 'Matching'; // Single source is by definition matching
+
             const invItemId = await upsertInvItem(
                 sku,
                 title,
@@ -512,9 +516,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
 
         const metadata = {
             image_url: ep.image_url,
-            status: ep.status,
-            available_stock: ep.stock_quantity,
-            reserved_stock: 0
+            status: 'Matching',
+            master_stock: ep.stock_quantity,
         };
 
         // Usually, these are unmatched. If there's an anomaly where shopify_variant_id exists but wasn't caught above, include it.

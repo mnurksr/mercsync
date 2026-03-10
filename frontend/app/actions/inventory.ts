@@ -38,9 +38,7 @@ export type InventoryItem = {
     id: string
     sku: string
     name: string | null
-    available_stock: number
-    reserved_stock: number
-    on_hand_stock: number
+    master_stock: number
     updated_at: string
     image_url: string | null
     status: string | null
@@ -223,7 +221,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         .from('inventory_items')
         .select(`
             id, sku, name, image_url, status,
-            available_stock, reserved_stock, on_hand_stock, 
+            master_stock, 
             updated_at,
             shopify_variant_id, etsy_variant_id, 
             shopify_product_id, etsy_listing_id
@@ -247,10 +245,8 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         sku: item.sku || 'NO-SKU',
         name: item.name || 'Unnamed Product',
         image_url: item.image_url,
-        status: item.status,
-        available_stock: item.available_stock || 0,
-        reserved_stock: item.reserved_stock || 0,
-        on_hand_stock: item.on_hand_stock || 0,
+        status: item.status || 'Matching',
+        master_stock: item.master_stock || 0,
         updated_at: item.updated_at,
         shopify_variant_id: item.shopify_variant_id,
         etsy_variant_id: item.etsy_variant_id,
@@ -305,8 +301,8 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
         const { error: updateErr } = await supabase
             .from('inventory_items')
             .update({
-                available_stock: newStock,
-                on_hand_stock: newStock, // Assuming reserved is 0 for simple updates
+                master_stock: newStock,
+                status: 'Matching', // Reset status as it propagates to both
                 updated_at: new Date().toISOString()
             })
             .eq('id', inventoryItemId)
