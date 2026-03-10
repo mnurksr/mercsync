@@ -399,7 +399,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
 
             const payload = {
                 shop_id: shop.id,
-                owner_id: shop.owner_id,
                 sku,
                 name: title,
                 shopify_product_id: sId,
@@ -419,20 +418,23 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
 
             if (existingItem) {
                 const { error } = await supabase.from('inventory_items').update(payload).eq('id', existingItem.id);
-                if (error) console.error(`[Sync] Failed to update inventory item ${sku}:`, error.message);
-                else console.log(`[Sync] Updated inventory item: ${sku}`);
-                invItemId = existingItem.id;
+                if (error) {
+                    console.error(`[Sync] Failed to update inventory item ${sku}:`, error.message, error.details, error.hint);
+                } else {
+                    console.log(`[Sync] Updated inventory item: ${sku}`);
+                    invItemId = existingItem.id;
+                }
             } else {
                 const { data: newItem, error } = await supabase.from('inventory_items').insert(payload).select('id').single();
                 if (error) {
-                    console.error(`[Sync] Failed to insert inventory item ${sku}:`, error.message);
+                    console.error(`[Sync] Failed to insert inventory item ${sku}:`, error.message, error.details, error.hint);
                 } else if (newItem) {
                     console.log(`[Sync] Inserted new inventory item: ${sku}`);
                     invItemId = newItem.id;
                 }
             }
         } catch (err: any) {
-            console.error(`[Sync] Caught error upserting item ${sku}:`, err.message);
+            console.error(`[Sync] Caught fatal error in upsertInvItem for ${sku}:`, err.message);
         }
         return invItemId;
     };
