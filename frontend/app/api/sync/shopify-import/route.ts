@@ -130,14 +130,19 @@ export async function POST(req: NextRequest) {
             const levels = inventoryLevelsData.inventory_levels || [];
 
             // Aggregate by inventory_item_id
-            const aggregated: Record<string, { total: number, locations: any[] }> = {};
+            const aggregated: Record<string, { total: number, locations: any[], latest_update: string }> = {};
             levels.forEach((level: any) => {
                 const itemId = level.inventory_item_id.toString();
                 if (!aggregated[itemId]) {
-                    aggregated[itemId] = { total: 0, locations: [] };
+                    aggregated[itemId] = { total: 0, locations: [], latest_update: '0' };
                 }
                 const stock = level.available || 0;
                 aggregated[itemId].total += stock;
+
+                if (level.updated_at && (aggregated[itemId].latest_update === '0' || level.updated_at > aggregated[itemId].latest_update)) {
+                    aggregated[itemId].latest_update = level.updated_at;
+                }
+
                 aggregated[itemId].locations.push({
                     location_id: level.location_id.toString(),
                     stock: stock,
@@ -156,6 +161,7 @@ export async function POST(req: NextRequest) {
                         .update({
                             stock_quantity: data.total,
                             location_inventory_map: data.locations,
+                            shopify_updated_at: data.latest_update !== '0' ? data.latest_update : new Date().toISOString(),
                             updated_at: new Date().toISOString()
                         })
                         .eq('shopify_inventory_item_id', itemId);

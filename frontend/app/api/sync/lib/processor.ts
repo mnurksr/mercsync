@@ -449,7 +449,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 image_url: sp.image_url,
                 shopify_inventory_item_id: sp.shopify_inventory_item_id,
                 shopify_stock_snapshot: sp.stock_quantity,
-                shopify_updated_at: sp.updated_at,
+                shopify_updated_at: sp.shopify_updated_at,
                 master_stock: sp.stock_quantity,
                 location_inventory_map: sp.location_inventory_map || {},
             };
@@ -464,7 +464,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 eId = ep.etsy_listing_id;
                 eVarId = ep.etsy_variant_id;
                 metadata.etsy_stock_snapshot = ep.stock_quantity;
-                metadata.etsy_updated_at = ep.updated_at;
+                metadata.etsy_updated_at = ep.etsy_updated_at;
                 metadata.status = (sp.stock_quantity === ep.stock_quantity) ? 'Matching' : 'Action Required';
                 processedEtsyVariantIds.add(ep.etsy_variant_id);
             } else {
@@ -501,7 +501,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 image_url: ep.image_url,
                 status: 'Matching',
                 etsy_stock_snapshot: ep.stock_quantity,
-                etsy_updated_at: ep.updated_at,
+                etsy_updated_at: ep.etsy_updated_at,
                 master_stock: ep.stock_quantity,
             };
 

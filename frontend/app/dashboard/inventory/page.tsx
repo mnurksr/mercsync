@@ -449,7 +449,7 @@ export default function InventoryPage() {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4 text-center">
-                                                <span className="text-base font-black text-gray-900">{item.master_stock}</span>
+                                                <span className="text-base font-black text-gray-900">{item.status === 'Action Required' ? '-' : item.master_stock}</span>
                                             </td>
                                             <td className="px-2 py-4 text-center">
                                                 <div className="flex flex-col gap-1">
