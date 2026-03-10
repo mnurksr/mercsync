@@ -52,15 +52,11 @@ export async function getProductsWithMeta(searchQuery: string = '', ownerId?: st
     const isShopifyConnected = shopData.shopify_connected === true ||
         (shopData.is_active === true && !!shopData.access_token)
 
-    // Fetch inventory items with levels
+    // Fetch inventory items
     let query = supabase
         .from('inventory_items')
         .select(`
-            id, sku, name, updated_at,
-            inventory_levels (
-                available_stock,
-                market_iso
-            )
+            id, sku, name, updated_at, master_stock
         `)
         .eq('shop_id', shopData.id)
         .order('updated_at', { ascending: false })
@@ -74,9 +70,7 @@ export async function getProductsWithMeta(searchQuery: string = '', ownerId?: st
     if (error || !data) return { products: [], isEtsyConnected, isShopifyConnected }
 
     const products = data.map((item: any) => {
-        const totalStock = item.inventory_levels?.reduce(
-            (sum: number, l: any) => sum + (l.available_stock || 0), 0
-        ) || 0
+        const totalStock = item.master_stock || 0
 
         // Determine status based on connection state
         let status: Product['status'] = 'synced'

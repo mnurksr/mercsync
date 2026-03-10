@@ -370,6 +370,10 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             status?: string | null;
             shopify_inventory_item_id?: string | null;
             master_stock?: number;
+            shopify_stock_snapshot?: number;
+            etsy_stock_snapshot?: number;
+            shopify_updated_at?: string;
+            etsy_updated_at?: string;
         }
     ) => {
         let invItemId = null;
@@ -405,6 +409,10 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 status: metadata?.status || 'Matching',
                 shopify_inventory_item_id: metadata?.shopify_inventory_item_id,
                 master_stock: metadata?.master_stock || 0,
+                shopify_stock_snapshot: metadata?.shopify_stock_snapshot || 0,
+                etsy_stock_snapshot: metadata?.etsy_stock_snapshot || 0,
+                shopify_updated_at: metadata?.shopify_updated_at,
+                etsy_updated_at: metadata?.etsy_updated_at,
                 updated_at: new Date().toISOString()
             };
 
@@ -426,20 +434,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         return invItemId;
     };
 
-    const upsertInvLevel = async (invItemId: string, market: 'SHOPIFY' | 'ETSY', stock: number) => {
-        if (!invItemId || !mainLocationId) return;
-        // Also update inventory_levels for backward compatibility if needed, 
-        // but inventory_items is now our primary source for available_stock.
-        const { error } = await supabase.from('inventory_levels').upsert({
-            inventory_item_id: invItemId,
-            location_id: mainLocationId,
-            shop_id: shop.id,
-            market_iso: market,
-            available_stock: stock || 0,
-            updated_at: new Date().toISOString()
-        }, { onConflict: 'inventory_item_id,location_id,market_iso' });
-        if (error) console.error(`[Sync] Failed to upsert ${market} level:`, error.message);
-    };
 
     // 3. Process Shopify products
     for (const sp of sProds) {
@@ -448,6 +442,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         const metadata: any = {
             image_url: sp.image_url,
             shopify_inventory_item_id: sp.shopify_inventory_item_id,
+            shopify_stock_snapshot: sp.stock_quantity,
+            shopify_updated_at: sp.updated_at || new Date().toISOString(),
             master_stock: sp.stock_quantity,
         };
 
@@ -461,11 +457,16 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             if (!metadata.image_url && ep?.image_url) metadata.image_url = ep.image_url;
 
             // Discrepancy Detection: 
-            // If shopify stock !== etsy stock, status is Mismatch
+            // If shopify stock !== etsy stock, status is Action Required
             if (ep && sp.stock_quantity !== ep.stock_quantity) {
-                metadata.status = 'Mismatch';
+                metadata.status = 'Action Required';
             } else {
                 metadata.status = 'Matching';
+            }
+
+            if (ep) {
+                metadata.etsy_stock_snapshot = ep.stock_quantity;
+                metadata.etsy_updated_at = ep.updated_at || new Date().toISOString();
             }
 
             const invItemId = await upsertInvItem(
@@ -477,14 +478,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 sp.etsy_variant_id,
                 metadata
             );
-
-            if (invItemId) {
-                await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
-                if (ep) {
-                    await upsertInvLevel(invItemId, 'ETSY', ep.stock_quantity);
-                    processedEtsyVariantIds.add(ep.etsy_variant_id);
-                }
-            }
         } else {
             // Unmatched Shopify
             const rawSku = sp.sku;
@@ -500,9 +493,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 null,
                 metadata
             );
-            if (invItemId) {
-                await upsertInvLevel(invItemId, 'SHOPIFY', sp.stock_quantity);
-            }
         }
     }
 
@@ -517,6 +507,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         const metadata = {
             image_url: ep.image_url,
             status: 'Matching',
+            etsy_stock_snapshot: ep.stock_quantity,
+            etsy_updated_at: ep.updated_at || new Date().toISOString(),
             master_stock: ep.stock_quantity,
         };
 
@@ -530,9 +522,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             ep.etsy_variant_id,
             metadata
         );
-        if (invItemId) {
-            await upsertInvLevel(invItemId, 'ETSY', ep.stock_quantity);
-        }
     }
 }
 

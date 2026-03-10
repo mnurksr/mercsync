@@ -1,100 +1,204 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { getInventoryItems, forceSyncStock, updateInventoryStock, type InventoryItem } from '../../actions/inventory';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+    getInventoryItems,
+    forceSyncStock,
+    updateInventoryStock,
+    getShopifyLocations,
+    bulkUpdateStock,
+    type InventoryItem
+} from '../../actions/inventory';
 import {
     Search, Package, Layers, RefreshCw,
     AlertTriangle, Check, Loader2,
-    Box, ShoppingBag, Store, Pencil, X
+    Box, ShoppingBag, Store, Pencil, X,
+    ChevronRight, History, Zap, CheckSquare, Square,
+    ExternalLink
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
 
-// --- StockEditModal Component ---
-interface StockEditModalProps {
+// --- SymmetricSyncModal Component ---
+interface SymmetricSyncModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (newStock: number) => Promise<void>;
     item: InventoryItem | null;
+    shopLocations: { id: string, name: string, active: boolean }[];
 }
 
-function StockEditModal({ isOpen, onClose, onConfirm, item }: StockEditModalProps) {
-    const [newStock, setNewStock] = useState<number>(0);
+function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }: SymmetricSyncModalProps) {
+    const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+    const [syncSource, setSyncSource] = useState<'shopify' | 'etsy' | 'manual'>('manual');
+    const [manualStock, setManualStock] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        if (item) setNewStock(item.master_stock);
-    }, [item]);
+        if (item) {
+            setManualStock(item.master_stock);
+            // Default select locations that were marked active in shop settings
+            setSelectedLocations(shopLocations.filter(l => l.active).map(l => l.id));
+
+            // Auto-detect best source if it's "Action Required"
+            const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
+            const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
+            if (sTime > eTime) setSyncSource('shopify');
+            else if (eTime > sTime) setSyncSource('etsy');
+        }
+    }, [item, shopLocations]);
 
     if (!isOpen || !item) return null;
+
+    // Simulate/Calculate live Shopify stock based on selected locations
+    // In a real scenario, we might fetch live per-location stock here if not already in snapshots
+    const liveShopifyStock = item.shopify_stock_snapshot;
+    const liveEtsyStock = item.etsy_stock_snapshot;
+
+    const finalStockToApply = syncSource === 'shopify'
+        ? liveShopifyStock
+        : syncSource === 'etsy'
+            ? liveEtsyStock
+            : manualStock;
 
     const handleConfirm = async () => {
         setIsSubmitting(true);
         try {
-            await onConfirm(newStock);
+            await onConfirm(finalStockToApply);
             onClose();
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const isLatestShopify = (item.shopify_updated_at || 0) > (item.etsy_updated_at || 0);
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="px-6 py-6 border-b border-gray-100 flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-gray-900">Update Stock</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                        <X className="w-5 h-5 text-gray-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+                <div className="px-8 py-8 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                    <div>
+                        <h3 className="text-2xl font-black text-gray-900 leading-none">Resolve Discrepancy</h3>
+                        <p className="text-gray-400 font-bold text-xs mt-2 uppercase tracking-widest">Symmetric Stock Synchronization</p>
+                    </div>
+                    <button onClick={onClose} className="p-3 hover:bg-gray-100 rounded-2xl transition-all active:scale-90">
+                        <X className="w-6 h-6 text-gray-400" />
                     </button>
                 </div>
 
-                <div className="p-6">
-                    <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-indigo-600 border border-gray-100">
-                            <Package className="w-6 h-6" />
+                <div className="p-8 overflow-y-auto flex-1 space-y-8">
+                    {/* Comparison Cards */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* Shopify Card */}
+                        <div className={`p-6 rounded-[2rem] border-2 transition-all ${syncSource === 'shopify' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-50 bg-gray-50/50'}`}
+                            onClick={() => setSyncSource('shopify')}>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
+                                        <ShoppingBag className="w-4 h-4" />
+                                    </div>
+                                    <span className="text-xs font-black text-blue-600 uppercase tracking-tighter">Shopify</span>
+                                </div>
+                                {isLatestShopify && (
+                                    <span className="px-2 py-0.5 bg-blue-600 text-[8px] text-white font-black rounded-full uppercase">Latest</span>
+                                )}
+                            </div>
+                            <div className="text-4xl font-black text-gray-900 mb-1">{liveShopifyStock}</div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live Inventory</p>
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
-                            <p className="text-xs font-mono text-gray-500 mt-0.5">{item.sku || 'NO-SKU'}</p>
+
+                        {/* Etsy Card */}
+                        <div className={`p-6 rounded-[2rem] border-2 transition-all ${syncSource === 'etsy' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50 bg-gray-50/50'}`}
+                            onClick={() => setSyncSource('etsy')}>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
+                                        <Store className="w-4 h-4" />
+                                    </div>
+                                    <span className="text-xs font-black text-orange-600 uppercase tracking-tighter">Etsy</span>
+                                </div>
+                                {!isLatestShopify && (
+                                    <span className="px-2 py-0.5 bg-orange-600 text-[8px] text-white font-black rounded-full uppercase">Latest</span>
+                                )}
+                            </div>
+                            <div className="text-4xl font-black text-gray-900 mb-1">{liveEtsyStock}</div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Platform Stock</p>
                         </div>
                     </div>
 
+                    {/* Location Selection (Live Counter) */}
                     <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">New Available Stock</label>
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    value={newStock}
-                                    onChange={(e) => setNewStock(parseInt(e.target.value) || 0)}
-                                    className="w-full pl-4 pr-12 py-3.5 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-lg font-bold"
-                                />
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">Units</div>
-                            </div>
+                        <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-indigo-500" /> Shopify Locations
+                            </h4>
+                            <span className="text-[10px] font-bold text-gray-400">STOCK IS SUMMED LIVE</span>
                         </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {shopLocations.map(loc => (
+                                <label key={loc.id} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${selectedLocations.includes(loc.id) ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={selectedLocations.includes(loc.id)}
+                                        onChange={() => {
+                                            setSelectedLocations(prev =>
+                                                prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]
+                                            );
+                                            setSyncSource('manual'); // Manual override if locations change
+                                        }}
+                                    />
+                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedLocations.includes(loc.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-200 bg-gray-50'}`}>
+                                        {selectedLocations.includes(loc.id) && <Check className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-700 truncate">{loc.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
 
-                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                                <strong>Important:</strong> This change will be pushed to all connected platforms (Shopify and Etsy). This cannot be undone.
-                            </p>
+                    {/* Final Action Required */}
+                    <div className="p-6 bg-gray-900 rounded-[2rem] text-white space-y-4">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-black uppercase tracking-widest">Stock to Apply globally</span>
+                            <div className="text-3xl font-black">{finalStockToApply} units</div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setSyncSource('shopify')}
+                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${syncSource === 'shopify' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                            >
+                                Use Shopify
+                            </button>
+                            <button
+                                onClick={() => setSyncSource('etsy')}
+                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${syncSource === 'etsy' ? 'bg-orange-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                            >
+                                Use Etsy
+                            </button>
+                            <button
+                                onClick={() => setSyncSource(isLatestShopify ? 'shopify' : 'etsy')}
+                                className="flex-1 py-3 bg-indigo-600 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-500"
+                            >
+                                <History className="w-3 h-3" /> Use Latest
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="px-6 py-6 bg-gray-50 flex items-center gap-3">
+                <div className="px-8 py-8 bg-gray-50 flex items-center gap-4 sticky bottom-0 border-t border-gray-100">
                     <button
                         onClick={onClose}
-                        className="flex-1 py-3.5 px-4 rounded-2xl border border-gray-200 bg-white text-gray-700 font-bold text-sm hover:bg-gray-100 transition-all active:scale-95"
+                        className="px-8 py-4 rounded-2xl border border-gray-200 bg-white text-gray-700 font-bold text-sm hover:bg-gray-100 transition-all active:scale-95"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleConfirm}
                         disabled={isSubmitting}
-                        className="flex-[2] py-3.5 px-4 rounded-2xl bg-indigo-600 text-white font-bold text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 py-4 px-8 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
                     >
-                        {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        Confirm Changes
+                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                        Sync Both Platforms
                     </button>
                 </div>
             </div>
@@ -102,20 +206,25 @@ function StockEditModal({ isOpen, onClose, onConfirm, item }: StockEditModalProp
     );
 }
 
-// --- Main InventoryPage Redesign ---
+// --- Main InventoryPage Component ---
 export default function InventoryPage() {
     const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [shopLocations, setShopLocations] = useState<{ id: string, name: string, active: boolean }[]>([]);
 
-    // Edit Modal State
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+    // Selection State
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+    // Sync Modal State
+    const [syncModalOpen, setSyncModalOpen] = useState(false);
+    const [targetItem, setTargetItem] = useState<InventoryItem | null>(null);
 
     useEffect(() => {
         loadData();
+        loadLocations();
     }, []);
 
     useEffect(() => {
@@ -138,6 +247,11 @@ export default function InventoryPage() {
         }
     };
 
+    const loadLocations = async () => {
+        const locs = await getShopifyLocations();
+        setShopLocations(locs);
+    };
+
     const handleForceSync = async (id?: string) => {
         setIsSyncing(true);
         try {
@@ -156,10 +270,10 @@ export default function InventoryPage() {
     };
 
     const handleUpdateStock = async (newStock: number) => {
-        if (!selectedItem) return;
+        if (!targetItem) return;
 
         try {
-            const res = await updateInventoryStock(selectedItem.id, newStock);
+            const res = await updateInventoryStock(targetItem.id, newStock);
             if (res.success) {
                 toast.success(res.message);
                 loadData();
@@ -171,9 +285,37 @@ export default function InventoryPage() {
         }
     };
 
+    const handleBulkSync = async (strategy: 'shopify' | 'etsy' | 'latest') => {
+        setIsSyncing(true);
+        try {
+            const res = await bulkUpdateStock(selectedIds, strategy);
+            if (res.success) {
+                toast.success(res.message);
+                setSelectedIds([]);
+                loadData();
+            } else {
+                toast.error(res.message);
+            }
+        } catch (err) {
+            toast.error('Bulk sync failed');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const getStockStatus = (status: string | null) => {
+        if (status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
         if (status === 'Mismatch') return { label: 'Mismatch', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-        return { label: 'Matching', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
+        return { label: 'In Sync', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === items.length) setSelectedIds([]);
+        else setSelectedIds(items.map(i => i.id));
     };
 
     return (
@@ -181,8 +323,8 @@ export default function InventoryPage() {
             {/* Header Area */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
                 <div>
-                    <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">Master Inventory</h1>
-                    <p className="text-gray-500 font-medium">Control your warehouse stock levels across all sales channels.</p>
+                    <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">Inventory Control</h1>
+                    <p className="text-gray-500 font-medium">Review stock discrepancies and sync across Etsy & Shopify.</p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -192,7 +334,7 @@ export default function InventoryPage() {
                         className="flex items-center gap-2 px-6 py-3.5 bg-white border-2 border-gray-100 text-gray-900 rounded-2xl font-bold shadow-sm hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
                     >
                         {isSyncing ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5 text-indigo-600" />}
-                        Global Sync
+                        Fetch Latest Counts
                     </button>
                 </div>
             </div>
@@ -217,27 +359,37 @@ export default function InventoryPage() {
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="pl-8 pr-6 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Listing</th>
-                                <th className="px-6 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">SKU Identifier</th>
-                                <th className="px-6 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
-                                <th className="px-6 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Master Stock</th>
-                                <th className="pl-6 pr-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Actions</th>
+                                <th className="pl-8 pr-4 py-6 w-10">
+                                    <button onClick={toggleSelectAll} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
+                                        {selectedIds.length === items.length && items.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
+                                    </button>
+                                </th>
+                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Listing</th>
+                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">SKU</th>
+                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
+                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Master</th>
+                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Snapshots</th>
+                                <th className="px-4 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Links</th>
+                                <th className="pl-4 pr-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100/50">
                             {isLoading ? (
                                 [...Array(6)].map((_, i) => (
                                     <tr key={i} className="animate-pulse">
-                                        <td className="pl-8 pr-6 py-6"><div className="h-5 bg-gray-100 rounded-lg w-48"></div></td>
-                                        <td className="px-6 py-6"><div className="h-4 bg-gray-100 rounded-lg w-24"></div></td>
-                                        <td className="px-6 py-6"><div className="h-6 bg-gray-100 rounded-full w-20 mx-auto"></div></td>
-                                        <td className="px-6 py-6"><div className="h-5 bg-gray-100 rounded-lg w-12 mx-auto"></div></td>
-                                        <td className="pl-6 pr-8 py-6 text-right"><div className="h-10 bg-gray-100 rounded-xl w-20 ml-auto"></div></td>
+                                        <td className="px-8 py-6"><div className="h-5 w-5 bg-gray-100 rounded"></div></td>
+                                        <td className="px-4 py-6"><div className="h-5 bg-gray-100 rounded-lg w-48"></div></td>
+                                        <td className="px-4 py-6"><div className="h-4 bg-gray-100 rounded-lg w-24"></div></td>
+                                        <td className="px-4 py-6"><div className="h-6 bg-gray-100 rounded-full w-20 mx-auto"></div></td>
+                                        <td className="px-4 py-6"><div className="h-5 bg-gray-100 rounded-lg w-12 mx-auto"></div></td>
+                                        <td className="px-4 py-6"><div className="h-4 bg-gray-100 rounded-lg w-32 mx-auto"></div></td>
+                                        <td className="px-4 py-6"><div className="h-4 bg-gray-100 rounded-lg w-16 mx-auto"></div></td>
+                                        <td className="pl-4 pr-8 py-6 text-right"><div className="h-10 bg-gray-100 rounded-xl w-20 ml-auto"></div></td>
                                     </tr>
                                 ))
                             ) : items.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-24 text-center">
+                                    <td colSpan={7} className="px-6 py-24 text-center">
                                         <div className="flex flex-col items-center justify-center text-gray-300">
                                             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
                                                 <Layers className="w-10 h-10 opacity-40" />
@@ -250,36 +402,34 @@ export default function InventoryPage() {
                             ) : (
                                 items.map((item) => {
                                     const displayStatus = getStockStatus(item.status);
+                                    const isSelected = selectedIds.includes(item.id);
                                     return (
-                                        <tr key={item.id} className="hover:bg-indigo-50/10 transition-colors group">
-                                            <td className="pl-6 pr-4 py-4">
+                                        <tr key={item.id} className={`hover:bg-indigo-50/10 transition-colors group ${isSelected ? 'bg-indigo-50/30' : ''}`}>
+                                            <td className="pl-8 pr-4 py-4">
+                                                <button onClick={() => toggleSelect(item.id)} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
+                                                    {isSelected ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 shadow-sm overflow-hidden group-hover:border-indigo-200 transition-colors">
+                                                    <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 shadow-sm overflow-hidden">
                                                         {item.image_url ? (
                                                             <img src={item.image_url} alt="" className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <Package className="w-5 h-5 group-hover:text-indigo-500 transition-colors" />
+                                                            <Package className="w-5 h-5" />
                                                         )}
                                                     </div>
-                                                    <div className="min-w-0 max-w-[200px] lg:max-w-sm">
+                                                    <div className="min-w-0 max-w-[200px]">
                                                         <p className="text-sm font-black text-gray-900 truncate">{item.name || 'Unnamed Product'}</p>
                                                         <div className="flex items-center gap-2 mt-1 ">
-                                                            {item.shopify_variant_id && (
-                                                                <span className="flex items-center gap-1 text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase border border-blue-100">
-                                                                    <ShoppingBag className="w-2.5 h-2.5" /> Shopify
-                                                                </span>
-                                                            )}
-                                                            {item.etsy_variant_id && (
-                                                                <span className="flex items-center gap-1 text-[9px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded uppercase border border-orange-100">
-                                                                    <Store className="w-2.5 h-2.5" /> Etsy
-                                                                </span>
-                                                            )}
+                                                            {item.shopify_variant_id && <ShoppingBag className="w-2.5 h-2.5 text-blue-500" />}
+                                                            {item.etsy_variant_id && <Store className="w-2.5 h-2.5 text-orange-500" />}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-xs font-black text-gray-500 tracking-tight bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">{item.sku || 'NO-SKU'}</span>
+                                                <span className="text-[10px] font-black text-gray-500 tracking-tight bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{item.sku || 'NO-SKU'}</span>
                                             </td>
                                             <td className="px-4 py-4 text-center">
                                                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ring-1 ${displayStatus.color}`}>
@@ -289,26 +439,52 @@ export default function InventoryPage() {
                                             <td className="px-4 py-4 text-center">
                                                 <span className="text-base font-black text-gray-900">{item.master_stock}</span>
                                             </td>
-                                            <td className="pl-4 pr-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedItem(item);
-                                                            setEditModalOpen(true);
-                                                        }}
-                                                        className="px-3 py-2 bg-white border border-gray-200 text-gray-700 font-bold text-[10px] rounded-lg shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-1.5 active:scale-95"
-                                                    >
-                                                        <Pencil className="w-3 h-3" />
-                                                        Update
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleForceSync(item.id)}
-                                                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-white border border-transparent hover:border-indigo-100 rounded-lg transition-all"
-                                                        title="Force re-sync"
-                                                    >
-                                                        <RefreshCw className="w-3.5 h-3.5" />
-                                                    </button>
+                                            <td className="px-4 py-4 text-center">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-center gap-2 text-[10px] font-bold">
+                                                        <span className="text-blue-600">S: {item.shopify_stock_snapshot}</span>
+                                                        <span className="text-gray-300">|</span>
+                                                        <span className="text-orange-600">E: {item.etsy_stock_snapshot}</span>
+                                                    </div>
                                                 </div>
+                                            </td>
+                                            <td className="px-4 py-4 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {item.shopify_product_id && (
+                                                        <a
+                                                            href={`https://${item.shop_domain}/admin/products/${item.shopify_product_id}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                                                            title="Edit on Shopify"
+                                                        >
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    )}
+                                                    {item.etsy_listing_id && (
+                                                        <a
+                                                            href={`https://www.etsy.com/your/shops/me/listing/${item.etsy_listing_id}/edit`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="p-1.5 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
+                                                            title="Edit on Etsy"
+                                                        >
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="pl-4 pr-8 py-4 text-right">
+                                                <button
+                                                    onClick={() => {
+                                                        setTargetItem(item);
+                                                        setSyncModalOpen(true);
+                                                    }}
+                                                    className="px-4 py-2.5 bg-gray-900 text-white font-black text-[10px] rounded-xl shadow-lg shadow-gray-200 hover:bg-black transition-all flex items-center gap-2 active:scale-95 ml-auto uppercase tracking-widest"
+                                                >
+                                                    <Zap className="w-3.5 h-3.5" />
+                                                    Sync
+                                                </button>
                                             </td>
                                         </tr>
                                     );
@@ -319,15 +495,59 @@ export default function InventoryPage() {
                 </div>
             </div>
 
-            {/* Edit Stock Modal */}
-            <StockEditModal
-                isOpen={editModalOpen}
+            {/* Bulk Action Footer */}
+            {selectedIds.length > 0 && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-10 duration-500">
+                    <div className="bg-gray-900 rounded-[2.5rem] shadow-2xl p-4 flex items-center gap-8 border border-white/10 backdrop-blur-xl">
+                        <div className="pl-6 pr-4 border-r border-white/10">
+                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-0.5">Selected Items</p>
+                            <p className="text-2xl font-black text-white leading-none">{selectedIds.length}</p>
+                        </div>
+
+                        <div className="flex items-center gap-2 pr-4">
+                            <button
+                                onClick={() => handleBulkSync('shopify')}
+                                className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
+                            >
+                                <ShoppingBag className="w-5 h-5 text-blue-400" />
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Shopify Source</span>
+                            </button>
+                            <button
+                                onClick={() => handleBulkSync('etsy')}
+                                className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
+                            >
+                                <Store className="w-5 h-5 text-orange-400" />
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Etsy Source</span>
+                            </button>
+                            <button
+                                onClick={() => handleBulkSync('latest')}
+                                className="flex flex-col items-center gap-1.5 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-2xl transition-all shadow-xl shadow-indigo-900/50"
+                            >
+                                <History className="w-5 h-5 text-white" />
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Latest Source</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => setSelectedIds([])}
+                            className="p-3 text-white/40 hover:text-white transition-colors mr-2"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Symmetric Sync Modal */}
+            <SymmetricSyncModal
+                isOpen={syncModalOpen}
                 onClose={() => {
-                    setEditModalOpen(false);
-                    setSelectedItem(null);
+                    setSyncModalOpen(false);
+                    setTargetItem(null);
                 }}
                 onConfirm={handleUpdateStock}
-                item={selectedItem}
+                item={targetItem}
+                shopLocations={shopLocations}
             />
         </div>
     );

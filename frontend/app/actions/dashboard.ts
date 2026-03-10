@@ -69,13 +69,12 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
             .in('shop_id', shopIds)
         totalProducts = count || 0
 
-        // At Risk: Low stock? We need to join with inventory_levels
-        // For simplicity/performance now, let's query levels with low stock (<5)
+        // At Risk: Low stock (<5)
         const { count: riskCount } = await supabase
-            .from('inventory_levels')
+            .from('inventory_items')
             .select('*', { count: 'exact', head: true })
             .in('shop_id', shopIds)
-            .lt('available_stock', 5)
+            .lt('master_stock', 5)
         riskProducts = riskCount || 0
     }
 

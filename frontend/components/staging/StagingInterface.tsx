@@ -914,7 +914,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [reconcileGroups, setReconcileGroups] = useState<ReconcileGroup[]>([]);
     const [syncing, setSyncing] = useState(false);
     const [savingOverlay, setSavingOverlay] = useState<'loading' | 'success' | null>(null);
-    const [activeTab, setActiveTab] = useState<'equalize' | 'catalog'>('equalize');
+    const [activeTab, setActiveTab] = useState<'catalog'>('catalog');
 
 
 
@@ -1434,57 +1434,10 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         setSavingOverlay(null);
     };
 
-    // Update stock for an item
-    const updateStock = (itemId: string, platform: 'shopify' | 'etsy', value: number) => {
-        setReconcileGroups(prev => prev.map(g => ({
-            ...g,
-            items: g.items.map(i => {
-                if (i.id !== itemId) return i;
-                return platform === 'shopify'
-                    ? { ...i, shopifyStock: value }
-                    : { ...i, etsyStock: value };
-            })
-        })));
-    };
-
-    // Sync single item
-    const syncItem = (itemId: string) => {
-        setReconcileGroups(prev => prev.map(g => ({
-            ...g,
-            items: g.items.map(i => {
-                if (i.id !== itemId) return i;
-                const min = Math.min(i.shopifyStock, i.etsyStock);
-                return { ...i, shopifyStock: min, etsyStock: min };
-            })
-        })));
-    };
-
-    // Sync ALL items
-    const syncAll = () => {
-        setReconcileGroups(prev => prev.map(g => ({
-            ...g,
-            items: g.items.map(i => {
-                if (i.single) return i;
-                const min = Math.min(i.shopifyStock, i.etsyStock);
-                return { ...i, shopifyStock: min, etsyStock: min };
-            })
-        })));
-    };
-
     // Reset scope depending on activeTab
     const resetAll = () => {
-        if (activeTab === 'equalize') {
-            setReconcileGroups(prev => prev.map(g => ({
-                ...g,
-                items: g.items.map(i => ({
-                    ...i,
-                    shopifyStock: i.originalShopifyStock,
-                    etsyStock: i.originalEtsyStock
-                }))
-            })));
-        } else if (activeTab === 'catalog') {
-            setCrossListing({ to_shopify: [], to_etsy: [] });
-        }
+        // Since 'equalize' tab is removed, only 'catalog' logic remains.
+        setCrossListing({ to_shopify: [], to_etsy: [] });
     };
 
     // Save changes
@@ -1683,7 +1636,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         };
 
         const tabs = [
-            { key: 'equalize' as const, label: 'Stock Equalization', icon: ArrowDownUp, count: mismatchItems.length, color: 'red' },
             { key: 'catalog' as const, label: 'Complete Catalog', icon: Copy, count: totalMissingCount, color: 'amber' },
         ];
 
@@ -1720,8 +1672,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                         <ArrowLeft className="w-5 h-5 text-gray-600" />
                                     </button>
                                     <div>
-                                        <h1 className="text-xl font-bold text-gray-900">Stock Reconciliation</h1>
-                                        <p className="text-sm text-gray-500">Review and fix inventory differences across platforms</p>
+                                        <h1 className="text-xl font-bold text-gray-900">Finalize Shop Setup</h1>
+                                        <p className="text-sm text-gray-500">Clone missing products to ensure a complete catalog sync</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -1786,155 +1738,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     {/* Tab Content */}
                     <div className="max-w-[1200px] mx-auto px-6 py-6">
 
-                        {/* ──── TAB 1: STOCK EQUALIZATION ──── */}
-                        {activeTab === 'equalize' && (
-                            <div>
-                                <div className="mb-5">
-                                    <h2 className="text-lg font-bold text-gray-900 mb-1">Stock Equalization</h2>
-                                    <p className="text-sm text-gray-500">Fix stock mismatches between platforms to prevent overselling.</p>
-                                </div>
-                                {matchedItems.length === 0 ? (
-                                    <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
-                                        <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                            <Package className="w-8 h-8 text-gray-400" />
-                                        </div>
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-1">No matched products!</h3>
-                                        <p className="text-sm text-gray-500">First match products across platforms to equalize their stock.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className={`text-sm font-medium ${mismatchItems.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                                {mismatchItems.length > 0
-                                                    ? `${mismatchItems.length} variant${mismatchItems.length > 1 ? 's' : ''} with mismatched stock`
-                                                    : 'All variant stocks are perfectly in sync'}
-                                            </span>
-                                            {mismatchItems.length > 0 && (
-                                                <button
-                                                    onClick={syncAll}
-                                                    className="h-9 px-4 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors"
-                                                >
-                                                    <ArrowDownUp className="w-4 h-4" /> Equalize All
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {(() => {
-                                            // Group matched items by their parent reconcile group
-                                            const matchedGroups = new Map<string, { group: ReconcileGroup, items: ReconcileItem[], hasMismatch: boolean }>();
-                                            matchedItems.forEach(item => {
-                                                const parentGroup = reconcileGroups.find(g => g.items.some(i => i.id === item.id));
-                                                if (!parentGroup) return;
-                                                if (!matchedGroups.has(parentGroup.id)) {
-                                                    matchedGroups.set(parentGroup.id, { group: parentGroup, items: [], hasMismatch: false });
-                                                }
-                                                const g = matchedGroups.get(parentGroup.id)!;
-                                                g.items.push(item);
-                                                if (item.shopifyStock !== item.etsyStock) g.hasMismatch = true;
-                                            });
-
-                                            return Array.from(matchedGroups.values())
-                                                .sort((a, b) => (a.hasMismatch === b.hasMismatch ? 0 : a.hasMismatch ? -1 : 1)) // Mismatches at the top
-                                                .map(({ group, items, hasMismatch }) => {
-                                                    const img = (group.items[0]?.shopify || group.items[0]?.etsy)?.imageUrl;
-
-                                                    return (
-                                                        <div key={group.id} className={`bg-white rounded-2xl border overflow-hidden shadow-sm ${hasMismatch ? 'border-red-200' : 'border-gray-200'}`}>
-                                                            {/* Product Header */}
-                                                            <div className={`p-4 flex items-center gap-4 border-b ${hasMismatch ? 'bg-red-50/50 border-red-100' : 'bg-gray-50/50 border-gray-100'}`}>
-                                                                <div className="w-14 h-14 rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden shrink-0">
-                                                                    {img ?
-                                                                        <img src={img} className="w-full h-full object-cover" alt="" /> :
-                                                                        <div className="w-full h-full bg-gray-50 flex items-center justify-center"><Package className="w-6 h-6 text-gray-300" /></div>
-                                                                    }
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <h3 className="font-bold text-gray-900 truncate">{group.title}</h3>
-                                                                    <div className="flex items-center gap-2 mt-1">
-                                                                        {hasMismatch ? (
-                                                                            <span className="text-xs text-red-600 font-medium">{items.filter(i => i.shopifyStock !== i.etsyStock).length} mismatched variant(s)</span>
-                                                                        ) : (
-                                                                            <span className="text-xs text-gray-500 font-medium flex items-center gap-1"><Check className="w-3.5 h-3.5 text-green-500" /> Synced</span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Variant Rows */}
-                                                            <div className="divide-y divide-gray-100 pb-2">
-                                                                {items.map(item => {
-                                                                    const isMismatch = item.shopifyStock !== item.etsyStock;
-                                                                    const diff = Math.abs(item.shopifyStock - item.etsyStock);
-                                                                    return (
-                                                                        <div key={item.id} className={`px-5 py-4 flex items-center gap-4 transition-colors ${isMismatch ? 'bg-white hover:bg-red-50/30' : 'bg-gray-50/50'}`}>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <p className="text-sm font-semibold text-gray-900 truncate">{item.shopify?.variantTitle || item.shopify?.name || 'Default'}</p>
-                                                                                <p className="text-xs text-gray-400 mt-0.5">{item.shopify?.sku || 'NO-SKU'}</p>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-4 shrink-0">
-                                                                                <div className="text-center">
-                                                                                    <div className="flex items-center justify-center gap-1.5 mb-1.5 opacity-70">
-                                                                                        <ShoppingBag className="w-3 h-3 text-gray-500" />
-                                                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Shopify</p>
-                                                                                    </div>
-                                                                                    <EditableStock value={item.shopifyStock} onChange={v => updateStock(item.id, 'shopify', v)} isExcess={item.shopifyStock > item.etsyStock} platform="shopify" />
-                                                                                </div>
-                                                                                <div className="flex flex-col items-center">
-                                                                                    {isMismatch ? (
-                                                                                        <>
-                                                                                            <span className="text-xs font-bold text-red-500 mb-1">Δ {diff}</span>
-                                                                                            <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center ring-4 ring-white shadow-sm z-10 transition-transform hover:scale-110">
-                                                                                                <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
-                                                                                            </div>
-                                                                                        </>
-                                                                                    ) : (
-                                                                                        <>
-                                                                                            <span className="text-xs font-medium text-gray-400 mb-1 opacity-0">Δ 0</span>
-                                                                                            <div className="w-5 h-5 rounded-full flex items-center justify-center z-10">
-                                                                                                <Check className="w-4 h-4 text-emerald-400" />
-                                                                                            </div>
-                                                                                        </>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div className="text-center">
-                                                                                    <div className="flex items-center justify-center gap-1.5 mb-1.5 opacity-70">
-                                                                                        <Store className="w-3 h-3 text-gray-500" />
-                                                                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Etsy</p>
-                                                                                    </div>
-                                                                                    <EditableStock value={item.etsyStock} onChange={v => updateStock(item.id, 'etsy', v)} isExcess={item.etsyStock > item.shopifyStock} platform="etsy" />
-                                                                                </div>
-
-                                                                                {isMismatch ? (
-                                                                                    <>
-                                                                                        <div className="w-px h-10 bg-gray-200 mx-2 hidden sm:block"></div>
-                                                                                        <button
-                                                                                            onClick={() => syncItem(item.id)}
-                                                                                            className="h-9 w-[100px] text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-                                                                                        >
-                                                                                            <ArrowDownUp className="w-3.5 h-3.5" /> Eq to {Math.min(item.shopifyStock, item.etsyStock)}
-                                                                                        </button>
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
-                                                                                        <div className="w-px h-10 bg-gray-200 mx-2 hidden sm:block opacity-0"></div>
-                                                                                        <div className="h-9 w-[100px] flex items-center justify-center text-xs font-medium text-green-600 bg-transparent">
-                                                                                            Synced
-                                                                                        </div>
-                                                                                    </>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                });
-                                        })()}
-                                    </div>
-                                )}
-                            </div>
-                        )}
 
                         {/* ──── TAB 2: COMPLETE YOUR CATALOG ──── */}
                         {activeTab === 'catalog' && (

@@ -47,6 +47,11 @@ export type InventoryItem = {
     shopify_product_id: string | null
     etsy_listing_id: string | null
     shop_id: string
+    shop_domain: string | null
+    shopify_stock_snapshot: number
+    etsy_stock_snapshot: number
+    shopify_updated_at: string | null
+    etsy_updated_at: string | null
 }
 
 /**
@@ -214,14 +219,15 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return []
 
-    const { data: shop } = await supabase.from('shops').select('id').eq('owner_id', ownerId).single()
+    const { data: shop } = await supabase.from('shops').select('id, shopify_domain').eq('owner_id', ownerId).single()
     if (!shop) return []
 
     let baseQuery = supabase
         .from('inventory_items')
         .select(`
             id, sku, name, image_url, status,
-            master_stock, 
+            master_stock, shopify_stock_snapshot, etsy_stock_snapshot,
+            shopify_updated_at, etsy_updated_at,
             updated_at,
             shopify_variant_id, etsy_variant_id, 
             shopify_product_id, etsy_listing_id
@@ -247,13 +253,83 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         image_url: item.image_url,
         status: item.status || 'Matching',
         master_stock: item.master_stock || 0,
+        shopify_stock_snapshot: item.shopify_stock_snapshot || 0,
+        etsy_stock_snapshot: item.etsy_stock_snapshot || 0,
+        shopify_updated_at: item.shopify_updated_at,
+        etsy_updated_at: item.etsy_updated_at,
         updated_at: item.updated_at,
         shopify_variant_id: item.shopify_variant_id,
         etsy_variant_id: item.etsy_variant_id,
         shopify_product_id: item.shopify_product_id,
         etsy_listing_id: item.etsy_listing_id,
-        shop_id: shop.id
+        shop_id: shop.id,
+        shop_domain: shop.shopify_domain
     }))
+}
+
+/**
+ * Get all available Shopify locations for the shop
+ */
+export async function getShopifyLocations(): Promise<{ id: string, name: string, active: boolean }[]> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return []
+
+    const { data: shop } = await supabase.from('shops').select('id, main_location_id').eq('owner_id', ownerId).single()
+    if (!shop) return []
+
+    const { data: locations } = await supabase
+        .from('inventory_locations')
+        .select('id, name, shopify_location_id')
+        .eq('shop_id', shop.id)
+
+    const activeIds = (shop.main_location_id || '').split(',').map((s: string) => s.trim())
+
+    return (locations || []).map((loc: any) => ({
+        id: loc.shopify_location_id || loc.id,
+        name: loc.name,
+        active: activeIds.includes(loc.shopify_location_id || loc.id)
+    }))
+}
+
+/**
+ * Perform bulk sync operations for selected items
+ */
+export async function bulkUpdateStock(
+    itemIds: string[],
+    strategy: 'shopify' | 'etsy' | 'latest'
+): Promise<{ success: boolean; message: string }> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return { success: false, message: 'Not authenticated' }
+
+    try {
+        const { data: items } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .in('id', itemIds)
+
+        if (!items) return { success: false, message: 'No items found' }
+
+        for (const item of items) {
+            let targetStock = item.master_stock
+
+            if (strategy === 'shopify') {
+                targetStock = item.shopify_stock_snapshot || 0
+            } else if (strategy === 'etsy') {
+                targetStock = item.etsy_stock_snapshot || 0
+            } else if (strategy === 'latest') {
+                const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0
+                const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0
+                targetStock = sTime >= eTime ? (item.shopify_stock_snapshot || 0) : (item.etsy_stock_snapshot || 0)
+            }
+
+            await updateInventoryStock(item.id, targetStock)
+        }
+
+        return { success: true, message: `Successfully synced ${itemIds.length} items.` }
+    } catch (err) {
+        console.error('Bulk update error:', err)
+        return { success: false, message: 'An unexpected error occurred during bulk sync' }
+    }
 }
 
 /**
