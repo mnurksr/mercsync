@@ -9,9 +9,14 @@ export type PlatformVariant = {
     sku: string | null
     price: number
     stock: number
+    otherStock?: number // Stock on the other platform if matched
     imageUrl: string | null
     isMatched: boolean
     dbId: string
+    shopifyProductId?: string
+    shopifyVariantId?: string
+    etsyListingId?: string
+    etsyVariantId?: string
 }
 
 export type ListingItem = {
@@ -19,11 +24,14 @@ export type ListingItem = {
     title: string
     imageUrl: string | null
     totalStock: number
+    otherTotalStock?: number
     variantsCount: number
     platformStatus: string
     matchStatus: 'synced' | 'unmatched' | 'partially_matched'
     platform: 'shopify' | 'etsy'
     variants: PlatformVariant[]
+    shopDomain: string
+    etsyShopId?: string
 }
 
 export type InventoryItem = {
@@ -65,16 +73,17 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         if (!resolvedOwnerId) return []
     }
 
-    // Get shop ID
+    // Get shop ID and details
     const { data: shop } = await supabase
         .from('shops')
-        .select('id')
+        .select('id, shop_domain, etsy_shop_id')
         .eq('owner_id', resolvedOwnerId)
         .maybeSingle()
 
     if (!shop) return []
 
     const tableName = platform === 'shopify' ? 'staging_shopify_products' : 'staging_etsy_products'
+    const otherTableName = platform === 'shopify' ? 'staging_etsy_products' : 'staging_shopify_products'
     const parentIdField = platform === 'shopify' ? 'shopify_product_id' : 'etsy_listing_id'
 
     let query = supabase
@@ -84,7 +93,6 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         .order('created_at', { ascending: false })
 
     if (searchQuery) {
-        // Search by parent product title or variant SKU
         query = query.or(`product_title.ilike.%${searchQuery}%,name.ilike.%${searchQuery}%,sku.ilike.%${searchQuery}%`)
     }
 
@@ -95,12 +103,34 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         return []
     }
 
+    // Fetch the "other" platform stocks for matched variants
+    const matchedOtherIds = (items || [])
+        .map(i => platform === 'shopify' ? i.etsy_variant_id : i.shopify_variant_id)
+        .filter(Boolean);
+
+    let otherStocksMap: { [key: string]: number } = {};
+    if (matchedOtherIds.length > 0) {
+        const otherIdField = platform === 'shopify' ? 'etsy_variant_id' : 'shopify_variant_id';
+        const { data: otherItems } = await supabase
+            .from(otherTableName)
+            .select(`${otherIdField}, stock_quantity`)
+            .in(otherIdField, matchedOtherIds);
+
+        if (otherItems) {
+            otherItems.forEach((oi: any) => {
+                otherStocksMap[oi[otherIdField]] = oi.stock_quantity || 0;
+            });
+        }
+    }
+
     // Group variants into Listings
     const groups: { [key: string]: ListingItem } = {};
 
     (items || []).forEach(item => {
         const groupId = item[parentIdField] || item.id;
-        const isMatched = platform === 'shopify' ? !!item.etsy_variant_id : !!item.shopify_variant_id;
+        const otherVariantId = platform === 'shopify' ? item.etsy_variant_id : item.shopify_variant_id;
+        const isMatched = !!otherVariantId;
+        const otherStock = isMatched ? (otherStocksMap[otherVariantId] || 0) : undefined;
 
         if (!groups[groupId]) {
             groups[groupId] = {
@@ -108,11 +138,14 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
                 title: item.product_title || item.name || 'Unnamed Product',
                 imageUrl: item.image_url,
                 totalStock: 0,
+                otherTotalStock: 0,
                 variantsCount: 0,
                 platformStatus: item.status || 'unknown',
                 matchStatus: 'synced',
                 platform,
-                variants: []
+                variants: [],
+                shopDomain: shop.shop_domain,
+                etsyShopId: shop.etsy_shop_id
             };
         }
 
@@ -123,11 +156,19 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             sku: item.sku,
             price: item.price || 0,
             stock: item.stock_quantity || 0,
+            otherStock,
             imageUrl: item.image_url,
-            isMatched
+            isMatched,
+            shopifyProductId: item.shopify_product_id,
+            shopifyVariantId: item.shopify_variant_id,
+            etsyListingId: item.etsy_listing_id,
+            etsyVariantId: item.etsy_variant_id
         });
 
         groups[groupId].totalStock += (item.stock_quantity || 0);
+        if (otherStock !== undefined) {
+            groups[groupId].otherTotalStock = (groups[groupId].otherTotalStock || 0) + otherStock;
+        }
         groups[groupId].variantsCount += 1;
     });
 

@@ -403,7 +403,7 @@ export default function ProductsPage() {
                                 <th className="px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Platform Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Match Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Stock</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Stock (SH / ET)</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
@@ -485,38 +485,75 @@ export default function ProductsPage() {
                                                     {getMatchStatusBadge(item.matchStatus)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={`text-sm font-bold ${item.totalStock <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                                        {item.totalStock} <span className="text-gray-500 font-medium text-xs">units</span>
-                                                    </span>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex flex-col">
+                                                            <span className={`text-sm font-bold ${activePlatform === 'shopify' ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                                {activePlatform === 'shopify' ? item.totalStock : (item.otherTotalStock ?? '-')} <span className="text-[10px] font-medium ml-0.5">SH</span>
+                                                            </span>
+                                                            <span className={`text-sm font-bold ${activePlatform === 'etsy' ? 'text-orange-600' : 'text-gray-400'}`}>
+                                                                {activePlatform === 'etsy' ? item.totalStock : (item.otherTotalStock ?? '-')} <span className="text-[10px] font-medium ml-0.5">ET</span>
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    {isQueued ? (
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
-                                                                Queued
-                                                            </span>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {/* Edit Links */}
+                                                        {item.variants[0]?.shopifyProductId && (
+                                                            <a
+                                                                href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="p-1.5 border border-gray-100 bg-white hover:bg-gray-50 rounded-md text-blue-500 shadow-sm transition-all"
+                                                                title="Edit on Shopify"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <ShoppingBag className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+                                                        {item.variants[0]?.etsyListingId && (
+                                                            <a
+                                                                href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="p-1.5 border border-gray-100 bg-white hover:bg-gray-50 rounded-md text-orange-500 shadow-sm transition-all"
+                                                                title="Edit on Etsy"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <Store className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+
+                                                        <div className="w-px h-6 bg-gray-100 mx-1"></div>
+
+                                                        {isQueued ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                                                                    Queued
+                                                                </span>
+                                                                <button
+                                                                    onClick={(e) => handleCloneClick(item, e)}
+                                                                    className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors shadow-sm"
+                                                                    title="Edit queue details"
+                                                                >
+                                                                    <Pencil className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
                                                             <button
                                                                 onClick={(e) => handleCloneClick(item, e)}
-                                                                className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors shadow-sm"
-                                                                title="Edit queue details"
+                                                                disabled={item.matchStatus === 'synced'}
+                                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
+                                                                    ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed grayscale'
+                                                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                                                                    }`}
                                                             >
-                                                                <Pencil className="w-3.5 h-3.5" />
+                                                                <Copy className="w-3.5 h-3.5 text-gray-400" />
+                                                                Clone
                                                             </button>
-                                                        </div>
-                                                    ) : (
-                                                        <button
-                                                            onClick={(e) => handleCloneClick(item, e)}
-                                                            disabled={item.matchStatus === 'synced'}
-                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
-                                                                ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed grayscale'
-                                                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
-                                                                }`}
-                                                        >
-                                                            <Copy className="w-3.5 h-3.5 text-gray-400" />
-                                                            Clone
-                                                        </button>
-                                                    )}
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
 
@@ -552,9 +589,14 @@ export default function ProductsPage() {
                                                                                 <span className="text-[10px] text-gray-500 ml-0.5">TL</span>
                                                                             </td>
                                                                             <td className="px-4 py-3">
-                                                                                <span className={`text-sm font-semibold ${variant.stock <= 0 ? 'text-red-500' : 'text-gray-700'}`}>
-                                                                                    {variant.stock} <span className="text-xs text-gray-400">units</span>
-                                                                                </span>
+                                                                                <div className="flex flex-col">
+                                                                                    <span className={`text-sm font-bold ${activePlatform === 'shopify' ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                                                        {activePlatform === 'shopify' ? variant.stock : (variant.otherStock ?? '-')} <span className="text-[10px] font-medium ml-0.5 whitespace-nowrap">SH</span>
+                                                                                    </span>
+                                                                                    <span className={`text-sm font-bold ${activePlatform === 'etsy' ? 'text-orange-600' : 'text-gray-400'}`}>
+                                                                                        {activePlatform === 'etsy' ? variant.stock : (variant.otherStock ?? '-')} <span className="text-[10px] font-medium ml-0.5 whitespace-nowrap">ET</span>
+                                                                                    </span>
+                                                                                </div>
                                                                             </td>
                                                                             <td className="px-4 py-3 text-right">
                                                                                 {variant.isMatched ? (
