@@ -32,7 +32,7 @@ interface SymmetricSyncModalProps {
 
 function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, shopLocations }: SymmetricSyncModalProps) {
     const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-    const [syncSource, setSyncSource] = useState<'shopify' | 'etsy' | 'manual'>('manual');
+    const [syncSource, setSyncSource] = useState<'shopify' | 'etsy' | 'latest' | 'manual'>('manual');
     const [manualStock, setManualStock] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,21 +79,38 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
         }, 0);
     }, [item, selectedLocations]);
 
+    const isLatestShopify = useMemo(() => {
+        if (!item) return true;
+        const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
+        const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
+        if (sTime === 0 && eTime === 0) return true; // Default to Shopify
+        return sTime >= eTime;
+    }, [item]);
+
     const liveEtsyStock = item?.etsy_stock_snapshot || 0;
 
     const finalStockToApply = syncSource === 'shopify'
         ? liveShopifyStock
         : syncSource === 'etsy'
             ? liveEtsyStock
-            : manualStock;
+            : syncSource === 'latest'
+                ? (isLatestShopify ? liveShopifyStock : liveEtsyStock)
+                : manualStock;
 
     const handleConfirm = async () => {
+        if (!syncSource || syncSource === 'manual') {
+            // Default to highest or alert user? They should select a card.
+            // But we can default to latest if none selected.
+        }
+
         setIsSubmitting(true);
         try {
             await onConfirm(finalStockToApply);
-            onClose();
+            // User requested to NOT close modal here so they can see updated numbers.
         } finally {
             setIsSubmitting(false);
+            // Reset selection visually to indicate it was applied
+            setSyncSource('manual');
         }
     };
 
@@ -106,14 +123,6 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
             setIsSubmitting(false);
         }
     };
-
-    const isLatestShopify = useMemo(() => {
-        if (!item) return true;
-        const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
-        const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
-        if (sTime === 0 && eTime === 0) return true; // Default to Shopify
-        return sTime >= eTime;
-    }, [item]);
 
     if (!isOpen || !item) return null;
 
@@ -130,102 +139,107 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                     </button>
                 </div>
 
-                <div className="p-8 overflow-y-auto flex-1 space-y-8">
-                    {/* Comparison Cards */}
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Shopify Card */}
-                        <div className={`p-6 rounded-[2rem] border-2 transition-all ${syncSource === 'shopify' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-50 bg-gray-50/50'}`}
-                            onClick={() => setSyncSource('shopify')}>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
-                                        <ShoppingBag className="w-4 h-4" />
-                                    </div>
-                                    <span className="text-xs font-black text-blue-600 uppercase tracking-tighter">Shopify</span>
-                                </div>
-                                {isLatestShopify && (
-                                    <span className="px-2 py-0.5 bg-blue-600 text-[8px] text-white font-black rounded-full uppercase">Latest</span>
-                                )}
-                            </div>
-                            <div className="text-4xl font-black text-gray-900 mb-1">{liveShopifyStock}</div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live Inventory</p>
-                        </div>
-
-                        {/* Etsy Card */}
-                        <div className={`p-6 rounded-[2rem] border-2 transition-all ${syncSource === 'etsy' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50 bg-gray-50/50'}`}
-                            onClick={() => setSyncSource('etsy')}>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
-                                        <Store className="w-4 h-4" />
-                                    </div>
-                                    <span className="text-xs font-black text-orange-600 uppercase tracking-tighter">Etsy</span>
-                                </div>
-                                {!isLatestShopify && (
-                                    <span className="px-2 py-0.5 bg-orange-600 text-[8px] text-white font-black rounded-full uppercase">Latest</span>
-                                )}
-                            </div>
-                            <div className="text-4xl font-black text-gray-900 mb-1">{liveEtsyStock}</div>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Platform Stock</p>
-                        </div>
-                    </div>
-
-                    {/* Location Selection (Live Counter) */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-                                <Zap className="w-4 h-4 text-indigo-500" /> Shopify Locations
-                            </h4>
-                            <span className="text-[10px] font-bold text-gray-400">STOCK IS SUMMED LIVE</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {shopLocations.map(loc => (
-                                <label key={loc.id} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${selectedLocations.includes(loc.id) ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                                    <input
-                                        type="checkbox"
-                                        className="hidden"
-                                        checked={selectedLocations.includes(loc.id)}
-                                        onChange={() => {
-                                            setSelectedLocations(prev =>
-                                                prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]
-                                            );
-                                            setSyncSource('manual'); // Manual override if locations change
-                                        }}
-                                    />
-                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedLocations.includes(loc.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-200 bg-gray-50'}`}>
-                                        {selectedLocations.includes(loc.id) && <Check className="w-3 h-3 text-white" />}
-                                    </div>
-                                    <span className="text-xs font-bold text-gray-700 truncate">{loc.name}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Final Action Required */}
-                    <div className="p-6 bg-gray-900 rounded-[2rem] text-white space-y-4">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-black uppercase tracking-widest">Stock to Apply globally</span>
-                            <div className="text-3xl font-black">{finalStockToApply} units</div>
-                        </div>
-                        <div className="flex gap-2">
-                            <button
+                <div className="px-8 py-6 overflow-hidden flex-1 flex flex-col justify-center">
+                    <div className="flex flex-col md:flex-row items-stretch justify-center gap-6 relative">
+                        {/* Shopify Column */}
+                        <div className="flex-1 flex flex-col gap-4">
+                            <div
+                                className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer shadow-sm hover:shadow-md ${syncSource === 'shopify' ? 'border-blue-500 bg-blue-50/30' : 'border-gray-50 bg-gray-50/50 hover:border-blue-200'}`}
                                 onClick={() => setSyncSource('shopify')}
-                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${syncSource === 'shopify' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
                             >
-                                Use Shopify
-                            </button>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-blue-100 rounded-xl text-blue-600">
+                                            <ShoppingBag className="w-4 h-4" />
+                                        </div>
+                                        <span className="text-xs font-black text-blue-600 uppercase tracking-tighter">Shopify</span>
+                                    </div>
+                                    {isLatestShopify && (
+                                        <span className="px-2 py-0.5 bg-blue-600 text-[8px] text-white font-black rounded-full uppercase">Latest</span>
+                                    )}
+                                </div>
+
+                                {isSubmitting && syncSource === 'shopify' ? (
+                                    <div className="h-10 w-24 bg-gray-200 animate-pulse rounded-lg mb-1" />
+                                ) : (
+                                    <div className="text-4xl font-black text-gray-900 mb-1">{liveShopifyStock}</div>
+                                )}
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live Inventory</p>
+                            </div>
+
+                            {/* Shopify Locations */}
+                            <div className="p-5 rounded-[2rem] border border-gray-100 bg-white shadow-sm flex-1 flex flex-col">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest flex items-center gap-1.5">
+                                        <Zap className="w-3 h-3 text-indigo-500" /> Locations
+                                    </h4>
+                                    <span className="text-[8px] font-bold text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">SUMMED LIVE</span>
+                                </div>
+                                <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1 max-h-[160px]">
+                                    {shopLocations.map(loc => (
+                                        <label key={loc.id} className={`flex items-center gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${selectedLocations.includes(loc.id) ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+                                            <input
+                                                type="checkbox"
+                                                className="hidden"
+                                                checked={selectedLocations.includes(loc.id)}
+                                                onChange={() => {
+                                                    setSelectedLocations(prev =>
+                                                        prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]
+                                                    );
+                                                    setSyncSource('shopify');
+                                                }}
+                                            />
+                                            <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all ${selectedLocations.includes(loc.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-200 bg-gray-50'}`}>
+                                                {selectedLocations.includes(loc.id) && <Check className="w-2.5 h-2.5 text-white" />}
+                                            </div>
+                                            <span className="text-[11px] font-bold text-gray-700 truncate">{loc.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Center Latest Button */}
+                        <div className="hidden md:flex flex-col justify-center items-center z-10 -mx-4 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                             <button
+                                onClick={() => setSyncSource('latest')}
+                                className={`w-14 h-14 rounded-full border-[6px] border-white shadow-xl flex items-center justify-center transition-all ${syncSource === 'latest'
+                                    ? 'bg-indigo-600 text-white hover:scale-105'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 active:scale-95'
+                                    }`}
+                                title="Use Latest Updated Stock"
+                            >
+                                <History className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Etsy Column */}
+                        <div className="flex-1 flex flex-col gap-4">
+                            <div
+                                className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer shadow-sm hover:shadow-md h-full flex flex-col justify-start ${syncSource === 'etsy' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50 bg-gray-50/50 hover:border-orange-200'}`}
                                 onClick={() => setSyncSource('etsy')}
-                                className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${syncSource === 'etsy' ? 'bg-orange-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
                             >
-                                Use Etsy
-                            </button>
-                            <button
-                                onClick={() => setSyncSource(isLatestShopify ? 'shopify' : 'etsy')}
-                                className="flex-1 py-3 bg-indigo-600 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-500"
-                            >
-                                <History className="w-3 h-3" /> Use Latest
-                            </button>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
+                                            <Store className="w-4 h-4" />
+                                        </div>
+                                        <span className="text-xs font-black text-orange-600 uppercase tracking-tighter">Etsy</span>
+                                    </div>
+                                    {!isLatestShopify && (
+                                        <span className="px-2 py-0.5 bg-orange-600 text-[8px] text-white font-black rounded-full uppercase">Latest</span>
+                                    )}
+                                </div>
+
+                                <div className="mt-2">
+                                    {isSubmitting && syncSource === 'etsy' ? (
+                                        <div className="h-10 w-24 bg-gray-200 animate-pulse rounded-lg mb-1" />
+                                    ) : (
+                                        <div className="text-4xl font-black text-gray-900 mb-1">{liveEtsyStock}</div>
+                                    )}
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Platform Stock</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -331,13 +345,18 @@ export default function InventoryPage() {
 
         // Optimistic UI Update
         const previousItems = [...items];
-        setItems(items.map(i => i.id === targetItem.id ? {
-            ...i,
+
+        const updatedItem = {
+            ...targetItem,
             master_stock: newStock,
             status: 'Matching',
             shopify_stock_snapshot: newStock,
             etsy_stock_snapshot: newStock
-        } : i));
+        };
+
+        setItems(items.map(i => i.id === targetItem.id ? updatedItem : i));
+        // Update the modal's target item reference so the modal numbers re-render instantly too
+        setTargetItem(updatedItem);
 
         try {
             const res = await updateInventoryStock(targetItem.id, newStock);
@@ -346,10 +365,12 @@ export default function InventoryPage() {
                 loadData(); // Re-fetch to ensure data consistency later
             } else {
                 setItems(previousItems); // Rollback on failure
+                setTargetItem(targetItem);
                 toast.error(res.message);
             }
         } catch (err) {
             setItems(previousItems); // Rollback on failure
+            setTargetItem(targetItem);
             toast.error('Failed to update stock');
         }
     };
