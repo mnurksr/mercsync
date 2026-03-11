@@ -51,7 +51,8 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
     const liveShopifyStock = useMemo(() => {
         if (!item || !item.location_inventory_map || selectedLocations.length === 0) return 0;
         return selectedLocations.reduce((sum, locId) => {
-            const qty = (item.location_inventory_map as any)[locId] || 0;
+            const val = (item.location_inventory_map as any)[locId];
+            const qty = parseInt(val, 10) || 0;
             return sum + qty;
         }, 0);
     }, [item, selectedLocations]);
@@ -382,7 +383,6 @@ export default function InventoryPage() {
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Master</th>
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Snapshots</th>
-                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Links</th>
                                 <th className="pl-2 pr-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Action</th>
                             </tr>
                         </thead>
@@ -396,7 +396,6 @@ export default function InventoryPage() {
                                         <td className="px-4 py-6"><div className="h-6 bg-gray-100 rounded-full w-20 mx-auto"></div></td>
                                         <td className="px-4 py-6"><div className="h-5 bg-gray-100 rounded-lg w-12 mx-auto"></div></td>
                                         <td className="px-4 py-6"><div className="h-4 bg-gray-100 rounded-lg w-32 mx-auto"></div></td>
-                                        <td className="px-4 py-6"><div className="h-4 bg-gray-100 rounded-lg w-16 mx-auto"></div></td>
                                         <td className="pl-4 pr-8 py-6 text-right"><div className="h-10 bg-gray-100 rounded-xl w-20 ml-auto"></div></td>
                                     </tr>
                                 ))
@@ -461,32 +460,6 @@ export default function InventoryPage() {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-2">
-                                                    {item.shopify_product_id && (
-                                                        <a
-                                                            href={`https://${item.shop_domain}/admin/products/${item.shopify_product_id}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                                                            title="Edit on Shopify"
-                                                        >
-                                                            <ExternalLink className="w-3.5 h-3.5" />
-                                                        </a>
-                                                    )}
-                                                    {item.etsy_listing_id && (
-                                                        <a
-                                                            href={`https://www.etsy.com/your/shops/me/listing/${item.etsy_listing_id}/edit`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="p-1.5 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors"
-                                                            title="Edit on Etsy"
-                                                        >
-                                                            <ExternalLink className="w-3.5 h-3.5" />
-                                                        </a>
-                                                    )}
-                                                </div>
-                                            </td>
                                             <td className="pl-4 pr-8 py-4 text-right">
                                                 <button
                                                     onClick={() => {
@@ -508,74 +481,88 @@ export default function InventoryPage() {
                 </div>
             </div>
 
-            {/* Bulk Action Footer */}
+            {/* Simplified Confirmation Floating Bar */}
             {selectedIds.length > 0 && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-10 duration-500">
-                    <div className="bg-gray-900 rounded-[2.5rem] shadow-2xl p-4 flex items-center gap-8 border border-white/10 backdrop-blur-xl">
-                        <div className="pl-6 pr-4 border-r border-white/10">
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-0.5">Selected Items</p>
-                            <p className="text-2xl font-black text-white leading-none">{selectedIds.length}</p>
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5">
+                    <div className="bg-gray-900/95 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-12 ring-1 ring-white/20">
+                        {/* Selected Items Counter */}
+                        <div className="flex items-center gap-4">
+                            <div className="relative">
+                                <div className="w-10 h-10 rounded-full bg-indigo-500 font-bold text-sm flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                                    {selectedIds.length}
+                                </div>
+                                <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-400 rounded-full animate-ping"></div>
+                            </div>
+                            <div>
+                                <p className="font-bold text-sm tracking-tight text-white/90">Selected Items</p>
+                                <p className="text-gray-400 text-[11px] font-medium uppercase tracking-wider">Ready to synchronize</p>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-2 pr-4">
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => {
+                                    setSelectedIds([]);
+                                    setPendingBulkAction(null);
+                                }}
+                                className="px-4 py-2.5 text-xs font-bold text-gray-400 hover:text-white transition-colors"
+                            >
+                                Clear
+                            </button>
                             {!pendingBulkAction ? (
                                 <>
                                     <button
                                         onClick={() => setPendingBulkAction('shopify')}
-                                        className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
+                                        className="px-6 py-2.5 rounded-xl bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 font-bold text-sm flex items-center gap-2 transition-all shadow-lg active:scale-95 whitespace-nowrap border border-blue-500/30"
                                     >
-                                        <ShoppingBag className="w-5 h-5 text-blue-400" />
-                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Shopify Source</span>
+                                        <ShoppingBag className="w-4 h-4" />
+                                        Shopify Source
                                     </button>
                                     <button
                                         onClick={() => setPendingBulkAction('etsy')}
-                                        className="flex flex-col items-center gap-1.5 px-6 py-3 hover:bg-white/5 rounded-2xl transition-all"
+                                        className="px-6 py-2.5 rounded-xl bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 hover:text-orange-300 font-bold text-sm flex items-center gap-2 transition-all shadow-lg active:scale-95 whitespace-nowrap border border-orange-500/30"
                                     >
-                                        <Store className="w-5 h-5 text-orange-400" />
-                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Etsy Source</span>
+                                        <Store className="w-4 h-4" />
+                                        Etsy Source
                                     </button>
                                     <button
                                         onClick={() => setPendingBulkAction('latest')}
-                                        className="flex flex-col items-center gap-1.5 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all"
+                                        className="px-6 py-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 font-bold text-sm flex items-center gap-2 transition-all shadow-lg active:scale-95 whitespace-nowrap border border-indigo-500/30"
                                     >
-                                        <History className="w-5 h-5 text-indigo-400" />
-                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Latest Source</span>
+                                        <History className="w-4 h-4" />
+                                        Latest Source
                                     </button>
                                 </>
                             ) : (
-                                <div className="flex items-center gap-4 animate-in fade-in zoom-in-95 duration-200">
+                                <div className="flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200">
                                     <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/10">
                                         <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">Apply:</span>
-                                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{pendingBulkAction} source</span>
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${pendingBulkAction === 'shopify' ? 'text-blue-400' :
+                                                pendingBulkAction === 'etsy' ? 'text-orange-400' :
+                                                    'text-indigo-400'
+                                            }`}>
+                                            {pendingBulkAction} source
+                                        </span>
                                     </div>
                                     <button
                                         onClick={() => {
                                             handleBulkSync(pendingBulkAction);
                                             setPendingBulkAction(null);
                                         }}
-                                        className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase rounded-xl shadow-xl shadow-indigo-900/40 active:scale-95 transition-all"
+                                        className="px-8 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/30 active:scale-95 whitespace-nowrap"
                                     >
-                                        Confirm Sync
+                                        <Check className="w-4 h-4" />
+                                        Confirm
                                     </button>
                                     <button
                                         onClick={() => setPendingBulkAction(null)}
-                                        className="text-[10px] font-black text-white/40 hover:text-white uppercase tracking-widest underline underline-offset-4"
+                                        className="p-2 text-white/40 hover:text-white transition-colors"
                                     >
-                                        Cancel
+                                        <X className="w-5 h-5" />
                                     </button>
                                 </div>
                             )}
                         </div>
-
-                        <button
-                            onClick={() => {
-                                setSelectedIds([]);
-                                setPendingBulkAction(null);
-                            }}
-                            className="p-3 text-white/40 hover:text-white transition-colors mr-2"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
                     </div>
                 </div>
             )}
