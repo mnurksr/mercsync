@@ -200,13 +200,10 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                         </div>
 
                         {/* Center Latest Button */}
-                        <div className="hidden md:flex flex-col justify-center items-center z-10 -mx-4 absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <div className="hidden md:flex flex-col justify-center items-center z-10 -mx-4 absolute left-1/2 top-[35%] -translate-x-1/2 -translate-y-1/2">
                             <button
-                                onClick={() => setSyncSource('latest')}
-                                className={`w-14 h-14 rounded-full border-[6px] border-white shadow-xl flex items-center justify-center transition-all ${syncSource === 'latest'
-                                    ? 'bg-indigo-600 text-white hover:scale-105'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 active:scale-95'
-                                    }`}
+                                onClick={() => setSyncSource(isLatestShopify ? 'shopify' : 'etsy')}
+                                className="w-14 h-14 rounded-full border-[6px] border-white shadow-xl flex items-center justify-center transition-all bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 active:scale-95"
                                 title="Use Latest Updated Stock"
                             >
                                 <History className="w-5 h-5" />
@@ -216,7 +213,7 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                         {/* Etsy Column */}
                         <div className="flex-1 flex flex-col gap-4">
                             <div
-                                className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer shadow-sm hover:shadow-md h-full flex flex-col justify-start ${syncSource === 'etsy' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50 bg-gray-50/50 hover:border-orange-200'}`}
+                                className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer shadow-sm hover:shadow-md h-auto flex flex-col justify-start ${syncSource === 'etsy' ? 'border-orange-500 bg-orange-50/30' : 'border-gray-50 bg-gray-50/50 hover:border-orange-200'}`}
                                 onClick={() => setSyncSource('etsy')}
                             >
                                 <div className="flex items-center justify-between mb-4">

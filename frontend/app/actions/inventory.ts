@@ -378,6 +378,61 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
     if (!ownerId) return { success: false, message: 'Not authenticated' }
 
     try {
+        // 1. Fetch Item Details
+        const { data: item, error: fetchErr } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('id', inventoryItemId)
+            .single();
+
+        if (fetchErr || !item) {
+            return { success: false, message: 'Item not found' };
+        }
+
+        // 2. Fetch Shop Details
+        const { data: shop } = await supabase.from('shops').select('*').eq('id', item.shop_id).single();
+        if (!shop) return { success: false, message: 'Shop not found' };
+
+        // 3. Update Shopify API
+        if (item.shopify_inventory_item_id) {
+            try {
+                const { setInventoryLevel } = await import('@/app/api/sync/lib/shopify');
+                const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+
+                // Use the first selected location, or the main_location_id as fallback
+                let targetLocationId = shop.main_location_id?.toString().split(',')[0].trim();
+                if (item.selected_location_ids && item.selected_location_ids.length > 0) {
+                    targetLocationId = item.selected_location_ids[0]; // For bulk/manual override, push total to primary selected
+                }
+
+                if (targetLocationId) {
+                    await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, newStock);
+                }
+            } catch (err: any) {
+                console.error('Failed to push stock to Shopify:', err.message);
+                // Non-fatal, continue to DB update and Etsy
+            }
+        }
+
+        // 4. Update Etsy API
+        if (item.etsy_listing_id && item.etsy_variant_id) {
+            try {
+                const { getInventory, mergeStockUpdate, updateInventory } = await import('@/app/api/sync/lib/etsy');
+                const accessToken = shop.etsy_access_token;
+
+                if (accessToken) {
+                    const currentInventory = await getInventory(item.etsy_listing_id, accessToken);
+                    const updatedInventoryPayload = mergeStockUpdate(currentInventory, [
+                        { item_id: item.etsy_variant_id.toString(), new_stock: newStock }
+                    ]);
+
+                    await updateInventory(item.etsy_listing_id, accessToken, updatedInventoryPayload);
+                }
+            } catch (err: any) {
+                console.error('Failed to push stock to Etsy:', err.message);
+                // Non-fatal
+            }
+        }
         // Update the master record directly in inventory_items
         const { error: updateErr } = await supabase
             .from('inventory_items')
