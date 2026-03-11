@@ -47,18 +47,16 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
         }
     }, [item, shopLocations]);
 
-    if (!isOpen || !item) return null;
-
     // Calculate live Shopify stock based on selected locations
     const liveShopifyStock = useMemo(() => {
-        if (!item.location_inventory_map || selectedLocations.length === 0) return 0;
+        if (!item || !item.location_inventory_map || selectedLocations.length === 0) return 0;
         return selectedLocations.reduce((sum, locId) => {
-            const qty = item.location_inventory_map[locId] || 0;
+            const qty = (item.location_inventory_map as any)[locId] || 0;
             return sum + qty;
         }, 0);
-    }, [item.location_inventory_map, selectedLocations]);
+    }, [item, selectedLocations]);
 
-    const liveEtsyStock = item.etsy_stock_snapshot;
+    const liveEtsyStock = item?.etsy_stock_snapshot || 0;
 
     const finalStockToApply = syncSource === 'shopify'
         ? liveShopifyStock
@@ -77,11 +75,14 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
     };
 
     const isLatestShopify = useMemo(() => {
+        if (!item) return true;
         const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
         const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
         if (sTime === 0 && eTime === 0) return true; // Default to Shopify
         return sTime >= eTime;
-    }, [item.shopify_updated_at, item.etsy_updated_at]);
+    }, [item]);
+
+    if (!isOpen || !item) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
