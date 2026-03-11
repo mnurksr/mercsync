@@ -161,6 +161,7 @@ export async function POST(req: NextRequest) {
                         .update({
                             stock_quantity: data.total,
                             location_inventory_map: data.locations,
+                            selected_location_ids: activeLocationIds,
                             shopify_updated_at: data.latest_update !== '0' ? data.latest_update : new Date().toISOString(),
                             updated_at: new Date().toISOString()
                         })

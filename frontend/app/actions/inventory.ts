@@ -53,6 +53,7 @@ export type InventoryItem = {
     shopify_updated_at: string | null
     etsy_updated_at: string | null
     location_inventory_map: any
+    selected_location_ids: string[] | null
 }
 
 /**
@@ -232,7 +233,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
             updated_at,
             shopify_variant_id, etsy_variant_id, 
             shopify_product_id, etsy_listing_id,
-            location_inventory_map
+            location_inventory_map, selected_location_ids
         `)
         .eq('shop_id', shop.id)
         .order('name', { ascending: true })
@@ -265,6 +266,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         shopify_product_id: item.shopify_product_id,
         etsy_listing_id: item.etsy_listing_id,
         location_inventory_map: item.location_inventory_map || {},
+        selected_location_ids: item.selected_location_ids || null,
         shop_id: shop.id,
         shop_domain: shop.shop_domain
     }))
@@ -396,4 +398,42 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
         console.error('Update inventory error:', err)
         return { success: false, message: 'An unexpected error occurred' }
     }
+}
+
+/**
+ * Update the multi-location configuration for an individual inventory item.
+ */
+export async function updateInventoryConfig(itemId: string, selectedLocationIds: string[]) {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return { success: false, error: 'Unauthorized' }
+
+    // 1. Update the inventory item location preference
+    const { error: invError } = await supabase
+        .from('inventory_items')
+        .update({
+            selected_location_ids: selectedLocationIds,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', itemId)
+
+    if (invError) {
+        console.error('Error updating inventory config:', invError)
+        return { success: false, error: 'Failed to update inventory configuration' }
+    }
+
+    // 2. Also map it to staging_shopify_products so subsequent imports preserve it
+    // First, find the shopify_inventory_item_id or variant id to link
+    const { data: item } = await supabase.from('inventory_items').select('shopify_variant_id, shop_id').eq('id', itemId).single()
+    if (item?.shopify_variant_id) {
+        await supabase
+            .from('staging_shopify_products')
+            .update({
+                selected_location_ids: selectedLocationIds,
+                updated_at: new Date().toISOString()
+            })
+            .eq('shopify_variant_id', item.shopify_variant_id)
+            .eq('shop_id', item.shop_id)
+    }
+
+    return { success: true }
 }

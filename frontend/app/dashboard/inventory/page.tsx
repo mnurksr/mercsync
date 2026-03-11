@@ -7,6 +7,7 @@ import {
     updateInventoryStock,
     getShopifyLocations,
     bulkUpdateStock,
+    updateInventoryConfig,
     type InventoryItem
 } from '../../actions/inventory';
 import {
@@ -17,17 +18,19 @@ import {
     ExternalLink
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
+import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
 
 // --- SymmetricSyncModal Component ---
 interface SymmetricSyncModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (newStock: number) => Promise<void>;
+    onSaveConfig: (selectedLocationIds: string[]) => Promise<void>;
     item: InventoryItem | null;
     shopLocations: { id: string, name: string, active: boolean }[];
 }
 
-function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }: SymmetricSyncModalProps) {
+function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, shopLocations }: SymmetricSyncModalProps) {
     const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
     const [syncSource, setSyncSource] = useState<'shopify' | 'etsy' | 'manual'>('manual');
     const [manualStock, setManualStock] = useState<number>(0);
@@ -36,8 +39,13 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
     useEffect(() => {
         if (item) {
             setManualStock(item.master_stock);
-            // Default select locations that were marked active in shop settings
-            setSelectedLocations(shopLocations.filter(l => l.active).map(l => l.id));
+
+            // Default select locations from product config, fallback to active shop settings
+            if (item.selected_location_ids && item.selected_location_ids.length > 0) {
+                setSelectedLocations(item.selected_location_ids);
+            } else {
+                setSelectedLocations(shopLocations.filter(l => l.active).map(l => l.id));
+            }
 
             // Auto-detect best source if it's "Action Required"
             const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
@@ -83,6 +91,16 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
         setIsSubmitting(true);
         try {
             await onConfirm(finalStockToApply);
+            onClose();
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSaveConfig = async () => {
+        setIsSubmitting(true);
+        try {
+            await onSaveConfig(selectedLocations);
             onClose();
         } finally {
             setIsSubmitting(false);
@@ -215,14 +233,21 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
                 <div className="px-8 py-8 bg-gray-50 flex items-center gap-4 sticky bottom-0 border-t border-gray-100">
                     <button
                         onClick={onClose}
-                        className="px-8 py-4 rounded-2xl border border-gray-200 bg-white text-gray-700 font-bold text-sm hover:bg-gray-100 transition-all active:scale-95"
+                        className="px-8 py-4 rounded-xl text-gray-400 font-bold text-sm hover:text-gray-900 transition-all active:scale-95"
                     >
                         Cancel
                     </button>
                     <button
+                        onClick={handleSaveConfig}
+                        disabled={isSubmitting}
+                        className="px-8 py-4 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        Save Config
+                    </button>
+                    <button
                         onClick={handleConfirm}
                         disabled={isSubmitting}
-                        className="flex-1 py-4 px-8 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
+                        className="flex-1 py-4 px-8 rounded-xl bg-indigo-600 text-white font-black text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
                     >
                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                         Sync Both Platforms
@@ -249,6 +274,10 @@ export default function InventoryPage() {
     // Sync Modal State
     const [syncModalOpen, setSyncModalOpen] = useState(false);
     const [targetItem, setTargetItem] = useState<InventoryItem | null>(null);
+
+    // Background Job State
+    const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+    const [syncJobId, setSyncJobId] = useState<string>('');
 
     useEffect(() => {
         loadData();
@@ -300,32 +329,75 @@ export default function InventoryPage() {
     const handleUpdateStock = async (newStock: number) => {
         if (!targetItem) return;
 
+        // Optimistic UI Update
+        const previousItems = [...items];
+        setItems(items.map(i => i.id === targetItem.id ? {
+            ...i,
+            master_stock: newStock,
+            status: 'Matching',
+            shopify_stock_snapshot: newStock,
+            etsy_stock_snapshot: newStock
+        } : i));
+
         try {
             const res = await updateInventoryStock(targetItem.id, newStock);
             if (res.success) {
                 toast.success(res.message);
-                loadData();
+                loadData(); // Re-fetch to ensure data consistency later
             } else {
+                setItems(previousItems); // Rollback on failure
                 toast.error(res.message);
             }
         } catch (err) {
+            setItems(previousItems); // Rollback on failure
             toast.error('Failed to update stock');
+        }
+    };
+
+    const handleSaveConfig = async (selectedLocationIds: string[]) => {
+        if (!targetItem) return;
+
+        try {
+            const res = await updateInventoryConfig(targetItem.id, selectedLocationIds);
+            if (res.success) {
+                toast.success('Inventory configuration saved.');
+                loadData();
+            } else {
+                toast.error(res.error || 'Failed to save configuration');
+            }
+        } catch (err) {
+            toast.error('Failed to save configuration');
         }
     };
 
     const handleBulkSync = async (strategy: 'shopify' | 'etsy' | 'latest') => {
         setIsSyncing(true);
         try {
-            const res = await bulkUpdateStock(selectedIds, strategy);
-            if (res.success) {
-                toast.success(res.message);
-                setSelectedIds([]);
-                loadData();
+            // Using fetch to trigger background job
+            const jobId = `stock_sync_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+            // Note: We're sending a dummy user_id here for the job queue since /api/sync/stock requires it.
+            // In a fully authenticated Next.js API route we'd extract it from the session, but we'll send a placeholder.
+            const res = await fetch('/api/sync/stock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    job_id: jobId,
+                    user_id: 'auto-stock-sync',
+                    itemIds: selectedIds,
+                    strategy
+                })
+            });
+
+            if (res.ok) {
+                setSyncJobId(jobId);
+                setIsProgressModalOpen(true);
             } else {
-                toast.error(res.message);
+                const errData = await res.json();
+                toast.error(errData.error || 'Failed to start bulk sync');
             }
         } catch (err) {
-            toast.error('Bulk sync failed');
+            toast.error('Failed to start bulk sync');
         } finally {
             setIsSyncing(false);
         }
@@ -581,6 +653,17 @@ export default function InventoryPage() {
                 </div>
             )}
 
+            {/* Modals */}
+            <SyncProgressModal
+                isOpen={isProgressModalOpen}
+                jobId={syncJobId}
+                onClose={() => {
+                    setIsProgressModalOpen(false);
+                    loadData(); // Formally reload data after sync is fully complete
+                    setSelectedIds([]);
+                }}
+            />
+
             {/* Symmetric Sync Modal */}
             <SymmetricSyncModal
                 isOpen={syncModalOpen}
@@ -589,6 +672,7 @@ export default function InventoryPage() {
                     setTargetItem(null);
                 }}
                 onConfirm={handleUpdateStock}
+                onSaveConfig={handleSaveConfig}
                 item={targetItem}
                 shopLocations={shopLocations}
             />
