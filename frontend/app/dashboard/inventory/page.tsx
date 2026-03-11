@@ -50,9 +50,23 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, item, shopLocations }:
     // Calculate live Shopify stock based on selected locations
     const liveShopifyStock = useMemo(() => {
         if (!item || !item.location_inventory_map || selectedLocations.length === 0) return 0;
+
         return selectedLocations.reduce((sum, locId) => {
-            const val = (item.location_inventory_map as any)[locId];
-            const qty = parseInt(val, 10) || 0;
+            let qty = 0;
+            const map = item.location_inventory_map;
+
+            if (Array.isArray(map)) {
+                // Handle array of objects format: [{ location_id, stock, updated_at }]
+                const locData = map.find((l: any) => l.location_id === locId || l.location_id?.toString() === locId);
+                if (locData && locData.stock !== undefined) {
+                    qty = parseInt(locData.stock, 10) || 0;
+                }
+            } else if (typeof map === 'object' && map !== null) {
+                // Handle key-value map format: { "locId": stock }
+                const val = (map as any)[locId];
+                qty = parseInt(val, 10) || 0;
+            }
+
             return sum + qty;
         }, 0);
     }, [item, selectedLocations]);
@@ -538,8 +552,8 @@ export default function InventoryPage() {
                                     <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl border border-white/10">
                                         <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">Apply:</span>
                                         <span className={`text-[10px] font-black uppercase tracking-widest ${pendingBulkAction === 'shopify' ? 'text-blue-400' :
-                                                pendingBulkAction === 'etsy' ? 'text-orange-400' :
-                                                    'text-indigo-400'
+                                            pendingBulkAction === 'etsy' ? 'text-orange-400' :
+                                                'text-indigo-400'
                                             }`}>
                                             {pendingBulkAction} source
                                         </span>
