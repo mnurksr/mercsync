@@ -25,13 +25,14 @@ interface SymmetricSyncModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirm: (newStock: number) => Promise<void>;
-    onSaveConfig: (selectedLocationIds: string[]) => Promise<void>;
+    onSaveConfig: (selectedLocationIds: string[], primaryLocationId?: string) => Promise<void>;
     item: InventoryItem | null;
     shopLocations: { id: string, name: string, active: boolean }[];
 }
 
 function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, shopLocations }: SymmetricSyncModalProps) {
     const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+    const [primaryLocationId, setPrimaryLocationId] = useState<string | null>(null);
     const [syncSource, setSyncSource] = useState<'shopify' | 'etsy' | 'latest' | 'manual'>('manual');
     const [manualStock, setManualStock] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,6 +46,12 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                 setSelectedLocations(item.selected_location_ids);
             } else {
                 setSelectedLocations(shopLocations.filter(l => l.active).map(l => l.id));
+            }
+
+            // Extract global primary location
+            if (item.shop?.main_location_id) {
+                const globalPrimary = item.shop.main_location_id.split(',')[0].trim();
+                setPrimaryLocationId(globalPrimary);
             }
 
             // Auto-detect best source if it's "Action Required"
@@ -117,7 +124,7 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
     const handleSaveConfig = async () => {
         setIsSubmitting(true);
         try {
-            await onSaveConfig(selectedLocations);
+            await onSaveConfig(selectedLocations, primaryLocationId || undefined);
             onClose();
         } finally {
             setIsSubmitting(false);
@@ -176,25 +183,57 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                                     <span className="text-[8px] font-bold text-gray-400 bg-white border border-gray-200 px-1.5 py-0.5 rounded shadow-sm">SUMMED</span>
                                 </div>
                                 <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar max-h-[120px]">
-                                    {shopLocations.map(loc => (
-                                        <label key={loc.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${selectedLocations.includes(loc.id) ? 'border-indigo-200 bg-white shadow-sm' : 'border-gray-200/50 bg-white/50 hover:bg-white'}`}>
-                                            <input
-                                                type="checkbox"
-                                                className="hidden"
-                                                checked={selectedLocations.includes(loc.id)}
-                                                onChange={() => {
-                                                    setSelectedLocations(prev =>
-                                                        prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]
-                                                    );
-                                                    setSyncSource('shopify');
-                                                }}
-                                            />
-                                            <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all ${selectedLocations.includes(loc.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-200 bg-gray-50'}`}>
-                                                {selectedLocations.includes(loc.id) && <Check className="w-2.5 h-2.5 text-white" />}
+                                    {shopLocations.map(loc => {
+                                        const isSelected = selectedLocations.includes(loc.id);
+                                        const isPrimary = primaryLocationId === loc.id;
+
+                                        return (
+                                            <div key={loc.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${isSelected ? 'border-indigo-200 bg-white shadow-sm' : 'border-gray-200/50 bg-white/50'}`}>
+
+                                                {/* Primary Star Button */}
+                                                <button
+                                                    onClick={() => {
+                                                        setPrimaryLocationId(loc.id);
+                                                        if (!isSelected) {
+                                                            setSelectedLocations(prev => [...prev, loc.id]);
+                                                        }
+                                                        setSyncSource('shopify');
+                                                    }}
+                                                    className={`p-1.5 rounded-lg transition-colors shrink-0 ${isPrimary ? 'text-amber-500 bg-amber-50' : 'text-gray-300 hover:text-amber-500 hover:bg-gray-100'}`}
+                                                    title={isPrimary ? "Main Fulfillment Location" : "Set as Main Location"}
+                                                >
+                                                    <svg className="w-4 h-4" fill={isPrimary ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                                    </svg>
+                                                </button>
+
+                                                {/* Summation Checkbox */}
+                                                <label className="flex items-center gap-2.5 flex-1 cursor-pointer min-w-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="hidden"
+                                                        checked={isSelected}
+                                                        onChange={() => {
+                                                            // Prevent unchecking if it's the primary location
+                                                            if (isPrimary) {
+                                                                // Use an alert directly or a simple console warn if toast is out of scope. We'll find the toast context above if it exists, but alert is safest for modals if toast hook isn't brought down.
+                                                                alert("Cannot unselect the Main Fulfillment Location. Please assign a new Main Location first.");
+                                                                return;
+                                                            }
+                                                            setSelectedLocations(prev =>
+                                                                prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]
+                                                            );
+                                                            setSyncSource('shopify');
+                                                        }}
+                                                    />
+                                                    <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all shrink-0 ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-200 bg-gray-50'}`}>
+                                                        {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-gray-700 truncate">{loc.name}</span>
+                                                </label>
                                             </div>
-                                            <span className="text-[11px] font-bold text-gray-700 truncate">{loc.name}</span>
-                                        </label>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

@@ -54,6 +54,9 @@ export type InventoryItem = {
     etsy_updated_at: string | null
     location_inventory_map: any
     selected_location_ids: string[] | null
+    shop?: {
+        main_location_id: string;
+    }
 }
 
 /**
@@ -233,7 +236,8 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
             updated_at,
             shopify_variant_id, etsy_variant_id, 
             shopify_product_id, etsy_listing_id,
-            location_inventory_map, selected_location_ids
+            location_inventory_map, selected_location_ids,
+            shop:shops(main_location_id)
         `)
         .eq('shop_id', shop.id)
         .order('name', { ascending: true })
@@ -267,6 +271,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         etsy_listing_id: item.etsy_listing_id,
         location_inventory_map: item.location_inventory_map || {},
         selected_location_ids: item.selected_location_ids || null,
+        shop: item.shop || undefined,
         shop_id: shop.id,
         shop_domain: shop.shop_domain
     }))
@@ -399,13 +404,13 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                 const { setInventoryLevel } = await import('@/app/api/sync/lib/shopify');
                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
+                // Primary Location comes ONLY from the global shop connection:
                 let targetLocationId = shop.main_location_id?.toString().split(',')[0].trim();
                 let selectedLocationIds = item.selected_location_ids || [];
 
-                if (selectedLocationIds.length > 0) {
-                    targetLocationId = selectedLocationIds[0]; // Primary selected is always the first one
-                } else {
-                    selectedLocationIds = [targetLocationId];
+                // Fallback purely for robustness:
+                if (!targetLocationId && selectedLocationIds.length > 0) {
+                    targetLocationId = selectedLocationIds[0];
                 }
 
                 if (targetLocationId) {
@@ -476,9 +481,31 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
 /**
  * Update the multi-location configuration for an individual inventory item.
  */
-export async function updateInventoryConfig(itemId: string, selectedLocationIds: string[]) {
+export async function updateInventoryConfig(itemId: string, selectedLocationIds: string[], primaryLocationId?: string) {
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return { success: false, error: 'Unauthorized' }
+
+    // 0. Update Shop's Global Main Location if a new Primary Location was chosen
+    if (primaryLocationId) {
+        // Fetch the shop id linked to this item
+        const { data: itemData } = await supabase.from('inventory_items').select('shop_id').eq('id', itemId).single();
+        if (itemData?.shop_id) {
+            // Guarantee selectedLocationIds includes primaryLocationId, and it's at the front
+            const cleanOtherIds = selectedLocationIds.filter(id => id !== primaryLocationId);
+            const orderedIds = [primaryLocationId, ...cleanOtherIds];
+            const newMainLocationStr = orderedIds.join(',');
+
+            // Override selectedLocationIds so they save consistently
+            selectedLocationIds = orderedIds;
+
+            const { error: shopError } = await supabase
+                .from('shops')
+                .update({ main_location_id: newMainLocationStr })
+                .eq('id', itemData.shop_id);
+
+            if (shopError) console.error('[Config] Failed to update global primary location', shopError);
+        }
+    }
 
     // 1. Update the inventory item location preference
     const { error: invError } = await supabase
