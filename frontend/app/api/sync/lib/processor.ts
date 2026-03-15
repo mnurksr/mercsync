@@ -385,21 +385,21 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
 
             // Priority 1: Look by variant IDs
             if (sVarId) {
-                const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('shopify_variant_id', sVarId).maybeSingle();
+                const { data } = await supabase.from('inventory_items').select('id, master_stock').eq('shop_id', shop.id).eq('shopify_variant_id', sVarId).maybeSingle();
                 existingItem = data;
             }
             if (!existingItem && eVarId) {
-                const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('etsy_variant_id', eVarId).maybeSingle();
+                const { data } = await supabase.from('inventory_items').select('id, master_stock').eq('shop_id', shop.id).eq('etsy_variant_id', eVarId).maybeSingle();
                 existingItem = data;
             }
 
             // Priority 2: Look by SKU
             if (!existingItem && sku && !sku.startsWith('SKU-') && sku !== 'NO-SKU') {
-                const { data } = await supabase.from('inventory_items').select('id').eq('shop_id', shop.id).eq('sku', sku).maybeSingle();
+                const { data } = await supabase.from('inventory_items').select('id, master_stock').eq('shop_id', shop.id).eq('sku', sku).maybeSingle();
                 existingItem = data;
             }
 
-            const payload = {
+            const payload: any = {
                 shop_id: shop.id,
                 sku,
                 name: title,
@@ -410,15 +410,23 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 image_url: metadata?.image_url,
                 status: metadata?.status || 'Matching',
                 shopify_inventory_item_id: metadata?.shopify_inventory_item_id,
-                master_stock: metadata?.master_stock || 0,
                 shopify_stock_snapshot: metadata?.shopify_stock_snapshot || 0,
                 etsy_stock_snapshot: metadata?.etsy_stock_snapshot || 0,
                 shopify_updated_at: metadata?.shopify_updated_at,
                 etsy_updated_at: metadata?.etsy_updated_at,
                 location_inventory_map: metadata?.location_inventory_map || {},
-                selected_location_ids: metadata?.selected_location_ids || {},
+                selected_location_ids: metadata?.selected_location_ids || [],
                 updated_at: new Date().toISOString()
             };
+
+            // Only set master_stock if explicit in metadata, OR keep existing/null
+            if (metadata?.master_stock !== undefined) {
+                payload.master_stock = metadata.master_stock;
+            } else if (existingItem && existingItem.master_stock !== undefined) {
+                payload.master_stock = existingItem.master_stock;
+            } else {
+                payload.master_stock = null; // Forces action required logic
+            }
 
             if (existingItem) {
                 const { error } = await supabase.from('inventory_items').update(payload).eq('id', existingItem.id);
@@ -452,7 +460,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 shopify_inventory_item_id: sp.shopify_inventory_item_id,
                 shopify_stock_snapshot: sp.stock_quantity,
                 shopify_updated_at: sp.shopify_updated_at,
-                master_stock: sp.stock_quantity,
                 location_inventory_map: sp.location_inventory_map || {},
                 selected_location_ids: sp.selected_location_ids || [],
             };
@@ -505,7 +512,6 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 status: 'Matching',
                 etsy_stock_snapshot: ep.stock_quantity,
                 etsy_updated_at: ep.etsy_updated_at,
-                master_stock: ep.stock_quantity,
             };
 
             await upsertInvItem(

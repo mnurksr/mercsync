@@ -70,6 +70,9 @@ export async function POST(req: NextRequest) {
 
         console.log(`[Shopify Import] Total products fetched: ${allProducts.length}`);
 
+        // Default to the locations the user chose during setup
+        const defaultLocationIds = shop.main_location_id ? shop.main_location_id.split(',').map((id: string) => id.trim()) : [];
+
         // 4. Transform and Upsert Products to Staging
         const stagingRows: any[] = [];
         allProducts.forEach(product => {
@@ -101,6 +104,7 @@ export async function POST(req: NextRequest) {
                     description: description,
                     status: product.status,
                     stock_quantity: variant.inventory_quantity || 0,
+                    selected_location_ids: defaultLocationIds,
                     updated_at: new Date().toISOString()
                 });
             });
