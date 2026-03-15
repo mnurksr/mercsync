@@ -692,6 +692,14 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     // Use prop userId if available, otherwise fall back to auth user
     const currentUserId = propUserId || authUser?.id;
 
+    // UI Modals config
+    const [showLocationModal, setShowLocationModal] = useState(false);
+    const [locations, setLocations] = useState<{ id: string, name: string, active: boolean, address1?: string }[]>([]);
+    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+    const [primaryLocationId, setPrimaryLocationId] = useState<string | null>(null);
+    const [loadingLocations, setLoadingLocations] = useState(false);
+    const [submittingLocation, setSubmittingLocation] = useState(false);
+
     // Grouping Helper
     const groupProducts = (products: StagingProduct[], platform: 'shopify' | 'etsy'): ProductGroup[] => {
         const groups: { [key: string]: ProductGroup } = {};
@@ -733,13 +741,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [dropTargetGroup, setDropTargetGroup] = useState<string | null>(null);
     const [centerHover, setCenterHover] = useState(false);
 
-    // Location Modal State
-    const [showLocationModal, setShowLocationModal] = useState(false);
-    const [locations, setLocations] = useState<any[]>([]);
-    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
-    const [loadingLocations, setLoadingLocations] = useState(false);
-    const [submittingLocation, setSubmittingLocation] = useState(false);
-
     const handleGoBack = async () => {
         setConfirmModal({
             isOpen: true,
@@ -776,7 +777,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             if (res.success && res.data) {
                 setLocations(res.data);
                 if (res.data.length > 0) {
-                    setSelectedLocationIds([res.data[0].id.toString()]);
+                    const mappedLocs = res.data;
+                    const activeLocs = mappedLocs.filter(l => l.active).map(l => l.id.toString());
+
+                    setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : [mappedLocs[0].id.toString()]);
+                    setPrimaryLocationId(activeLocs.length > 0 ? activeLocs[0] : mappedLocs[0].id.toString());
                 }
             } else {
                 toast.error(res.message || 'Failed to load locations.');
@@ -790,16 +795,22 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     };
 
     const submitLocationAndContinue = async () => {
-        if (selectedLocationIds.length === 0) {
-            toast.warning('Please select at least one location.');
+        if (selectedLocationIds.length === 0 || !primaryLocationId) {
+            toast.warning('Please select at least one location and designate a Main Location.');
             return;
         }
 
         setSubmittingLocation(true);
         try {
+            // Sort array so primaryLocationId is at index 0
+            const sortedLocations = [
+                primaryLocationId,
+                ...selectedLocationIds.filter(id => id !== primaryLocationId)
+            ];
+
             const payload = {
                 owner_id: currentUserId,
-                shopify_location_ids: selectedLocationIds
+                shopify_location_ids: sortedLocations
             };
 
             const req = await fetch('/api/sync/location-id', {
@@ -2296,22 +2307,30 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                 <div className="max-h-[300px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
                                     {locations.map((loc) => {
                                         const isSelected = selectedLocationIds.includes(loc.id.toString());
+                                        const isPrimary = primaryLocationId === loc.id.toString();
+
                                         return (
                                             <div
                                                 key={loc.id}
-                                                onClick={() => {
-                                                    setSelectedLocationIds(prev =>
-                                                        isSelected
-                                                            ? prev.filter(id => id !== loc.id.toString())
-                                                            : [...prev, loc.id.toString()]
-                                                    );
-                                                }}
-                                                className={`p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between ${isSelected
+                                                className={`p-3 rounded-xl border-2 transition-all flex items-center justify-between ${isSelected
                                                     ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600/10'
                                                     : 'border-gray-100 bg-gray-50 hover:border-gray-200'
                                                     }`}
                                             >
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 cursor-pointer select-none"
+                                                    onClick={() => {
+                                                        // Prevent unchecking if it's the primary location
+                                                        if (isPrimary) {
+                                                            alert("Cannot unselect the Main Fulfillment Location. Please assign a new Main Location first.");
+                                                            return;
+                                                        }
+                                                        setSelectedLocationIds(prev =>
+                                                            isSelected
+                                                                ? prev.filter(id => id !== loc.id.toString())
+                                                                : [...prev, loc.id.toString()]
+                                                        );
+                                                    }}
+                                                >
                                                     <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600' : 'bg-white border border-gray-300'
                                                         }`}>
                                                         {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
@@ -2323,6 +2342,24 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                         {loc.address1 && <p className="text-[11px] text-gray-400 truncate">{loc.address1}</p>}
                                                     </div>
                                                 </div>
+
+                                                {/* Primary Location Radio/Star */}
+                                                {isSelected && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setPrimaryLocationId(loc.id.toString());
+                                                        }}
+                                                        className={`p-2 rounded-full transition-all flexitems-center justify-center hover:scale-110 active:scale-95 ${isPrimary
+                                                            ? 'bg-yellow-100 text-yellow-500 shadow-sm ring-1 ring-yellow-400/30'
+                                                            : 'bg-white text-gray-300 hover:text-yellow-400 hover:bg-yellow-50 border border-gray-200'
+                                                            }`}
+                                                        title={isPrimary ? "Main Fulfillment Location" : "Set as Main Location"}
+                                                    >
+                                                        <Sparkles className={`w-4 h-4 ${isPrimary ? 'fill-yellow-500' : ''}`} />
+                                                    </button>
+                                                )}
                                             </div>
                                         );
                                     })}
