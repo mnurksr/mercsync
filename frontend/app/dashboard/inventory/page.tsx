@@ -167,17 +167,17 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live Inventory</p>
                             </div>
 
-                            {/* Shopify Locations */}
-                            <div className="p-5 rounded-[2rem] border border-gray-100 bg-white shadow-sm flex-1 flex flex-col">
+                            {/* Tracked Locations */}
+                            <div className="p-5 rounded-[2rem] border border-gray-100 bg-gray-50 shadow-inner flex flex-col mt-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Zap className="w-3 h-3 text-indigo-500" /> Locations
+                                        <Zap className="w-3 h-3 text-indigo-500" /> Tracked Locations
                                     </h4>
-                                    <span className="text-[8px] font-bold text-gray-400 bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded">SUMMED LIVE</span>
+                                    <span className="text-[8px] font-bold text-gray-400 bg-white border border-gray-200 px-1.5 py-0.5 rounded shadow-sm">SUMMED</span>
                                 </div>
-                                <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar flex-1 max-h-[160px]">
+                                <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar max-h-[120px]">
                                     {shopLocations.map(loc => (
-                                        <label key={loc.id} className={`flex items-center gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${selectedLocations.includes(loc.id) ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+                                        <label key={loc.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${selectedLocations.includes(loc.id) ? 'border-indigo-200 bg-white shadow-sm' : 'border-gray-200/50 bg-white/50 hover:bg-white'}`}>
                                             <input
                                                 type="checkbox"
                                                 className="hidden"
@@ -241,27 +241,35 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                     </div>
                 </div>
 
-                <div className="px-8 py-8 bg-gray-50 flex items-center gap-4 sticky bottom-0 border-t border-gray-100">
+                <div className="px-8 py-6 bg-gray-50 flex flex-col md:flex-row items-center justify-between gap-4 sticky bottom-0 border-t border-gray-100">
                     <button
                         onClick={onClose}
-                        className="px-8 py-4 rounded-xl text-gray-400 font-bold text-sm hover:text-gray-900 transition-all active:scale-95"
+                        className="px-6 py-3 rounded-xl text-gray-500 font-bold text-sm hover:bg-gray-200 transition-all active:scale-95 w-full md:w-auto"
                     >
                         Cancel
                     </button>
+
                     <button
-                        onClick={handleSaveConfig}
-                        disabled={isSubmitting}
-                        className="px-8 py-4 rounded-xl bg-white border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+                        onClick={async () => {
+                            try {
+                                setIsSubmitting(true);
+                                await onSaveConfig(selectedLocations);
+                                await handleConfirm();
+                            } finally {
+                                setIsSubmitting(false);
+                            }
+                        }}
+                        disabled={isSubmitting || syncSource === 'manual'}
+                        className="w-full md:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
                     >
-                        Save Config
-                    </button>
-                    <button
-                        onClick={handleConfirm}
-                        disabled={isSubmitting}
-                        className="flex-1 py-4 px-8 rounded-xl bg-indigo-600 text-white font-black text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-                    >
-                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                        Sync Both Platforms
+                        {isSubmitting ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                            <>
+                                <Zap className="w-4 h-4" />
+                                Save & Sync
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
