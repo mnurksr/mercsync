@@ -26,8 +26,8 @@ type ProductCloneEvent = {
 };
 type StockSyncEvent = {
     type: 'stock_sync';
-    platform: 'shopify' | 'etsy';
     product: { name: string; old_stock: number; new_stock: number; sku?: string };
+    status: 'success' | 'failed';
     text: string;
 };
 type SyncEvent = LogEvent | ProductCloneEvent | StockSyncEvent;
@@ -105,9 +105,12 @@ export default function SyncProgressModal({ isOpen, jobId, onClose }: SyncProgre
         }
 
         if (newJob.message) {
-            const allEvents = parseAllEvents(newJob.message).filter(e => e.type !== 'stock_sync');
-            const deduped = dedupeCloneEvents(allEvents);
-            setEvents(deduped);
+            const allEvents = parseAllEvents(newJob.message);
+            // Dedupe clone events, but keep stock sync events as is
+            const cloneEvents = allEvents.filter(e => e.type === 'product_clone');
+            const stockEvents = allEvents.filter(e => e.type === 'stock_sync');
+            const dedupedClones = dedupeCloneEvents(cloneEvents);
+            setEvents([...dedupedClones, ...stockEvents]);
         }
     }, []);
 
@@ -157,6 +160,7 @@ export default function SyncProgressModal({ isOpen, jobId, onClose }: SyncProgre
     const isFailed = job?.status === 'failed';
     const toShopifyEvents = events.filter(e => e.type === 'product_clone' && e.direction === 'to_shopify') as ProductCloneEvent[];
     const toEtsyEvents = events.filter(e => e.type === 'product_clone' && e.direction === 'to_etsy') as ProductCloneEvent[];
+    const stockEvents = events.filter(e => e.type === 'stock_sync') as StockSyncEvent[];
 
     const renderProductItem = (event: ProductCloneEvent) => (
         <motion.div
@@ -179,6 +183,35 @@ export default function SyncProgressModal({ isOpen, jobId, onClose }: SyncProgre
                 {event.status === 'success' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
                 {event.status === 'failed' && <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
                 {event.status === 'cloning' && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+            </div>
+        </motion.div>
+    );
+
+    const renderStockItem = (event: StockSyncEvent, idx: number) => (
+        <motion.div
+            key={`s-${idx}`}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 px-4 py-3"
+        >
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                <Package className="w-4 h-4 text-indigo-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+                <span className="text-sm text-gray-900 font-medium truncate block">{cleanName(event.product.name)}</span>
+                <span className="text-[10px] text-gray-500 truncate block mt-0.5">{event.text}</span>
+            </div>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+                {event.status === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                )}
+                {event.status === 'success' && (
+                    <span className="text-[10px] font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
+                        {event.product.new_stock} units
+                    </span>
+                )}
             </div>
         </motion.div>
     );
@@ -249,6 +282,19 @@ export default function SyncProgressModal({ isOpen, jobId, onClose }: SyncProgre
                                         </div>
                                         <div className="divide-y divide-gray-50">
                                             {toEtsyEvents.map(e => renderProductItem(e))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stock Sync Section */}
+                                {stockEvents.length > 0 && (
+                                    <div>
+                                        <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                                            <Package className="w-4 h-4 text-indigo-500" />
+                                            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Stock Updates</span>
+                                        </div>
+                                        <div className="divide-y divide-gray-50">
+                                            {stockEvents.map((e, idx) => renderStockItem(e, idx))}
                                         </div>
                                     </div>
                                 )}

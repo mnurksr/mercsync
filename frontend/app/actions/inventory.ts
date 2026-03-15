@@ -399,18 +399,35 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                 const { setInventoryLevel } = await import('@/app/api/sync/lib/shopify');
                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
-                // Use the first selected location, or the main_location_id as fallback
                 let targetLocationId = shop.main_location_id?.toString().split(',')[0].trim();
-                if (item.selected_location_ids && item.selected_location_ids.length > 0) {
-                    targetLocationId = item.selected_location_ids[0]; // For bulk/manual override, push total to primary selected
+                let selectedLocationIds = item.selected_location_ids || [];
+
+                if (selectedLocationIds.length > 0) {
+                    targetLocationId = selectedLocationIds[0]; // Primary selected is always the first one
+                } else {
+                    selectedLocationIds = [targetLocationId];
                 }
 
                 if (targetLocationId) {
-                    await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, newStock);
+                    // UX Answer: Primary Location Absorbs The Delta
+                    // Calculate stock of all OTHER selected locations
+                    const locationMap: any[] = item.location_inventory_map || [];
+                    let otherLocationsStock = 0;
+
+                    locationMap.forEach(loc => {
+                        if (loc.location_id.toString() !== targetLocationId.toString() && selectedLocationIds.includes(loc.location_id.toString())) {
+                            otherLocationsStock += (Number(loc.stock) || 0);
+                        }
+                    });
+
+                    // Set target location exactly to the difference. If other locations have MORE stock than the new total, this floor keeps it safe.
+                    const targetLocationStockToSet = Math.max(0, newStock - otherLocationsStock);
+
+                    await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, targetLocationStockToSet);
                 }
             } catch (err: any) {
                 console.error('Failed to push stock to Shopify:', err.message);
-                // Non-fatal, continue to DB update and Etsy
+                return { success: false, message: `Shopify Sync Error: ${err.message}` };
             }
         }
 
@@ -430,10 +447,11 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                 }
             } catch (err: any) {
                 console.error('Failed to push stock to Etsy:', err.message);
-                // Non-fatal
+                return { success: false, message: `Etsy Sync Error: ${err.message}` };
             }
         }
-        // Update the master record directly in inventory_items
+
+        // 5. Update the master record directly in inventory_items ONLY when API calls succeed
         const { error: updateErr } = await supabase
             .from('inventory_items')
             .update({
@@ -448,10 +466,10 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
             return { success: false, message: 'Failed to update database record' }
         }
 
-        return { success: true, message: `Stock updated to ${newStock} and synchronization started.` }
-    } catch (err) {
+        return { success: true, message: `Stock synchronized to ${newStock} successfully.` }
+    } catch (err: any) {
         console.error('Update inventory error:', err)
-        return { success: false, message: 'An unexpected error occurred' }
+        return { success: false, message: err.message || 'An unexpected error occurred' }
     }
 }
 

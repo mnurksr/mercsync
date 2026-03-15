@@ -22,6 +22,7 @@ async function processBulkStock(job_id: string, user_id: string, itemIds: string
 
         const totalSteps = items.length;
         let completedSteps = 0;
+        const events: any[] = [];
 
         await supabase.from('sync_jobs').update({
             status: 'processing',
@@ -46,22 +47,21 @@ async function processBulkStock(job_id: string, user_id: string, itemIds: string
 
             try {
                 // Call the existing function which handles Platform APIs (Shopify/Etsy)
-                await updateInventoryStock(item.id, targetStock);
+                const result = await updateInventoryStock(item.id, targetStock);
+                if (!result?.success) throw new Error(result?.message || 'Update failed');
 
-                // Add success log
-                await supabase.from('sync_logs').insert({
-                    job_id,
-                    level: 'info',
-                    message: `Successfully synchronized ${item.sku || 'product'} to ${targetStock} units.`,
-                    timestamp: new Date().toISOString()
+                events.push({
+                    type: 'stock_sync',
+                    product: { name: item.name, old_stock: item.master_stock, new_stock: targetStock, sku: item.sku },
+                    status: 'success',
+                    text: `Successfully synchronized ${item.sku || 'product'} to ${targetStock} units.`
                 });
             } catch (err: any) {
-                // Add error log
-                await supabase.from('sync_logs').insert({
-                    job_id,
-                    level: 'error',
-                    message: `Failed to sync ${item.sku || 'product'}: ${err.message}`,
-                    timestamp: new Date().toISOString()
+                events.push({
+                    type: 'stock_sync',
+                    product: { name: item.name, old_stock: item.master_stock, new_stock: targetStock, sku: item.sku },
+                    status: 'failed',
+                    text: `Failed to sync ${item.sku || 'product'}: ${err.message}`
                 });
             }
 
@@ -71,7 +71,7 @@ async function processBulkStock(job_id: string, user_id: string, itemIds: string
             // Update progress in sync_jobs
             await supabase.from('sync_jobs').update({
                 current_step: progress,
-                message: `Synced ${completedSteps} of ${totalSteps} items...`,
+                message: JSON.stringify(events),
                 updated_at: new Date().toISOString()
             }).eq('id', job_id);
 
@@ -82,7 +82,7 @@ async function processBulkStock(job_id: string, user_id: string, itemIds: string
         // Finish job
         await supabase.from('sync_jobs').update({
             status: 'completed',
-            message: 'Bulk sync completed successfully.',
+            message: JSON.stringify(events),
             current_step: 100,
             updated_at: new Date().toISOString()
         }).eq('id', job_id);
