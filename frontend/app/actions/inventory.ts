@@ -437,6 +437,15 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                         const diff = newStock - currentTotal;
                         const mainStockNew = mainStockCurrent + diff;
                         await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, mainStockNew);
+                        
+                        // Optimistically update local map
+                        const mainLocEntry = locationMap.find(l => l.location_id.toString() === targetLocationId);
+                        if (mainLocEntry) {
+                            mainLocEntry.stock = mainStockNew;
+                            mainLocEntry.updated_at = new Date().toISOString();
+                        } else {
+                            locationMap.push({ location_id: targetLocationId, stock: mainStockNew, updated_at: new Date().toISOString() });
+                        }
                     } else if (newStock < currentTotal) {
                         // DECREASE: Cascade Method (Şelale Yöntemi)
                         let diffToReduce = currentTotal - newStock;
@@ -460,6 +469,13 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                                 diffToReduce -= reduceAmount;
                                 
                                 await setInventoryLevel(creds, locId, item.shopify_inventory_item_id, newLocStock);
+                                
+                                // Optimistically update local map
+                                const locMapEntry = locationMap.find(l => l.location_id.toString() === locId);
+                                if (locMapEntry) {
+                                    locMapEntry.stock = newLocStock;
+                                    locMapEntry.updated_at = new Date().toISOString();
+                                }
                             }
                         }
 
@@ -467,8 +483,14 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                         // forcibly subtract from Main Location to guarantee sum matches exactly.
                         if (diffToReduce > 0) {
                              const forcedMainStock = (stockByLocId[targetLocationId] || 0) - diffToReduce;
-                             // Note: This relies on whether Shopify allows negative inventory or fails gracefully.
-                             await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, Math.max(0, forcedMainStock));
+                             const finalForcedStock = Math.max(0, forcedMainStock);
+                             await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, finalForcedStock);
+                             
+                             const mainLocEntry = locationMap.find(l => l.location_id.toString() === targetLocationId);
+                             if (mainLocEntry) {
+                                 mainLocEntry.stock = finalForcedStock;
+                                 mainLocEntry.updated_at = new Date().toISOString();
+                             }
                         }
                     }
                 }
@@ -499,10 +521,16 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
         }
 
         // 5. Update the master record directly in inventory_items ONLY when API calls succeed
+        // Extract locationMap if it was modified
+        const updatedLocationMap = item.location_inventory_map; // since we mutated it above if it was an array
+        
         const { error: updateErr } = await supabase
             .from('inventory_items')
             .update({
                 master_stock: newStock,
+                shopify_stock_snapshot: newStock,
+                etsy_stock_snapshot: newStock,
+                location_inventory_map: updatedLocationMap,
                 status: 'Matching', // Reset status as it propagates to both
                 updated_at: new Date().toISOString()
             })
