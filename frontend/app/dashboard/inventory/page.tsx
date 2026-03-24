@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
 import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
+import { useAuth } from '@/components/AuthProvider';
 
 // --- SymmetricSyncModal Component ---
 interface SymmetricSyncModalProps {
@@ -287,6 +288,7 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
 
 // --- Main InventoryPage Component ---
 export default function InventoryPage() {
+    const { user } = useAuth();
     const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -410,14 +412,13 @@ export default function InventoryPage() {
             // Using fetch to trigger background job
             const jobId = `stock_sync_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-            // Note: We're sending a dummy user_id here for the job queue since /api/sync/stock requires it.
-            // In a fully authenticated Next.js API route we'd extract it from the session, but we'll send a placeholder.
+            // Use actual user ID instead of dummy string "auto-stock-sync"
             const res = await fetch('/api/sync/stock', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     job_id: jobId,
-                    user_id: 'auto-stock-sync',
+                    user_id: user?.id,
                     itemIds: selectedIds,
                     strategy
                 })

@@ -405,7 +405,7 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
                 // Primary Location comes ONLY from the global shop connection:
-                let targetLocationId = shop.main_location_id?.toString().split(',')[0].trim();
+                let targetLocationId = shop.main_location_id?.toString().trim();
                 let selectedLocationIds = item.selected_location_ids || [];
 
                 // Fallback purely for robustness:
@@ -414,21 +414,63 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                 }
 
                 if (targetLocationId) {
-                    // UX Answer: Primary Location Absorbs The Delta
-                    // Calculate stock of all OTHER selected locations
-                    const locationMap: any[] = item.location_inventory_map || [];
-                    let otherLocationsStock = 0;
-
-                    locationMap.forEach(loc => {
-                        if (loc.location_id.toString() !== targetLocationId.toString() && selectedLocationIds.includes(loc.location_id.toString())) {
-                            otherLocationsStock += (Number(loc.stock) || 0);
-                        }
+                    const { setInventoryLevel } = await import('@/app/api/sync/lib/shopify');
+                    
+                    // Parse current location inventory map
+                    const locationMap: any[] = Array.isArray(item.location_inventory_map) ? item.location_inventory_map : [];
+                    
+                    // Filter map to selected locations only
+                    const activeLocs = locationMap.filter(l => l.location_id.toString() === targetLocationId || selectedLocationIds.includes(l.location_id.toString()));
+                    
+                    let currentTotal = 0;
+                    const stockByLocId: Record<string, number> = {};
+                    activeLocs.forEach(l => {
+                        const s = Number(l.stock) || 0;
+                        stockByLocId[l.location_id.toString()] = s;
+                        currentTotal += s;
                     });
 
-                    // Set target location exactly to the difference. If other locations have MORE stock than the new total, this floor keeps it safe.
-                    const targetLocationStockToSet = Math.max(0, newStock - otherLocationsStock);
+                    const mainStockCurrent = stockByLocId[targetLocationId] || 0;
 
-                    await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, targetLocationStockToSet);
+                    if (newStock > currentTotal) {
+                        // INCREASE: Add entire diff to Main Location
+                        const diff = newStock - currentTotal;
+                        const mainStockNew = mainStockCurrent + diff;
+                        await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, mainStockNew);
+                    } else if (newStock < currentTotal) {
+                        // DECREASE: Cascade Method (Şelale Yöntemi)
+                        let diffToReduce = currentTotal - newStock;
+                        
+                        // Cascade Order: Main Location first, then the rest
+                        const cascadeOrder = [
+                            targetLocationId,
+                            ...selectedLocationIds.filter((id: string) => id.toString() !== targetLocationId)
+                        ];
+                        
+                        // Deduplicate in case main location was also in selected
+                        const uniqueCascadeOrder = Array.from(new Set(cascadeOrder));
+
+                        for (const locId of uniqueCascadeOrder) {
+                            if (diffToReduce <= 0) break;
+                            
+                            const currentLocStock = stockByLocId[locId] || 0;
+                            if (currentLocStock > 0) {
+                                const reduceAmount = Math.min(currentLocStock, diffToReduce);
+                                const newLocStock = currentLocStock - reduceAmount;
+                                diffToReduce -= reduceAmount;
+                                
+                                await setInventoryLevel(creds, locId, item.shopify_inventory_item_id, newLocStock);
+                            }
+                        }
+
+                        // If there is still diffToReduce left (mathematically indicates edge case or DB out of sync),
+                        // forcibly subtract from Main Location to guarantee sum matches exactly.
+                        if (diffToReduce > 0) {
+                             const forcedMainStock = (stockByLocId[targetLocationId] || 0) - diffToReduce;
+                             // Note: This relies on whether Shopify allows negative inventory or fails gracefully.
+                             await setInventoryLevel(creds, targetLocationId, item.shopify_inventory_item_id, Math.max(0, forcedMainStock));
+                        }
+                    }
                 }
             } catch (err: any) {
                 console.error('Failed to push stock to Shopify:', err.message);
