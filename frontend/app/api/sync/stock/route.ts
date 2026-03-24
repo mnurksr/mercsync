@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         const payload = await req.json();
         const { job_id, user_id, itemIds, strategy } = payload;
 
-        if (!job_id || !user_id || !itemIds || !strategy) {
+        if (!job_id || !itemIds || !strategy || !Array.isArray(itemIds) || itemIds.length === 0) {
             return NextResponse.json(
                 { error: 'Invalid payload components' },
                 { status: 400 }
@@ -110,11 +110,27 @@ export async function POST(req: NextRequest) {
         }
 
         const supabase = createAdminClient();
+        
+        let target_user_id = user_id;
+        if (!target_user_id) {
+            // Fallback: If client-side Supabase user object was lost due to Shopify iFrame 3rd party cookie blocking, look it up securely.
+            const { data: itemData } = await supabase
+                .from('inventory_items')
+                .select('shop_id, shop:shops(owner_id)')
+                .eq('id', itemIds[0])
+                .single();
+                
+            if (itemData?.shop && (itemData.shop as any).owner_id) {
+                target_user_id = (itemData.shop as any).owner_id;
+            } else {
+                return NextResponse.json({ error: 'Cannot determine valid user tracking context' }, { status: 400 });
+            }
+        }
         await supabase
             .from('sync_jobs')
             .upsert({
                 id: job_id,
-                user_id,
+                user_id: target_user_id,
                 status: 'pending',
                 current_step: 0,
                 total_steps: 100,
