@@ -62,9 +62,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
-      </head>
       <body className={inter.className}>
         <AuthProvider>
           <ToastProvider>
