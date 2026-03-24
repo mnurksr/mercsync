@@ -2343,22 +2343,27 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                     </div>
                                                 </div>
 
-                                                {/* Primary Location Radio/Star */}
+                                                {/* Primary Location Badge / Button */}
                                                 {isSelected && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setPrimaryLocationId(loc.id.toString());
-                                                        }}
-                                                        className={`p-2 rounded-full transition-all flexitems-center justify-center hover:scale-110 active:scale-95 ${isPrimary
-                                                            ? 'bg-yellow-100 text-yellow-500 shadow-sm ring-1 ring-yellow-400/30'
-                                                            : 'bg-white text-gray-300 hover:text-yellow-400 hover:bg-yellow-50 border border-gray-200'
-                                                            }`}
-                                                        title={isPrimary ? "Main Fulfillment Location" : "Set as Main Location"}
-                                                    >
-                                                        <Sparkles className={`w-4 h-4 ${isPrimary ? 'fill-yellow-500' : ''}`} />
-                                                    </button>
+                                                    <div className="shrink-0 flex items-center">
+                                                        {isPrimary ? (
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-1 rounded shadow-sm border border-indigo-100">
+                                                                Primary
+                                                            </span>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setPrimaryLocationId(loc.id.toString());
+                                                                }}
+                                                                className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors border border-transparent hover:border-indigo-100"
+                                                                title="Set as Main Fulfillment Location"
+                                                            >
+                                                                Set Primary
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         );

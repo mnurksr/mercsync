@@ -41,11 +41,11 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
         if (item) {
             setManualStock(item.master_stock);
 
-            // Default select locations from product config, fallback to active shop settings
+            // Select locations from product config. If empty, leave empty.
             if (item.selected_location_ids && item.selected_location_ids.length > 0) {
                 setSelectedLocations(item.selected_location_ids);
             } else {
-                setSelectedLocations(shopLocations.filter(l => l.active).map(l => l.id));
+                setSelectedLocations([]);
             }
 
             // Extract global primary location
@@ -190,22 +190,6 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                                         return (
                                             <div key={loc.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all ${isSelected ? 'border-indigo-200 bg-white shadow-sm' : 'border-gray-200/50 bg-white/50'}`}>
 
-                                                {/* Primary Star Button */}
-                                                <button
-                                                    onClick={() => {
-                                                        setPrimaryLocationId(loc.id);
-                                                        if (!isSelected) {
-                                                            setSelectedLocations(prev => [...prev, loc.id]);
-                                                        }
-                                                        setSyncSource('shopify');
-                                                    }}
-                                                    className={`p-1.5 rounded-lg transition-colors shrink-0 ${isPrimary ? 'text-amber-500 bg-amber-50' : 'text-gray-300 hover:text-amber-500 hover:bg-gray-100'}`}
-                                                    title={isPrimary ? "Main Fulfillment Location" : "Set as Main Location"}
-                                                >
-                                                    <svg className="w-4 h-4" fill={isPrimary ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                                    </svg>
-                                                </button>
 
                                                 {/* Summation Checkbox */}
                                                 <label className="flex items-center gap-2.5 flex-1 cursor-pointer min-w-0">
@@ -214,12 +198,6 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                                                         className="hidden"
                                                         checked={isSelected}
                                                         onChange={() => {
-                                                            // Prevent unchecking if it's the primary location
-                                                            if (isPrimary) {
-                                                                // Use an alert directly or a simple console warn if toast is out of scope. We'll find the toast context above if it exists, but alert is safest for modals if toast hook isn't brought down.
-                                                                alert("Cannot unselect the Main Fulfillment Location. Please assign a new Main Location first.");
-                                                                return;
-                                                            }
                                                             setSelectedLocations(prev =>
                                                                 prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]
                                                             );
@@ -238,16 +216,7 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                             </div>
                         </div>
 
-                        {/* Center Latest Button */}
-                        <div className="hidden md:flex flex-col justify-center items-center z-10 -mx-4 absolute left-1/2 top-[35%] -translate-x-1/2 -translate-y-1/2">
-                            <button
-                                onClick={() => setSyncSource(isLatestShopify ? 'shopify' : 'etsy')}
-                                className="w-14 h-14 rounded-full border-[6px] border-white shadow-xl flex items-center justify-center transition-all bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900 active:scale-95"
-                                title="Use Latest Updated Stock"
-                            >
-                                <History className="w-5 h-5" />
-                            </button>
-                        </div>
+
 
                         {/* Etsy Column */}
                         <div className="flex-1 flex flex-col gap-4">

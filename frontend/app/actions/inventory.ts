@@ -493,14 +493,13 @@ export async function updateInventoryConfig(itemId: string, selectedLocationIds:
             // Guarantee selectedLocationIds includes primaryLocationId, and it's at the front
             const cleanOtherIds = selectedLocationIds.filter(id => id !== primaryLocationId);
             const orderedIds = [primaryLocationId, ...cleanOtherIds];
-            const newMainLocationStr = orderedIds.join(',');
 
             // Override selectedLocationIds so they save consistently
             selectedLocationIds = orderedIds;
 
             const { error: shopError } = await supabase
                 .from('shops')
-                .update({ main_location_id: newMainLocationStr })
+                .update({ main_location_id: primaryLocationId })
                 .eq('id', itemData.shop_id);
 
             if (shopError) console.error('[Config] Failed to update global primary location', shopError);

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
     LayoutDashboard, LogOut, Settings, Bell,
-    RefreshCw, Box, History, Layers
+    RefreshCw, Box, History, Layers, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { usePathname, useRouter } from 'next/navigation';
@@ -14,6 +14,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     const router = useRouter();
     const pathname = usePathname();
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const handleSignOut = async () => {
         await supabase.auth.signOut();
@@ -36,15 +37,15 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex">
             {/* Sidebar */}
-            <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col fixed top-0 left-0 h-screen z-20">
-                <div className="h-16 flex items-center px-6 border-b border-gray-100">
-                    <Link href="/" className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
-                        <span className="text-xl font-bold tracking-tight">MerSync</span>
+            <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-gray-200 hidden md:flex flex-col fixed top-0 left-0 h-screen z-20 transition-all duration-300`}>
+                <div className="h-16 flex items-center px-6 border-b border-gray-100 overflow-hidden shrink-0">
+                    <Link href="/" className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center text-white font-black text-sm shrink-0">M</div>
+                        {isSidebarOpen && <span className="text-xl font-bold tracking-tight whitespace-nowrap">MerSync</span>}
                     </Link>
                 </div>
 
-                <nav className="p-4 space-y-1 flex-1">
+                <nav className="p-4 space-y-2 flex-1 overflow-y-auto overflow-x-hidden">
                     {navLinks.map((link) => {
                         const Icon = link.icon;
                         const isActive = pathname === link.href;
@@ -53,34 +54,43 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                             <Link
                                 key={link.href}
                                 href={link.href}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors ${isActive
+                                className={`flex items-center gap-3 px-3 py-3 rounded-xl font-medium transition-colors ${isActive
                                     ? 'bg-blue-50 text-blue-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                    }`}
+                                    } ${!isSidebarOpen && 'justify-center'}`}
+                                title={!isSidebarOpen ? link.label : undefined}
                             >
-                                <Icon className="w-5 h-5" />
-                                {link.label}
+                                <Icon className="w-5 h-5 shrink-0" />
+                                {isSidebarOpen && <span className="truncate">{link.label}</span>}
                             </Link>
                         );
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-gray-100">
+                <div className="p-4 border-t border-gray-100 overflow-hidden">
                     <button
                         onClick={handleSignOut}
-                        className="flex items-center gap-3 px-4 py-3 w-full text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors"
+                        className={`flex items-center gap-3 px-3 py-3 w-full text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors ${!isSidebarOpen && 'justify-center'}`}
+                        title={!isSidebarOpen ? 'Sign Out' : undefined}
                     >
-                        <LogOut className="w-5 h-5" />
-                        Sign Out
+                        <LogOut className="w-5 h-5 shrink-0" />
+                        {isSidebarOpen && <span className="truncate">Sign Out</span>}
                     </button>
                 </div>
             </aside>
 
             {/* Main Content Area */}
-            <main className="flex-1 min-w-0 md:ml-64">
+            <main className={`flex-1 min-w-0 transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'}`}>
                 {/* Global Header */}
-                <header className="bg-white border-b border-gray-200 sticky top-0 z-10 h-16 flex items-center justify-between px-4 sm:px-8">
-                    <div>
+                <header className="bg-white border-b border-gray-200 sticky top-0 z-10 h-16 flex items-center justify-between px-4 sm:px-6">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="hidden md:flex p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Toggle Sidebar"
+                        >
+                            {isSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+                        </button>
                         <h1 className="text-xl font-bold text-gray-800 tracking-tight">
                             {navLinks.find(l => l.href === pathname)?.label || 'Dashboard'}
                         </h1>

@@ -34,11 +34,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Shop not found' }, { status: 404 });
         }
 
-        // Update main_location_id in shops table with all selected IDs (comma-separated)
-        const locationStr = locationIds.join(',');
+        // Only save the PRIMARY location to main_location_id
+        const primaryLocationId = locationIds[0];
+        
         await supabase
             .from('shops')
-            .update({ main_location_id: locationStr })
+            .update({ main_location_id: primaryLocationId })
             .eq('id', shop.id);
 
         const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
                     .from('staging_shopify_products')
                     .update({
                         stock_quantity: totalStock,
+                        selected_location_ids: locationIds,
                         updated_at: new Date().toISOString()
                     })
                     .eq('shopify_inventory_item_id', itemId);
