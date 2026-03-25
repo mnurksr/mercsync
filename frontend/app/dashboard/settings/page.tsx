@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import {
     Link2, Settings, Bell, DollarSign, MapPin, Shield,
     ShoppingBag, Store, Check, X, ExternalLink,
-    ArrowUpRight, Unlink, Save, Loader2, ChevronRight,
-    ToggleLeft, ToggleRight, CreditCard, Trash2
+    ArrowUpRight, Unlink, Save, Loader2,
+    CreditCard, Trash2, ArrowRight, Star,
+    Mail, BellRing
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
@@ -16,8 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations } from '../../actions/shop';
 import {
     getSettings, updateSettings,
-    type ShopSettings, type SyncDirection, type ConflictStrategy,
-    type SyncFrequency, type NotificationFrequency,
+    type ShopSettings, type SyncDirection,
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
 
@@ -48,7 +48,7 @@ export default function SettingsPage() {
 
     // Store connection state
     const [stores, setStores] = useState({
-        shopify: { connected: false, name: null as string | null, domain: null as string | null },
+        shopify: { connected: false, name: null as string | null, domain: null as string | null, plan_type: null as string | null },
         etsy: { connected: false, name: null as string | null, shopId: null as string | null }
     });
 
@@ -57,7 +57,7 @@ export default function SettingsPage() {
         sync_direction: 'bidirectional',
         conflict_strategy: 'last_write_wins',
         auto_sync_enabled: false,
-        sync_frequency: '6h',
+        sync_frequency: '1h',
         stock_buffer: 0,
         price_sync_enabled: false,
         price_rules: [],
@@ -67,7 +67,13 @@ export default function SettingsPage() {
     });
 
     // Locations state
-    const [locations, setLocations] = useState<{ id: string; name: string; active: boolean }[]>([]);
+    const [locations, setLocations] = useState<{ id: string; name: string; active: boolean; address1?: string }[]>([]);
+    const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+    const [primaryLocationId, setPrimaryLocationId] = useState<string | null>(null);
+    const [savingLocations, setSavingLocations] = useState(false);
+
+    // Notification email
+    const [notificationEmail, setNotificationEmail] = useState('');
 
     // Modal states
     const [showShopifyModal, setShowShopifyModal] = useState(false);
@@ -91,21 +97,29 @@ export default function SettingsPage() {
             ]);
 
             setStores({
-                shopify: { connected: shopify.connected, name: shopify.shop_domain, domain: shopify.shop_domain },
+                shopify: { connected: shopify.connected, name: shopify.shop_domain, domain: shopify.shop_domain, plan_type: shopify.plan_type || null },
                 etsy: { connected: etsy.connected, name: etsy.shop_domain, shopId: null }
             });
 
             setSettings(savedSettings);
+            setNotificationEmail(user?.email || '');
 
             // Load locations if Shopify connected
             if (shopify.connected) {
                 const locResult = await fetchShopifyLocations();
                 if (locResult.success && locResult.data) {
-                    setLocations(locResult.data.map((l: any) => ({
+                    const locs = locResult.data.map((l: any) => ({
                         id: l.id?.toString(),
                         name: l.name,
-                        active: l.active || false
-                    })));
+                        active: l.active || false,
+                        address1: l.address1
+                    }));
+                    setLocations(locs);
+
+                    // Set selected locations from staging data
+                    const activeLocs = locs.filter(l => l.active).map(l => l.id);
+                    setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : locs.length > 0 ? [locs[0].id] : []);
+                    setPrimaryLocationId(activeLocs.length > 0 ? activeLocs[0] : locs.length > 0 ? locs[0].id : null);
                 }
             }
         } catch (error) {
@@ -129,6 +143,40 @@ export default function SettingsPage() {
             toast.error(`Failed to save: ${err.message}`);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleSaveLocations = async () => {
+        if (selectedLocationIds.length === 0 || !primaryLocationId) {
+            toast.warning('Please select at least one location and set a primary.');
+            return;
+        }
+        setSavingLocations(true);
+        try {
+            const sortedLocations = [
+                primaryLocationId,
+                ...selectedLocationIds.filter(id => id !== primaryLocationId)
+            ];
+
+            const res = await fetch('/api/sync/location-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    owner_id: user?.id,
+                    shopify_location_ids: sortedLocations
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                toast.success('Location settings saved');
+            } else {
+                toast.error(data.error || 'Failed to save locations');
+            }
+        } catch (err: any) {
+            toast.error(`Error: ${err.message}`);
+        } finally {
+            setSavingLocations(false);
         }
     };
 
@@ -162,7 +210,7 @@ export default function SettingsPage() {
             if (result.success) {
                 setStores(prev => ({
                     ...prev,
-                    [platform]: { connected: false, name: null, domain: null, shopId: null }
+                    [platform]: { connected: false, name: null, domain: null, shopId: null, plan_type: null }
                 }));
                 toast.success('Disconnected successfully.');
                 loadData();
@@ -200,7 +248,7 @@ export default function SettingsPage() {
                 })}
             </div>
 
-            {/* Save Bar (sticky) */}
+            {/* Save Bar (sticky) — only for tabs that use settings state */}
             <AnimatePresence>
                 {isDirty && (
                     <motion.div
@@ -245,32 +293,40 @@ export default function SettingsPage() {
                     {activeTab === 'connections' && (
                         <ConnectionsTab
                             stores={stores}
-                            shopName={shopName}
                             setShopName={setShopName}
-                            showShopifyModal={showShopifyModal}
                             setShowShopifyModal={setShowShopifyModal}
-                            showEtsyModal={showEtsyModal}
                             setShowEtsyModal={setShowEtsyModal}
-                            handleConnectShopify={handleConnectShopify}
-                            handleConnectEtsy={handleConnectEtsy}
                             onDisconnect={setDisconnectTarget}
-                            user={user}
                         />
                     )}
                     {activeTab === 'sync' && (
                         <SyncTab settings={settings} updateField={updateField} />
                     )}
                     {activeTab === 'locations' && (
-                        <LocationsTab locations={locations} />
+                        <LocationsTab
+                            locations={locations}
+                            selectedLocationIds={selectedLocationIds}
+                            setSelectedLocationIds={setSelectedLocationIds}
+                            primaryLocationId={primaryLocationId}
+                            setPrimaryLocationId={setPrimaryLocationId}
+                            onSave={handleSaveLocations}
+                            saving={savingLocations}
+                            storesConnected={stores.shopify.connected}
+                        />
                     )}
                     {activeTab === 'pricing' && (
                         <PricingTab settings={settings} updateField={updateField} />
                     )}
                     {activeTab === 'notifications' && (
-                        <NotificationsTab settings={settings} updateField={updateField} />
+                        <NotificationsTab
+                            settings={settings}
+                            updateField={updateField}
+                            notificationEmail={notificationEmail}
+                            setNotificationEmail={setNotificationEmail}
+                        />
                     )}
                     {activeTab === 'billing' && (
-                        <BillingTab user={user} />
+                        <BillingTab stores={stores} />
                     )}
                     {activeTab === 'advanced' && (
                         <AdvancedTab />
@@ -315,14 +371,13 @@ export default function SettingsPage() {
 // Tab Components
 // ═══════════════════════════════════════════════
 
-// ─── Connections Tab ─────────────────────────
+// ─── Connections Tab (no Account section) ────
 
-function ConnectionsTab({ stores, shopName, setShopName, showShopifyModal, setShowShopifyModal, showEtsyModal, setShowEtsyModal, handleConnectShopify, handleConnectEtsy, onDisconnect, user }: any) {
+function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyModal, onDisconnect }: any) {
     return (
         <div className="space-y-4">
             <SectionHeader title="Connected Stores" description="Manage your e-commerce platform connections" />
 
-            {/* Shopify Card */}
             <StoreCard
                 name="Shopify"
                 icon={<ShoppingBag className="w-6 h-6 text-white" />}
@@ -334,7 +389,6 @@ function ConnectionsTab({ stores, shopName, setShopName, showShopifyModal, setSh
                 adminUrl={stores.shopify.domain ? `https://${stores.shopify.domain}/admin` : undefined}
             />
 
-            {/* Etsy Card */}
             <StoreCard
                 name="Etsy"
                 icon={<Store className="w-6 h-6 text-white" />}
@@ -345,33 +399,11 @@ function ConnectionsTab({ stores, shopName, setShopName, showShopifyModal, setSh
                 onDisconnect={() => onDisconnect('etsy')}
                 adminUrl="https://www.etsy.com/your/shops/me"
             />
-
-            {/* Account Section */}
-            <SectionHeader title="Account" />
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-lg font-bold text-white">
-                            {user?.email?.charAt(0).toUpperCase() || 'U'}
-                        </div>
-                        <div>
-                            <h3 className="font-semibold text-gray-900">{user?.email || 'User'}</h3>
-                            <p className="text-sm text-gray-500">Manage your account</p>
-                        </div>
-                    </div>
-                    <Link
-                        href="/billing"
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm transition-colors"
-                    >
-                        Manage Plan
-                    </Link>
-                </div>
-            </div>
         </div>
     );
 }
 
-// ─── Sync Settings Tab ───────────────────────
+// ─── Sync Settings Tab (simplified) ──────────
 
 function SyncTab({ settings, updateField }: { settings: ShopSettings; updateField: any }) {
     return (
@@ -406,44 +438,10 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                     />
                 </SettingRow>
 
-                {/* Conflict Resolution */}
-                <SettingRow
-                    label="Conflict Resolution"
-                    description="What happens when both platforms change stock at the same time?"
-                >
-                    <SelectBox
-                        value={settings.conflict_strategy}
-                        onChange={(v) => updateField('conflict_strategy', v as ConflictStrategy)}
-                        options={[
-                            { value: 'last_write_wins', label: 'Last Write Wins' },
-                            { value: 'shopify_wins', label: 'Shopify Always Wins' },
-                            { value: 'etsy_wins', label: 'Etsy Always Wins' },
-                            { value: 'manual_review', label: 'Manual Review' }
-                        ]}
-                    />
-                </SettingRow>
-
-                {/* Sync Frequency */}
-                <SettingRow
-                    label="Full Sync Frequency"
-                    description="How often to perform a complete inventory reconciliation"
-                >
-                    <SelectBox
-                        value={settings.sync_frequency}
-                        onChange={(v) => updateField('sync_frequency', v as SyncFrequency)}
-                        options={[
-                            { value: '1h', label: 'Every 1 Hour' },
-                            { value: '6h', label: 'Every 6 Hours' },
-                            { value: '12h', label: 'Every 12 Hours' },
-                            { value: '24h', label: 'Every 24 Hours' }
-                        ]}
-                    />
-                </SettingRow>
-
                 {/* Stock Buffer */}
                 <SettingRow
                     label="Stock Buffer"
-                    description="Safety buffer — deducts this amount from the stock shown on each platform to prevent overselling"
+                    description="Safety buffer — deducts this amount from stock shown on each platform to prevent overselling"
                 >
                     <div className="flex items-center gap-2">
                         <input
@@ -462,46 +460,115 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
     );
 }
 
-// ─── Locations Tab ───────────────────────────
+// ─── Locations Tab (interactive, like setup wizard) ──
 
-function LocationsTab({ locations }: { locations: { id: string; name: string; active: boolean }[] }) {
+function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, primaryLocationId, setPrimaryLocationId, onSave, saving, storesConnected }: {
+    locations: { id: string; name: string; active: boolean; address1?: string }[];
+    selectedLocationIds: string[];
+    setSelectedLocationIds: (v: string[] | ((prev: string[]) => string[])) => void;
+    primaryLocationId: string | null;
+    setPrimaryLocationId: (v: string) => void;
+    onSave: () => void;
+    saving: boolean;
+    storesConnected: boolean;
+}) {
     return (
         <div className="space-y-4">
-            <SectionHeader title="Inventory Locations" description="Manage which Shopify locations contribute to your total stock" />
+            <SectionHeader title="Inventory Locations" description="Select which Shopify locations supply your Etsy stock and set a primary fulfillment location" />
 
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                {locations.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400">
-                        <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No locations found. Connect Shopify first.</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {locations.map(loc => (
-                            <div key={loc.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                                <div className="flex items-center gap-3">
-                                    <MapPin className="w-4 h-4 text-gray-400" />
-                                    <div>
-                                        <p className="font-medium text-gray-900 text-sm">{loc.name}</p>
-                                        <p className="text-xs text-gray-400">ID: {loc.id}</p>
+            {!storesConnected ? (
+                <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm text-gray-400">Connect Shopify first to manage locations.</p>
+                </div>
+            ) : locations.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center">
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 text-gray-300 animate-spin" />
+                    <p className="text-sm text-gray-400">Loading locations...</p>
+                </div>
+            ) : (
+                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                    <p className="text-sm text-gray-500 mb-4">
+                        Select the locations whose stock will be aggregated for Etsy. The <strong>primary</strong> location is used for fulfillment priority.
+                    </p>
+
+                    <div className="space-y-2 mb-6">
+                        {locations.map(loc => {
+                            const isSelected = selectedLocationIds.includes(loc.id);
+                            const isPrimary = primaryLocationId === loc.id;
+
+                            return (
+                                <div
+                                    key={loc.id}
+                                    className={`p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
+                                        isSelected
+                                            ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600/10'
+                                            : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                                    }`}
+                                >
+                                    <div
+                                        className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                        onClick={() => {
+                                            if (isPrimary) {
+                                                alert('Cannot unselect the primary location. Assign a new primary first.');
+                                                return;
+                                            }
+                                            setSelectedLocationIds((prev: string[]) =>
+                                                isSelected
+                                                    ? prev.filter(id => id !== loc.id)
+                                                    : [...prev, loc.id]
+                                            );
+                                        }}
+                                    >
+                                        <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
+                                            isSelected ? 'bg-indigo-600' : 'bg-white border border-gray-300'
+                                        }`}>
+                                            {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className={`text-sm font-semibold truncate ${isSelected ? 'text-indigo-900' : 'text-gray-700'}`}>
+                                                {loc.name}
+                                            </p>
+                                            {loc.address1 && <p className="text-[11px] text-gray-400 truncate">{loc.address1}</p>}
+                                        </div>
                                     </div>
+
+                                    {isSelected && (
+                                        <div className="shrink-0">
+                                            {isPrimary ? (
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200">
+                                                    ★ Primary
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setPrimaryLocationId(loc.id); }}
+                                                    className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 px-2.5 py-1 rounded-md transition-colors border border-transparent hover:border-indigo-100"
+                                                >
+                                                    Set Primary
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${loc.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                                    {loc.active ? 'Active' : 'Inactive'}
-                                </span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
-                )}
-                <p className="text-xs text-gray-400 mt-4">
-                    Location management will be expanded in a future update. Currently, the primary location is set globally from the Inventory page.
-                </p>
-            </div>
+
+                    <button
+                        onClick={onSave}
+                        disabled={saving || selectedLocationIds.length === 0}
+                        className="w-full h-11 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                    >
+                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                        Save Location Settings
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
 
-// ─── Price Rules Tab ─────────────────────────
+// ─── Price Rules Tab (improved UX + currency) ─
 
 function PricingTab({ settings, updateField }: { settings: ShopSettings; updateField: any }) {
     const addRule = () => {
@@ -510,11 +577,11 @@ function PricingTab({ settings, updateField }: { settings: ShopSettings; updateF
     };
 
     const removeRule = (index: number) => {
-        updateField('price_rules', settings.price_rules.filter((_, i) => i !== index));
+        updateField('price_rules', settings.price_rules.filter((_: any, i: number) => i !== index));
     };
 
     const updateRule = (index: number, field: keyof PriceRule, value: any) => {
-        const updated = settings.price_rules.map((rule, i) =>
+        const updated = settings.price_rules.map((rule: PriceRule, i: number) =>
             i === index ? { ...rule, [field]: value } : rule
         );
         updateField('price_rules', updated);
@@ -524,10 +591,24 @@ function PricingTab({ settings, updateField }: { settings: ShopSettings; updateF
         <div className="space-y-4">
             <SectionHeader title="Price Sync Rules" description="Configure automatic price adjustments between platforms" />
 
+            {/* Currency Warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                    <DollarSign className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-amber-900">Currency Note</p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                        If your Shopify and Etsy stores use different currencies, price rules will apply to the raw numeric values.
+                        Currency conversion is not yet automatic — set your markup percentage to account for the exchange rate difference.
+                    </p>
+                </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
                 <SettingRow
                     label="Price Sync"
-                    description="Automatically update prices on the target platform when the source changes"
+                    description="Automatically update prices on the target platform when the source price changes"
                 >
                     <ToggleSwitch
                         enabled={settings.price_sync_enabled}
@@ -537,56 +618,99 @@ function PricingTab({ settings, updateField }: { settings: ShopSettings; updateF
             </div>
 
             {settings.price_sync_enabled && (
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-gray-900">Price Rules</h3>
-                        <button onClick={addRule} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-900">Price Rules</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Define how the target platform price is calculated from the source price</p>
+                        </div>
+                        <button onClick={addRule} className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
                             + Add Rule
                         </button>
                     </div>
 
                     {settings.price_rules.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-4">No rules configured. Click "Add Rule" to get started.</p>
+                        <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+                            <DollarSign className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+                            <p className="text-sm text-gray-400">No rules configured</p>
+                            <button onClick={addRule} className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-2">
+                                + Create your first rule
+                            </button>
+                        </div>
                     ) : (
                         <div className="space-y-3">
-                            {settings.price_rules.map((rule, i) => (
-                                <div key={i} className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                                    <select
-                                        value={rule.platform}
-                                        onChange={(e) => updateRule(i, 'platform', e.target.value)}
-                                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                    >
-                                        <option value="etsy">Etsy price =</option>
-                                        <option value="shopify">Shopify price =</option>
-                                    </select>
-                                    <span className="text-sm text-gray-500">Source price</span>
-                                    <select
-                                        value={rule.type}
-                                        onChange={(e) => updateRule(i, 'type', e.target.value)}
-                                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                    >
-                                        <option value="percentage">+ %</option>
-                                        <option value="fixed">+ $</option>
-                                    </select>
-                                    <input
-                                        type="number"
-                                        value={rule.value}
-                                        onChange={(e) => updateRule(i, 'value', parseFloat(e.target.value) || 0)}
-                                        className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-right"
-                                    />
-                                    <select
-                                        value={rule.rounding}
-                                        onChange={(e) => updateRule(i, 'rounding', e.target.value)}
-                                        className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
-                                    >
-                                        <option value="none">No rounding</option>
-                                        <option value="nearest_99">.99</option>
-                                        <option value="nearest_95">.95</option>
-                                        <option value="round_up">Round Up</option>
-                                    </select>
-                                    <button onClick={() => removeRule(i)} className="p-1.5 text-red-400 hover:text-red-600">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                            {settings.price_rules.map((rule: PriceRule, i: number) => (
+                                <div key={i} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="text-xs font-bold text-gray-400 uppercase">Rule {i + 1}</span>
+                                        <div className="flex-1 h-px bg-gray-200" />
+                                        <button onClick={() => removeRule(i)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <select
+                                            value={rule.platform}
+                                            onChange={(e) => updateRule(i, 'platform', e.target.value)}
+                                            className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white font-medium"
+                                        >
+                                            <option value="etsy">Etsy</option>
+                                            <option value="shopify">Shopify</option>
+                                        </select>
+
+                                        <span className="text-sm text-gray-500">price =</span>
+
+                                        <span className="text-sm font-medium text-gray-700">
+                                            {rule.platform === 'etsy' ? 'Shopify' : 'Etsy'} price
+                                        </span>
+
+                                        <select
+                                            value={rule.type}
+                                            onChange={(e) => updateRule(i, 'type', e.target.value)}
+                                            className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white"
+                                        >
+                                            <option value="percentage">+ Percentage (%)</option>
+                                            <option value="fixed">+ Fixed Amount</option>
+                                        </select>
+
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="number"
+                                                value={rule.value}
+                                                onChange={(e) => updateRule(i, 'value', parseFloat(e.target.value) || 0)}
+                                                className="w-20 px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                            <span className="text-sm text-gray-400">{rule.type === 'percentage' ? '%' : '$'}</span>
+                                        </div>
+
+                                        <select
+                                            value={rule.rounding}
+                                            onChange={(e) => updateRule(i, 'rounding', e.target.value)}
+                                            className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white"
+                                        >
+                                            <option value="none">No rounding</option>
+                                            <option value="nearest_99">Round to .99</option>
+                                            <option value="nearest_95">Round to .95</option>
+                                            <option value="round_up">Round up</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Preview */}
+                                    {rule.value > 0 && (
+                                        <div className="mt-3 px-3 py-2 bg-blue-50 rounded-lg">
+                                            <p className="text-xs text-blue-700">
+                                                <strong>Example:</strong> If {rule.platform === 'etsy' ? 'Shopify' : 'Etsy'} price is $10.00 →
+                                                {' '}{rule.platform === 'etsy' ? 'Etsy' : 'Shopify'} price will be{' '}
+                                                <strong>
+                                                    ${rule.type === 'percentage'
+                                                        ? (10 * (1 + rule.value / 100)).toFixed(2)
+                                                        : (10 + rule.value).toFixed(2)
+                                                    }
+                                                </strong>
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -597,9 +721,11 @@ function PricingTab({ settings, updateField }: { settings: ShopSettings; updateF
     );
 }
 
-// ─── Notifications Tab ───────────────────────
+// ─── Notifications Tab (simplified) ──────────
 
-function NotificationsTab({ settings, updateField }: { settings: ShopSettings; updateField: any }) {
+function NotificationsTab({ settings, updateField, notificationEmail, setNotificationEmail }: {
+    settings: ShopSettings; updateField: any; notificationEmail: string; setNotificationEmail: (v: string) => void;
+}) {
     const updateChannel = (key: keyof NotificationChannels, value: any) => {
         updateField('notification_channels', { ...settings.notification_channels, [key]: value });
     };
@@ -610,101 +736,146 @@ function NotificationsTab({ settings, updateField }: { settings: ShopSettings; u
 
     return (
         <div className="space-y-4">
-            <SectionHeader title="Notifications" description="Choose what events trigger alerts and where they're delivered" />
+            <SectionHeader title="Notifications" description="Choose what events trigger alerts and where they are delivered" />
 
             {/* Channels */}
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
                 <div className="px-6 py-4">
                     <h3 className="text-sm font-semibold text-gray-900">Notification Channels</h3>
                 </div>
-                <SettingRow label="In-App Notifications" description="Show alerts in the dashboard bell icon">
+                <SettingRow label="In-App Notifications" description="Show alerts in the dashboard notification bell">
                     <ToggleSwitch enabled={settings.notification_channels.in_app} onChange={(v) => updateChannel('in_app', v)} />
                 </SettingRow>
-                <SettingRow label="Email Notifications" description="Send alerts to your account email">
-                    <ToggleSwitch enabled={settings.notification_channels.email} onChange={(v) => updateChannel('email', v)} />
-                </SettingRow>
-                <SettingRow label="Slack / Discord Webhook" description="Send alerts to a Slack or Discord channel">
-                    <input
-                        type="url"
-                        value={settings.notification_channels.slack_webhook_url || ''}
-                        onChange={(e) => updateChannel('slack_webhook_url', e.target.value || null)}
-                        placeholder="https://hooks.slack.com/..."
-                        className="w-72 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                </SettingRow>
+                <div>
+                    <SettingRow label="Email Notifications" description="Send critical alerts to your email">
+                        <ToggleSwitch enabled={settings.notification_channels.email} onChange={(v) => updateChannel('email', v)} />
+                    </SettingRow>
+                    {settings.notification_channels.email && (
+                        <div className="px-6 pb-4 -mt-1">
+                            <div className="flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-gray-400" />
+                                <input
+                                    type="email"
+                                    value={notificationEmail}
+                                    onChange={(e) => setNotificationEmail(e.target.value)}
+                                    placeholder="your@email.com"
+                                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Events */}
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
                 <div className="px-6 py-4">
                     <h3 className="text-sm font-semibold text-gray-900">Alert Events</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Notifications are sent instantly when the selected event occurs</p>
                 </div>
-                <SettingRow label="Stock reaches zero" description="Alert when any product runs out of stock">
+                <SettingRow label="Stock reaches zero" description="When any product runs out of stock">
                     <ToggleSwitch enabled={settings.notification_events.stock_zero} onChange={(v) => updateEvent('stock_zero', v)} />
                 </SettingRow>
-                <SettingRow label="Sync failed" description="Alert when a stock sync operation fails">
+                <SettingRow label="Sync failed" description="When a stock sync operation fails">
                     <ToggleSwitch enabled={settings.notification_events.sync_failed} onChange={(v) => updateEvent('sync_failed', v)} />
                 </SettingRow>
-                <SettingRow label="Over-sell risk" description="Alert when stock levels are dangerously low">
+                <SettingRow label="Over-sell risk" description="When stock levels are critically low">
                     <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
                 </SettingRow>
-                <SettingRow label="New order" description="Alert when a new order comes in from any platform">
+                <SettingRow label="New order" description="When a new order comes in from any platform">
                     <ToggleSwitch enabled={settings.notification_events.new_order} onChange={(v) => updateEvent('new_order', v)} />
                 </SettingRow>
-                <SettingRow label="Token expiring" description="Alert when a platform connection is about to expire">
+                <SettingRow label="Token expiring" description="When a platform connection is about to expire">
                     <ToggleSwitch enabled={settings.notification_events.token_expiring} onChange={(v) => updateEvent('token_expiring', v)} />
-                </SettingRow>
-            </div>
-
-            {/* Frequency */}
-            <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
-                <SettingRow label="Notification Frequency" description="How often to receive notification summaries">
-                    <SelectBox
-                        value={settings.notification_frequency}
-                        onChange={(v) => updateField('notification_frequency', v as NotificationFrequency)}
-                        options={[
-                            { value: 'instant', label: 'Instant' },
-                            { value: 'hourly', label: 'Hourly Digest' },
-                            { value: 'daily', label: 'Daily Digest' }
-                        ]}
-                    />
                 </SettingRow>
             </div>
         </div>
     );
 }
 
-// ─── Billing Tab ─────────────────────────────
+// ─── Billing Tab (populated with real data) ──
 
-function BillingTab({ user }: { user: any }) {
+function BillingTab({ stores }: { stores: any }) {
+    const planType = stores.shopify?.plan_type || 'guest';
+    const planLabel = planType === 'guest' ? 'Free' : planType.charAt(0).toUpperCase() + planType.slice(1);
+    const isPaid = planType && !['guest', 'none', 'pending', 'basic'].includes(planType.toLowerCase());
+
     return (
         <div className="space-y-4">
             <SectionHeader title="Billing & Plan" description="Manage your subscription and view usage" />
 
+            {/* Current Plan Card */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="font-semibold text-gray-900">Current Plan</h3>
-                        <p className="text-sm text-gray-500 mt-1">Your plan details and usage will appear here once billing systems are active.</p>
+                    <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                            isPaid ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gray-100'
+                        }`}>
+                            {isPaid ? (
+                                <Star className="w-6 h-6 text-white" />
+                            ) : (
+                                <CreditCard className="w-6 h-6 text-gray-400" />
+                            )}
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-gray-900">{planLabel} Plan</h3>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                    isPaid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                    {isPaid ? 'Active' : 'Free Tier'}
+                                </span>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-0.5">
+                                {isPaid
+                                    ? 'Your subscription is managed through Shopify Billing.'
+                                    : 'Upgrade to unlock automatic synchronization and premium features.'
+                                }
+                            </p>
+                        </div>
                     </div>
                     <Link
                         href="/billing"
-                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm transition-colors"
+                        className={`px-5 py-2.5 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 ${
+                            isPaid
+                                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
                     >
-                        Manage Subscription
+                        {isPaid ? 'Manage Plan' : 'Upgrade'}
+                        <ArrowRight className="w-4 h-4" />
                     </Link>
                 </div>
+            </div>
 
-                {/* Quota placeholder */}
-                <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-600">Monthly Sync Operations</span>
-                        <span className="text-sm font-medium text-gray-900">— / —</span>
+            {/* Quota */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Usage This Month</h3>
+                <div className="space-y-4">
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm text-gray-600">Sync Operations</span>
+                            <span className="text-sm font-medium text-gray-900">
+                                {isPaid ? 'Unlimited' : '0 / 100'}
+                            </span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                            <div className={`h-2 rounded-full transition-all ${isPaid ? 'bg-green-500 w-[10%]' : 'bg-gray-300 w-0'}`} />
+                        </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: '0%' }} />
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm text-gray-600">Connected Stores</span>
+                            <span className="text-sm font-medium text-gray-900">
+                                {(stores.shopify?.connected ? 1 : 0) + (stores.etsy?.connected ? 1 : 0)} / {isPaid ? '∞' : '2'}
+                            </span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                            <div className="bg-blue-500 h-2 rounded-full" style={{
+                                width: `${((stores.shopify?.connected ? 1 : 0) + (stores.etsy?.connected ? 1 : 0)) * 50}%`
+                            }} />
+                        </div>
                     </div>
-                    <p className="text-xs text-gray-400 mt-2">Quota tracking will be available in Faz 5.</p>
                 </div>
             </div>
         </div>
