@@ -38,10 +38,21 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
     const [manualStock, setManualStock] = useState<number>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Initialize stock and sync source when stock changes
     useEffect(() => {
         if (item) {
             setManualStock(item.master_stock);
+            // Auto-detect best source if it's "Action Required"
+            const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
+            const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
+            if (sTime > eTime) setSyncSource('shopify');
+            else if (eTime > sTime) setSyncSource('etsy');
+        }
+    }, [item?.master_stock, item?.shopify_updated_at, item?.etsy_updated_at]);
 
+    // Initialize layout config only when modal opens for a specific item
+    useEffect(() => {
+        if (item && isOpen) {
             // Select locations from product config. If empty, leave empty.
             if (item.selected_location_ids && item.selected_location_ids.length > 0) {
                 setSelectedLocations(item.selected_location_ids);
@@ -54,14 +65,8 @@ function SymmetricSyncModal({ isOpen, onClose, onConfirm, onSaveConfig, item, sh
                 const globalPrimary = item.shop.main_location_id.split(',')[0].trim();
                 setPrimaryLocationId(globalPrimary);
             }
-
-            // Auto-detect best source if it's "Action Required"
-            const sTime = item.shopify_updated_at ? new Date(item.shopify_updated_at).getTime() : 0;
-            const eTime = item.etsy_updated_at ? new Date(item.etsy_updated_at).getTime() : 0;
-            if (sTime > eTime) setSyncSource('shopify');
-            else if (eTime > sTime) setSyncSource('etsy');
         }
-    }, [item, shopLocations]);
+    }, [item?.id, isOpen]);
 
     // Calculate live Shopify stock based on selected locations
     const liveShopifyStock = useMemo(() => {
@@ -596,15 +601,15 @@ export default function InventoryPage() {
                                             </td>
                                             <td className="px-2 py-4">
                                                 <div className="flex flex-col items-center justify-center">
-                                                    <div className="flex items-center gap-2.5 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200 shadow-inner">
-                                                        <div className="flex items-center gap-1.5" title="Shopify Stock Snapshot">
-                                                            <ShoppingBag className="w-3.5 h-3.5 text-blue-500" />
+                                                    <div className="flex items-center justify-between w-[120px] bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 shadow-inner">
+                                                        <div className="flex items-center gap-1.5 w-[40px]" title="Shopify Stock Snapshot">
+                                                            <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                                                             <span className="text-[11px] font-black text-gray-900">{item.shopify_stock_snapshot ?? '-'}</span>
                                                         </div>
-                                                        <div className="w-px h-3 bg-gray-300 rounded-full"></div>
-                                                        <div className="flex items-center gap-1.5" title="Etsy Stock Snapshot">
-                                                            <Store className="w-3.5 h-3.5 text-orange-500" />
-                                                            <span className="text-[11px] font-black text-gray-900">{item.etsy_stock_snapshot ?? '-'}</span>
+                                                        <div className="w-px h-3 bg-gray-300 rounded-full shrink-0"></div>
+                                                        <div className="flex items-center gap-1.5 w-[40px] flex-row-reverse" title="Etsy Stock Snapshot">
+                                                            <Store className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                            <span className="text-[11px] font-black text-gray-900 text-right w-full">{item.etsy_stock_snapshot ?? '-'}</span>
                                                         </div>
                                                     </div>
                                                 </div>
