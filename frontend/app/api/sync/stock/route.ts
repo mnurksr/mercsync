@@ -24,13 +24,15 @@ async function processBulkStock(job_id: string, user_id: string, itemIds: string
         let completedSteps = 0;
         const events: any[] = [];
 
-        await supabase.from('sync_jobs').update({
+        const { error: startError } = await supabase.from('sync_jobs').update({
             status: 'processing',
             message: `Starting bulk sync for ${totalSteps} items...`,
             current_step: 0,
             total_steps: totalSteps,
             updated_at: new Date().toISOString()
         }).eq('id', job_id);
+
+        if (startError) console.error('[Sync API] Failed to start job:', startError);
 
         for (const item of items) {
             let targetStock = item.master_stock;
@@ -69,23 +71,27 @@ async function processBulkStock(job_id: string, user_id: string, itemIds: string
             const progress = Math.round((completedSteps / totalSteps) * 100);
 
             // Update progress in sync_jobs
-            await supabase.from('sync_jobs').update({
+            const { error: progError } = await supabase.from('sync_jobs').update({
                 current_step: progress,
                 message: JSON.stringify(events),
                 updated_at: new Date().toISOString()
             }).eq('id', job_id);
+
+            if (progError) console.error('[Sync API] Progress update failed:', progError);
 
             // Sleep slightly to prevent rate limiting
             await new Promise(res => setTimeout(res, 500));
         }
 
         // Finish job
-        await supabase.from('sync_jobs').update({
+        const { error: finishError } = await supabase.from('sync_jobs').update({
             status: 'completed',
             message: JSON.stringify(events),
             current_step: 100,
             updated_at: new Date().toISOString()
         }).eq('id', job_id);
+
+        if (finishError) console.error('[Sync API] Finish update failed:', finishError);
 
     } catch (err: any) {
         console.error('[Sync API] Fatal background error:', err);
@@ -126,7 +132,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Cannot determine valid user tracking context' }, { status: 400 });
             }
         }
-        await supabase
+        const { error: upsertError } = await supabase
             .from('sync_jobs')
             .upsert({
                 id: job_id,
@@ -135,6 +141,11 @@ export async function POST(req: NextRequest) {
                 current_step: 0,
                 total_steps: 100,
             }, { onConflict: 'id' });
+
+        if (upsertError) {
+            console.error('[Sync API] Initial upsert error:', upsertError);
+            return NextResponse.json({ error: 'Database error creating sync job' }, { status: 500 });
+        }
 
         const response = NextResponse.json({
             status: 'accepted',

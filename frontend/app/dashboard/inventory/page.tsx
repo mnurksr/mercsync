@@ -409,8 +409,8 @@ export default function InventoryPage() {
     const handleBulkSync = async (strategy: 'shopify' | 'etsy' | 'latest') => {
         setIsSyncing(true);
         try {
-            // Using fetch to trigger background job
-            const jobId = `stock_sync_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            // Using fetch to trigger background job with a valid postgres UUID
+            const jobId = crypto.randomUUID();
 
             // Use actual user ID instead of dummy string "auto-stock-sync"
             const res = await fetch('/api/sync/stock', {
