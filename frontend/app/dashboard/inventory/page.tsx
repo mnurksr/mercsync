@@ -500,7 +500,7 @@ export default function InventoryPage() {
                                     </button>
                                 </th>
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Listing</th>
-                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">SKU</th>
+                                <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Links</th>
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Status</th>
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Master</th>
                                 <th className="px-2 py-6 text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Snapshots</th>
@@ -534,7 +534,10 @@ export default function InventoryPage() {
                                 </tr>
                             ) : (
                                 items.map((item) => {
-                                    const displayStatus = getStockStatus(item.status);
+                                    let displayStatus = getStockStatus(item.status);
+                                    if (item.status === 'In Sync' && item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
+                                        displayStatus = { label: 'Mismatch', color: 'bg-red-50 text-red-600 ring-red-500/20' };
+                                    }
                                     const isSelected = selectedIds.includes(item.id);
                                     return (
                                         <tr key={item.id} className={`hover:bg-indigo-50/10 transition-colors group ${isSelected ? 'bg-indigo-50/30' : ''}`}>
@@ -552,17 +555,36 @@ export default function InventoryPage() {
                                                             <Package className="w-5 h-5" />
                                                         )}
                                                     </div>
-                                                    <div className="min-w-0 max-w-[200px]">
-                                                        <p className="text-sm font-black text-gray-900 truncate">{item.name || 'Unnamed Product'}</p>
-                                                        <div className="flex items-center gap-2 mt-1 ">
-                                                            {item.shopify_variant_id && <ShoppingBag className="w-2.5 h-2.5 text-blue-500" />}
-                                                            {item.etsy_variant_id && <Store className="w-2.5 h-2.5 text-orange-500" />}
+                                                    <div className="min-w-0 max-w-[300px]">
+                                                        <p className="text-sm font-black text-gray-900 line-clamp-2 whitespace-normal leading-tight">{item.name || 'Unnamed Product'}</p>
+                                                        <div className="flex items-center gap-2 mt-1.5 opacity-70">
+                                                            {item.shopify_variant_id && <ShoppingBag className="w-2.5 h-2.5 text-blue-600" />}
+                                                            {item.etsy_variant_id && <Store className="w-2.5 h-2.5 text-orange-600" />}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-4">
-                                                <span className="text-[10px] font-black text-gray-500 tracking-tight bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{item.sku || 'NO-SKU'}</span>
+                                            <td className="px-2 py-4">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {item.shopify_product_id ? (
+                                                        <a href={`https://${item.shop_domain || 'admin.shopify.com'}/admin/products/${item.shopify_product_id}`} target="_blank" rel="noreferrer" title="Edit on Shopify" className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 hover:text-blue-600 transition-colors border border-blue-100 shadow-sm">
+                                                            <ShoppingBag className="w-4 h-4" />
+                                                        </a>
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100" title="No Shopify Product Linked">
+                                                            <ShoppingBag className="w-4 h-4" />
+                                                        </div>
+                                                    )}
+                                                    {item.etsy_listing_id ? (
+                                                        <a href={`https://www.etsy.com/your/shops/me/tools/listings/${item.etsy_listing_id}`} target="_blank" rel="noreferrer" title="Edit on Etsy" className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center hover:bg-orange-100 hover:text-orange-600 transition-colors border border-orange-100 shadow-sm">
+                                                            <Store className="w-4 h-4" />
+                                                        </a>
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100" title="No Etsy Product Linked">
+                                                            <Store className="w-4 h-4" />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-4 py-4 text-center">
                                                 <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ring-1 ${displayStatus.color}`}>
@@ -572,12 +594,18 @@ export default function InventoryPage() {
                                             <td className="px-4 py-4 text-center">
                                                 <span className="text-base font-black text-gray-900">{item.status === 'Action Required' ? '-' : item.master_stock}</span>
                                             </td>
-                                            <td className="px-2 py-4 text-center">
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center justify-center gap-2 text-[10px] font-bold">
-                                                        <span className="text-blue-600">S: {item.shopify_stock_snapshot}</span>
-                                                        <span className="text-gray-300">|</span>
-                                                        <span className="text-orange-600">E: {item.etsy_stock_snapshot}</span>
+                                            <td className="px-2 py-4">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <div className="flex items-center gap-2.5 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200 shadow-inner">
+                                                        <div className="flex items-center gap-1.5" title="Shopify Stock Snapshot">
+                                                            <ShoppingBag className="w-3.5 h-3.5 text-blue-500" />
+                                                            <span className="text-[11px] font-black text-gray-900">{item.shopify_stock_snapshot ?? '-'}</span>
+                                                        </div>
+                                                        <div className="w-px h-3 bg-gray-300 rounded-full"></div>
+                                                        <div className="flex items-center gap-1.5" title="Etsy Stock Snapshot">
+                                                            <Store className="w-3.5 h-3.5 text-orange-500" />
+                                                            <span className="text-[11px] font-black text-gray-900">{item.etsy_stock_snapshot ?? '-'}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
