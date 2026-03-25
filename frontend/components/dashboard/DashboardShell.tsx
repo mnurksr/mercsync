@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import {
-    LayoutDashboard, Settings, Bell,
-    RefreshCw, Box, History, Layers
+    Settings, Bell,
+    RefreshCw, Box, History, Layers, LayoutDashboard
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { usePathname, useRouter } from 'next/navigation';
@@ -28,31 +28,48 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         { href: '/dashboard/settings', label: 'Settings' },
     ];
 
-    // Build Shopify App Bridge <ui-nav-menu> via direct DOM manipulation.
-    // App Bridge scans the DOM for this web component and renders it
-    // natively in the Shopify admin sidebar. It must NOT be hidden.
+    // 1. Load App Bridge CDN script (only once, only on dashboard pages)
+    // 2. Then build the <ui-nav-menu> web component via DOM
     useEffect(() => {
-        const container = navRef.current;
-        if (!container) return;
+        // Check if App Bridge is already loaded
+        const alreadyLoaded = document.querySelector('script[src*="app-bridge.js"]');
+        if (!alreadyLoaded) {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.shopify.com/shopifycloud/app-bridge.js';
+            script.async = false;
+            document.head.appendChild(script);
 
-        // Remove any previously created menu
-        const existing = container.querySelector('ui-nav-menu');
-        if (existing) existing.remove();
+            // Wait for script to load before creating nav menu
+            script.onload = () => buildNavMenu();
+        } else {
+            buildNavMenu();
+        }
 
-        const menu = document.createElement('ui-nav-menu');
-        navLinks.forEach((link) => {
-            const a = document.createElement('a');
-            a.href = link.href;
-            a.textContent = link.label;
-            if (link.rel) a.setAttribute('rel', link.rel);
-            menu.appendChild(a);
-        });
-        container.appendChild(menu);
+        function buildNavMenu() {
+            const container = navRef.current;
+            if (!container) return;
 
-        // Cleanup on unmount
+            // Remove any previously created menu
+            const existing = container.querySelector('ui-nav-menu');
+            if (existing) existing.remove();
+
+            const menu = document.createElement('ui-nav-menu');
+            navLinks.forEach((link) => {
+                const a = document.createElement('a');
+                a.href = link.href;
+                a.textContent = link.label;
+                if (link.rel) a.setAttribute('rel', link.rel);
+                menu.appendChild(a);
+            });
+            container.appendChild(menu);
+        }
+
         return () => {
-            const old = container.querySelector('ui-nav-menu');
-            if (old) old.remove();
+            const container = navRef.current;
+            if (container) {
+                const old = container.querySelector('ui-nav-menu');
+                if (old) old.remove();
+            }
         };
     }, []);
 
@@ -61,7 +78,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col">
-            {/* Container for Shopify App Bridge ui-nav-menu (rendered via DOM, must not be display:none) */}
+            {/* Container for Shopify App Bridge ui-nav-menu */}
             <div ref={navRef} />
 
             {/* Main Content Area */}
