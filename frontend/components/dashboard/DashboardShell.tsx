@@ -28,52 +28,33 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         { href: '/dashboard/settings', label: 'Settings' },
     ];
 
-    // 1. Load App Bridge CDN script (only once, only on dashboard pages)
-    // 2. Then build the <ui-nav-menu> web component via DOM
+    // Build Shopify App Bridge <ui-nav-menu> via DOM.
+    // App Bridge CDN is loaded globally in layout.tsx <head>, so it's already available.
     useEffect(() => {
-        // Check if App Bridge is already loaded
-        const alreadyLoaded = document.querySelector('script[src*="app-bridge.js"]');
-        if (!alreadyLoaded) {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.shopify.com/shopifycloud/app-bridge.js';
-            script.async = false;
-            document.head.appendChild(script);
+        const container = navRef.current;
+        if (!container) return;
 
-            // Wait for script to load before creating nav menu
-            script.onload = () => buildNavMenu();
-        } else {
-            buildNavMenu();
-        }
+        // Remove any previously created menu
+        const existing = container.querySelector('ui-nav-menu');
+        if (existing) existing.remove();
 
-        function buildNavMenu() {
-            const container = navRef.current;
-            if (!container) return;
-
-            // Remove any previously created menu
-            const existing = container.querySelector('ui-nav-menu');
-            if (existing) existing.remove();
-
-            const menu = document.createElement('ui-nav-menu');
-            navLinks.forEach((link) => {
-                const a = document.createElement('a');
-                a.href = link.href;
-                a.textContent = link.label;
-                if (link.rel) a.setAttribute('rel', link.rel);
-                menu.appendChild(a);
-            });
-            container.appendChild(menu);
-        }
+        const menu = document.createElement('ui-nav-menu');
+        navLinks.forEach((link) => {
+            const a = document.createElement('a');
+            a.href = link.href;
+            a.textContent = link.label;
+            if (link.rel) a.setAttribute('rel', link.rel);
+            menu.appendChild(a);
+        });
+        container.appendChild(menu);
 
         return () => {
-            const container = navRef.current;
-            if (container) {
-                const old = container.querySelector('ui-nav-menu');
-                if (old) old.remove();
-            }
+            const old = container.querySelector('ui-nav-menu');
+            if (old) old.remove();
         };
     }, []);
 
-    // Page title mapping
+    // Page title
     const pageTitle = navLinks.find(l => l.href === pathname)?.label || 'Dashboard';
 
     return (
