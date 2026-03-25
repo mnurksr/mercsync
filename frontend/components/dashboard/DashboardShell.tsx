@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-    LayoutDashboard, LogOut, Settings, Bell,
+    LayoutDashboard, Settings, Bell,
     RefreshCw, Box, History, Layers
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -13,12 +13,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     const router = useRouter();
     const pathname = usePathname();
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const navMenuRef = useRef<HTMLDivElement>(null);
-
-    const handleSignOut = async () => {
-        await supabase.auth.signOut();
-        router.push('/login');
-    };
+    const navRef = useRef<HTMLDivElement>(null);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
@@ -26,36 +21,48 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     };
 
     const navLinks = [
-        { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, rel: 'home' },
-        { href: '/dashboard/products', label: 'Products', icon: Box },
-        { href: '/dashboard/inventory', label: 'Inventory', icon: Layers },
-        { href: '/dashboard/history', label: 'Sync History', icon: History },
-        { href: '/dashboard/settings', label: 'Integrations', icon: Settings },
+        { href: '/dashboard', label: 'Overview', rel: 'home' },
+        { href: '/dashboard/products', label: 'Products' },
+        { href: '/dashboard/inventory', label: 'Inventory' },
+        { href: '/dashboard/history', label: 'Sync History' },
+        { href: '/dashboard/settings', label: 'Settings' },
     ];
 
-    // Build the native Shopify App Bridge <ui-nav-menu> via DOM
+    // Build Shopify App Bridge <ui-nav-menu> via direct DOM manipulation.
+    // App Bridge scans the DOM for this web component and renders it
+    // natively in the Shopify admin sidebar. It must NOT be hidden.
     useEffect(() => {
-        if (!navMenuRef.current) return;
+        const container = navRef.current;
+        if (!container) return;
 
-        const container = navMenuRef.current;
-        // Clear previous
-        container.innerHTML = '';
+        // Remove any previously created menu
+        const existing = container.querySelector('ui-nav-menu');
+        if (existing) existing.remove();
 
         const menu = document.createElement('ui-nav-menu');
         navLinks.forEach((link) => {
             const a = document.createElement('a');
             a.href = link.href;
             a.textContent = link.label;
-            if (link.rel) a.rel = link.rel;
+            if (link.rel) a.setAttribute('rel', link.rel);
             menu.appendChild(a);
         });
         container.appendChild(menu);
-    }, [pathname]);
+
+        // Cleanup on unmount
+        return () => {
+            const old = container.querySelector('ui-nav-menu');
+            if (old) old.remove();
+        };
+    }, []);
+
+    // Page title mapping
+    const pageTitle = navLinks.find(l => l.href === pathname)?.label || 'Dashboard';
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col">
-            {/* Native Shopify App Bridge Navigation (rendered via DOM) */}
-            <div ref={navMenuRef} style={{ display: 'none' }} />
+            {/* Container for Shopify App Bridge ui-nav-menu (rendered via DOM, must not be display:none) */}
+            <div ref={navRef} />
 
             {/* Main Content Area */}
             <main className="flex-1 min-w-0 w-full">
@@ -63,7 +70,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 <header className="bg-white border-b border-gray-200 sticky top-0 z-10 h-16 flex items-center justify-between px-4 sm:px-6">
                     <div className="flex items-center gap-4">
                         <h1 className="text-xl font-bold text-gray-800 tracking-tight">
-                            {navLinks.find(l => l.href === pathname)?.label || 'Dashboard'}
+                            {pageTitle}
                         </h1>
                     </div>
                     <div className="flex items-center gap-4">
@@ -83,7 +90,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                 </header>
 
                 {/* Page Specific Content */}
-                <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8">
+                <div className="mx-auto px-4 sm:px-8 py-8">
                     {children}
                 </div>
             </main>
