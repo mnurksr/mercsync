@@ -219,21 +219,36 @@ export async function handleInventoryUpdate(
         let etsyError: string | null = null;
 
         if (item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
-            try {
-                console.log(`${logPrefix} Pushing to Etsy: listing=${item.etsy_listing_id}, variant=${item.etsy_variant_id}, stock=${effectiveStock}`);
+            const MAX_RETRIES = 3;
+            const BASE_DELAY_MS = 2000; // 2s, 4s, 8s
 
-                const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
-                const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
-                    { item_id: item.etsy_variant_id.toString(), new_stock: effectiveStock }
-                ]);
-                await etsyApi.updateInventory(item.etsy_listing_id, shop.etsy_access_token, updatedPayload);
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    console.log(`${logPrefix} Pushing to Etsy (attempt ${attempt}/${MAX_RETRIES}): listing=${item.etsy_listing_id}, variant=${item.etsy_variant_id}, stock=${effectiveStock}`);
 
-                etsySyncResult = 'success';
-                console.log(`${logPrefix} ✅ Etsy stock updated to ${effectiveStock}`);
-            } catch (err: any) {
-                etsySyncResult = 'failed';
-                etsyError = err.message;
-                console.error(`${logPrefix} ❌ Etsy push failed:`, err.message);
+                    const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
+                    const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
+                        { item_id: item.etsy_variant_id.toString(), new_stock: effectiveStock }
+                    ]);
+                    await etsyApi.updateInventory(item.etsy_listing_id, shop.etsy_access_token, updatedPayload);
+
+                    etsySyncResult = 'success';
+                    console.log(`${logPrefix} ✅ Etsy stock updated to ${effectiveStock} (attempt ${attempt})`);
+                    break; // Success, exit retry loop
+                } catch (err: any) {
+                    const is409 = err.message?.includes('409') || err.message?.includes('being edited');
+                    
+                    if (is409 && attempt < MAX_RETRIES) {
+                        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+                        console.warn(`${logPrefix} ⚠️ Etsy 409 conflict, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    
+                    etsySyncResult = 'failed';
+                    etsyError = err.message;
+                    console.error(`${logPrefix} ❌ Etsy push failed after ${attempt} attempts:`, err.message);
+                }
             }
         } else {
             console.log(`${logPrefix} No Etsy match for this item. Updating DB only.`);

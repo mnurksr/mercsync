@@ -443,9 +443,13 @@ export default function InventoryPage() {
         }
     };
 
-    const getStockStatus = (status: string | null) => {
-        if (status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-        if (status === 'Mismatch') return { label: 'Mismatch', color: 'bg-red-50 text-red-600 ring-red-500/20' };
+    const getStockStatus = (item: InventoryItem) => {
+        if (item.status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
+        // Compare actual platform snapshots — if they differ, it's a mismatch
+        if (item.shopify_variant_id && item.etsy_variant_id && item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
+            return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        }
+        if (item.status === 'Mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
         return { label: 'In Sync', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
     };
 
@@ -539,10 +543,7 @@ export default function InventoryPage() {
                                 </tr>
                             ) : (
                                 items.map((item) => {
-                                    let displayStatus = getStockStatus(item.status);
-                                    if (item.status === 'In Sync' && item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
-                                        displayStatus = { label: 'Mismatch', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-                                    }
+                                    const displayStatus = getStockStatus(item);
                                     const isSelected = selectedIds.includes(item.id);
                                     return (
                                         <tr key={item.id} className={`hover:bg-indigo-50/10 transition-colors group ${isSelected ? 'bg-indigo-50/30' : ''}`}>
