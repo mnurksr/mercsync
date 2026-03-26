@@ -513,3 +513,33 @@ export function mergeStockUpdate(
         sku_on_property: currentInventory.sku_on_property || []
     };
 }
+
+/**
+ * Get recent shop receipts (orders)
+ * Used by the Etsy order polling cron to detect new sales
+ * @param minCreated - Unix timestamp to filter receipts created after this time
+ */
+export async function getShopReceipts(
+    shopId: string | number,
+    accessToken: string,
+    minCreated?: number,
+    limit: number = 25
+) {
+    let endpoint = `/shops/${shopId}/receipts?limit=${limit}&sort_on=created&sort_order=desc`;
+    if (minCreated) {
+        endpoint += `&min_created=${minCreated}`;
+    }
+    return etsyFetch(endpoint, accessToken);
+}
+
+/**
+ * Get transactions (line items) for a specific receipt
+ * Each transaction = one product/variant sold in that order
+ */
+export async function getReceiptTransactions(
+    shopId: string | number,
+    receiptId: string | number,
+    accessToken: string
+) {
+    return etsyFetch(`/shops/${shopId}/receipts/${receiptId}/transactions`, accessToken);
+}
