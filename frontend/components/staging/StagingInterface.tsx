@@ -727,7 +727,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     const [shopifyProducts, setShopifyProducts] = useState<StagingProduct[]>(cache?.shopify || []);
     const [etsyProducts, setEtsyProducts] = useState<StagingProduct[]>(cache?.etsy || []);
-    const [shopCurrencies, setShopCurrencies] = useState<{ shopify: string, etsy: string }>({ shopify: 'USD', etsy: 'USD' });
     const [pricingRules, setPricingRules] = useState<any[]>([]);
     const [globalRuleId, setGlobalRuleId] = useState<string | null>(null);
     const [applyRuleToAll, setApplyRuleToAll] = useState(false);
@@ -1034,8 +1033,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             setShopifyProducts(s);
             setEtsyProducts(e);
             
-            // This ensures "Etsy USD" issue is solved by live sync
-            setShopCurrencies(currencies);
+            // No longer using shopCurrencies state
             
             if (settings?.price_rules) {
                 setPricingRules(settings.price_rules);
@@ -1833,19 +1831,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                 <Sparkles className="w-6 h-6 text-indigo-600" />
                                             </div>
                                             <div>
-                                                <h3 className="font-bold text-gray-900">Currency & Pricing Rules</h3>
-                                                <p className="text-xs text-gray-500">Auto-convert prices and apply profit margins during cloning</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Shopify</span>
-                                                <span className="text-sm font-bold text-gray-700">{shopCurrencies.shopify}</span>
-                                            </div>
-                                            <ArrowRight className="w-3.5 h-3.5 text-gray-300" />
-                                            <div className="bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-100">
-                                                <span className="text-[10px] font-bold text-orange-400 uppercase block mb-0.5">Etsy</span>
-                                                <span className="text-sm font-bold text-orange-700">{shopCurrencies.etsy}</span>
+                                                <h3 className="font-bold text-gray-900">Pricing Rules</h3>
+                                                <p className="text-xs text-gray-500">Apply profit margins during cloning</p>
                                             </div>
                                         </div>
                                     </div>
@@ -2133,7 +2120,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     targetPlatform={cloneModal.targetPlatform}
                     initialData={cloneModal.initialData}
                     targetId={cloneModal.targetId}
-                    shopCurrencies={shopCurrencies}
                     pricingRules={pricingRules}
                 />
 
@@ -2142,7 +2128,6 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     onClose={() => setShowAddRuleModal(false)}
                     onSave={handleAddRule}
                     isSaving={isSavingRule}
-                    shopCurrencies={shopCurrencies}
                 />
             </>
         )
@@ -2530,12 +2515,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 // Sub-components
 // ═══════════════════════════════════════════════
 
-function AddRuleModal({ isOpen, onClose, onSave, isSaving, shopCurrencies }: { 
+function AddRuleModal({ isOpen, onClose, onSave, isSaving }: { 
     isOpen: boolean; 
     onClose: () => void; 
     onSave: (rule: PriceRule) => void;
     isSaving: boolean;
-    shopCurrencies: { shopify: string; etsy: string };
 }) {
     const [rule, setRule] = useState<PriceRule>({
         platform: 'etsy',
@@ -2583,9 +2567,9 @@ function AddRuleModal({ isOpen, onClose, onSave, isSaving, shopCurrencies }: {
                     <div className="space-y-4">
                         <div className="flex items-center justify-center py-2 px-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs font-medium text-gray-600">
                             {rule.platform === 'etsy' ? (
-                                <>Shopify ({shopCurrencies.shopify}) <ArrowRight className="w-3 h-3 mx-2" /> Etsy ({shopCurrencies.etsy})</>
+                                <>Shopify (Source) <ArrowRight className="w-3 h-3 mx-2" /> Etsy (Target)</>
                             ) : (
-                                <>Etsy ({shopCurrencies.etsy}) <ArrowRight className="w-3 h-3 mx-2" /> Shopify ({shopCurrencies.shopify})</>
+                                <>Etsy (Source) <ArrowRight className="w-3 h-3 mx-2" /> Shopify (Target)</>
                             )}
                         </div>
 
@@ -2611,7 +2595,7 @@ function AddRuleModal({ isOpen, onClose, onSave, isSaving, shopCurrencies }: {
                                         className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none pl-10"
                                     />
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold font-mono">
-                                        {rule.type === 'percentage' ? '%' : (rule.platform === 'etsy' ? shopCurrencies.etsy : shopCurrencies.shopify)}
+                                        {rule.type === 'percentage' ? '%' : '$'}
                                     </div>
                                 </div>
                             </div>

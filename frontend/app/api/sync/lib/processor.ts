@@ -1,16 +1,7 @@
-/**
- * Main Sync Processor
- * Replaces ALL 3 n8n sub-workflows:
- * - Sync Stocks
- * - Clone to Shopify
- * - Clone to Etsy
- */
-
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as shopifyApi from './shopify';
 import * as etsyApi from './etsy';
 import { sendLog, sendStockSync, sendProductClone, markCompleted, markFailed } from './progress';
-import { convertCurrency } from '@/utils/currency';
 import { calculatePrice } from '../price-sync';
 
 const supabase = createAdminClient();
@@ -843,8 +834,6 @@ async function cloneToEtsy(
         .maybeSingle();
 
     const ruleToApply = product.price_rule || (settings?.price_rules || []);
-    const shCurr = shop.shopify_currency || 'USD';
-    const etCurr = shop.etsy_currency || 'USD';
 
     // === VARIANT INJECTION: Append to existing Etsy listing ===
     let targetListingId = product.target_id;
@@ -923,10 +912,9 @@ async function cloneToEtsy(
         const newProducts = variantsToAdd.map((cv: any) => {
             const stock = Math.max(1, cv.stock || 1);
             
-            // Apply Currency Conversion + Pricing Rules
+            // Apply Pricing Rules directly (ignoring currency/conversion)
             const basePrice = parseFloat(cv.price || 0);
-            const convertedPrice = convertCurrency(basePrice, shCurr, etCurr);
-            const finalPrice = calculatePrice(convertedPrice, ruleToApply, 'etsy') || convertedPrice;
+            const finalPrice = calculatePrice(basePrice, ruleToApply, 'etsy') || basePrice;
 
             const offering: any = {
                 price: finalPrice,
@@ -974,7 +962,7 @@ async function cloneToEtsy(
             }
 
             // Find if this was one of the newly added variants to link the shopify_variant_id
-            const matchedNewVariant = variantsToAdd.find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
+            const matchedNewVariant = (variantsToAdd || []).find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
 
             await supabase
                 .from('staging_etsy_products')
@@ -1009,12 +997,10 @@ async function cloneToEtsy(
     }
 
     // === STANDARD CLONE: Create new listing ===
-    // 3. Build Etsy payloads (using clone variant data if available)
     // Apply rules to cloneVariants if present
-    const processedCloneVariants = cloneVariants?.map(v => {
+    const processedCloneVariants = (cloneVariants || []).map(v => {
         const basePrice = parseFloat(v.price.toString());
-        const convertedPrice = convertCurrency(basePrice, shCurr, etCurr);
-        const finalPrice = calculatePrice(convertedPrice, ruleToApply, 'etsy') || convertedPrice;
+        const finalPrice = calculatePrice(basePrice, ruleToApply, 'etsy') || basePrice;
         return { ...v, price: finalPrice };
     });
 

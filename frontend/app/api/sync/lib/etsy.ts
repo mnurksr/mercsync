@@ -431,7 +431,7 @@ export function buildListingPayload(
         description: (overrides?.description || shopifyProduct.body_html || 'No description')
             .replace(/(<([^>]+)>)/gi, '')
             .substring(0, 500),
-        price: parseFloat(shopifyProduct.variants[0].price),
+        price: useCloneVariants ? variants[0].price : parseFloat(shopifyProduct.variants[0].price),
         who_made: 'i_did',
         when_made: '2020_2026',
         taxonomy_id: 1,

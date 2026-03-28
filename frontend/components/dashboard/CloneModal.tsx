@@ -54,7 +54,6 @@ type CloneModalProps = {
     targetPlatform: 'shopify' | 'etsy';
     initialData?: CrossListingItem;
     targetId?: string;
-    shopCurrencies?: { shopify: string, etsy: string };
     pricingRules?: any[];
 };
 
@@ -66,7 +65,6 @@ export default function CloneModal({
     targetPlatform,
     initialData,
     targetId,
-    shopCurrencies,
     pricingRules
 }: CloneModalProps) {
     const [formData, setFormData] = useState({
@@ -88,7 +86,7 @@ export default function CloneModal({
             // Build variants based on sourceData and potentially initialData
             const buildVariants = () => {
                 return sourceData.variants.map(v => {
-                    const existingData = initialData?.variants?.find(iv => iv.source_variant_id === v.platformId);
+                    const existingData = initialData?.variants?.find((iv: any) => iv.source_variant_id === v.platformId);
                     if (existingData) {
                         return { ...existingData, selected: true };
                     }
@@ -254,8 +252,8 @@ export default function CloneModal({
                                     <Info className="w-4 h-4" />
                                 </span>
                                 <div>
-                                    <h5 className="text-sm font-bold text-gray-900">Dynamic Pricing</h5>
-                                    <p className="text-[10px] text-gray-500">Apply rules and currency conversion</p>
+                                    <h5 className="text-sm font-bold text-gray-900">Pricing Adjustments</h5>
+                                    <p className="text-[10px] text-gray-500">Apply pricing rules to this clone</p>
                                 </div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
@@ -271,21 +269,12 @@ export default function CloneModal({
 
                         {formData.apply_pricing_rule && (
                             <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div className="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Source Currency</p>
-                                        <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                                            {shopCurrencies?.shopify || 'USD'}
-                                            <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded">Base</span>
-                                        </p>
-                                    </div>
-                                    <div className="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Target Currency</p>
-                                        <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                                            {shopCurrencies?.etsy || 'USD'}
-                                            <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Target</span>
-                                        </p>
-                                    </div>
+                                <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm">
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Pricing Rule Basis</p>
+                                    <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                        Source Price
+                                        <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded">Input</span>
+                                    </p>
                                 </div>
                                 <select 
                                     value={formData.selected_rule?.platform || ''}
@@ -302,8 +291,8 @@ export default function CloneModal({
                                         </option>
                                     ))}
                                 </select>
-                                <p className="text-[10px] text-indigo-600 mt-2 font-medium bg-indigo-50 p-2 rounded-lg">
-                                    Final price will be calculated during synchronization using the latest exchange rates.
+                                <p className="text-[10px] text-indigo-600 mt-2 font-medium bg-indigo-50 p-2 rounded-lg text-center">
+                                    Final price will be calculated based on your selected rule.
                                 </p>
                             </div>
                         )}

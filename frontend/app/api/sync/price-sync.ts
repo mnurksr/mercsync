@@ -1,22 +1,29 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getInventory, updateInventory } from './lib/etsy';
-import { convertCurrency } from '@/utils/currency';
 
 /**
  * Calculates a target price based on a base price and a set of rules.
  */
-export function calculatePrice(basePrice: number, rules: any[], targetPlatform: 'etsy' | 'shopify'): number | null {
-    // Find the rule where the target is the requested platform
-    const rule = rules.find(r => r.platform === targetPlatform);
+export function calculatePrice(basePrice: number, rules: any | any[], targetPlatform: 'etsy' | 'shopify'): number | null {
+    if (!rules) return null;
+    
+    // Support both single rule object or array of rules
+    const ruleArray = Array.isArray(rules) ? rules : [rules];
+    const rule = ruleArray.find(r => r.platform === targetPlatform);
+    
     if (!rule) return null; // No rule defined for this target
 
     let newPrice = basePrice;
     
     // 1. Apply formula
-    if (rule.type === 'percentage') {
-        newPrice = newPrice * (1 + (rule.value / 100));
-    } else if (rule.type === 'fixed') {
-        newPrice = newPrice + rule.value;
+    // Supporting both 'value' (from single rule) and 'adjustment_value' (from settings array)
+    const val = (rule.adjustment_value !== undefined ? rule.adjustment_value : rule.value) || 0;
+    const type = rule.adjustment_type !== undefined ? rule.adjustment_type : (rule.type || 'percentage');
+
+    if (type === 'percentage') {
+        newPrice = newPrice * (1 + (val / 100));
+    } else if (type === 'fixed') {
+        newPrice = newPrice + val;
     }
 
     // 2. Apply rounding
@@ -186,11 +193,8 @@ export async function handlePriceUpdate(
 
             const basePrice = parseFloat(shVariant.price);
             
-            // Apply Currency Conversion first if needed
-            const convertedPrice = convertCurrency(basePrice, shop.shopify_currency, shop.etsy_currency);
-            
-            // Then apply local pricing rules
-            const calculatedTargetPrice = calculatePrice(convertedPrice, settings.price_rules, 'etsy');
+            // Apply local pricing rules directly (ignoring currency/conversion)
+            const calculatedTargetPrice = calculatePrice(basePrice, settings.price_rules, 'etsy');
 
             if (calculatedTargetPrice !== null) {
                 priceUpdates.push({
