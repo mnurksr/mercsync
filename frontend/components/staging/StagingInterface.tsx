@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getStagingProducts, clearStagingTables, type StagingProduct } from '@/app/actions/staging';
-import { getShopifyLocations, getConnectedShop } from '@/app/actions/shop';
+import { getShopifyLocations, getConnectedShop, syncShopCurrencies } from '@/app/actions/shop';
+import { getSettings, updateSettings, type PriceRule } from '@/app/actions/settings';
 import {
     ArrowLeft, ShoppingBag, Store, RefreshCw, Search,
     Check, X, Loader2, Link2, Sparkles, Wand2, ArrowRight, RotateCcw, Copy,
@@ -730,6 +731,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [pricingRules, setPricingRules] = useState<any[]>([]);
     const [globalRuleId, setGlobalRuleId] = useState<string | null>(null);
     const [applyRuleToAll, setApplyRuleToAll] = useState(false);
+    const [showAddRuleModal, setShowAddRuleModal] = useState(false);
+    const [isSavingRule, setIsSavingRule] = useState(false);
 
     // Derived Groups
     const shopifyGroups = useMemo(() => groupProducts(shopifyProducts, 'shopify'), [shopifyProducts]);
@@ -1016,28 +1019,30 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const load = async () => {
         try {
             console.log('[StagingInterface] load() called with currentUserId:', currentUserId);
-            const [s, e, shopifyInfo, etsyInfo, rulesRes] = await Promise.all([
+            
+            // 1. Fetch live products
+            // 2. Fetch live shop currencies (force sync from API)
+            // 3. Fetch pricing settings
+            const [s, e, currencies, settings] = await Promise.all([
                 getStagingProducts('shopify', currentUserId),
                 getStagingProducts('etsy', currentUserId),
-                getConnectedShop('shopify', currentUserId),
-                getConnectedShop('etsy', currentUserId),
-                fetch(`/api/sync/settings?owner_id=${currentUserId}`).then(r => r.json().catch(() => ({})))
+                syncShopCurrencies(),
+                getSettings()
             ]);
             
             console.log('[StagingInterface] loaded products:', { shopify: s.length, etsy: e.length });
             setShopifyProducts(s);
             setEtsyProducts(e);
-            setShopCurrencies({
-                shopify: shopifyInfo?.shopify_currency || 'USD',
-                etsy: etsyInfo?.etsy_currency || 'USD'
-            });
             
-            // Extract pricing rules from settings if available
-            if (rulesRes?.pricing_rules) {
-                setPricingRules(rulesRes.pricing_rules);
+            // This ensures "Etsy USD" issue is solved by live sync
+            setShopCurrencies(currencies);
+            
+            if (settings?.price_rules) {
+                setPricingRules(settings.price_rules);
             }
         } catch (err) {
-            console.error(err);
+            console.error('[StagingInterface] Load error:', err);
+            toast.error('Failed to load fresh shop data.');
         } finally {
             setLoading(false);
         }
@@ -1206,6 +1211,26 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     };
 
     // AI Match
+    const handleAddRule = async (newRule: PriceRule) => {
+        setIsSavingRule(true);
+        try {
+            const ruleWithId = { ...newRule, id: `rule-${Date.now()}` } as any;
+            const updatedRules = [...pricingRules, ruleWithId];
+            const res = await updateSettings({ price_rules: updatedRules });
+            if (res.success) {
+                setPricingRules(updatedRules);
+                setShowAddRuleModal(false);
+                toast.success('New pricing rule added!');
+            } else {
+                toast.error(res.message);
+            }
+        } catch (e: any) {
+            toast.error(e.message);
+        } finally {
+            setIsSavingRule(false);
+        }
+    };
+
     const aiMatch = async () => {
         if (!currentUserId) {
             console.log('No user ID');
@@ -1842,18 +1867,28 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                             </label>
                                             
                                             {applyRuleToAll && (
-                                                <select 
-                                                    value={globalRuleId || ''}
-                                                    onChange={e => setGlobalRuleId(e.target.value)}
-                                                    className="min-w-[200px] px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none animate-in fade-in slide-in-from-right-2"
-                                                >
-                                                    <option value="">Select a rule...</option>
-                                                    {pricingRules.map((r, idx) => (
-                                                        <option key={r.id || idx} value={r.id}>
-                                                            {r.platform === 'etsy' ? 'Etsy Rule' : 'Shopify Rule'} ({r.adjustment_type === 'percentage' ? r.adjustment_value + '%' : r.adjustment_value + ' fixed'})
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
+                                                    <select 
+                                                        value={globalRuleId || ''}
+                                                        onChange={e => setGlobalRuleId(e.target.value)}
+                                                        className="min-w-[180px] px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                    >
+                                                        <option value="">Select a rule...</option>
+                                                        {pricingRules.map((r, idx) => (
+                                                            <option key={r.id || idx} value={r.id}>
+                                                                {r.platform === 'etsy' ? 'Etsy Rule' : 'Shopify Rule'} ({r.type === 'percentage' ? r.value + '%' : r.value + ' fixed'})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    
+                                                    <button 
+                                                        onClick={() => setShowAddRuleModal(true)}
+                                                        className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
+                                                        title="Add New Rule"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -2101,8 +2136,16 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     shopCurrencies={shopCurrencies}
                     pricingRules={pricingRules}
                 />
+
+                <AddRuleModal 
+                    isOpen={showAddRuleModal}
+                    onClose={() => setShowAddRuleModal(false)}
+                    onSave={handleAddRule}
+                    isSaving={isSavingRule}
+                    shopCurrencies={shopCurrencies}
+                />
             </>
-        );
+        )
     }
 
 
@@ -2479,6 +2522,134 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 confirmLabel="Yes, Go Back"
                 cancelLabel="Cancel"
             />
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════
+// Sub-components
+// ═══════════════════════════════════════════════
+
+function AddRuleModal({ isOpen, onClose, onSave, isSaving, shopCurrencies }: { 
+    isOpen: boolean; 
+    onClose: () => void; 
+    onSave: (rule: PriceRule) => void;
+    isSaving: boolean;
+    shopCurrencies: { shopify: string; etsy: string };
+}) {
+    const [rule, setRule] = useState<PriceRule>({
+        platform: 'etsy',
+        type: 'percentage',
+        value: 0,
+        rounding: 'none'
+    });
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-gray-100 overflow-hidden transform animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-5 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                            <Plus className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h3 className="font-bold text-gray-900">Add Pricing Rule</h3>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full text-gray-400 transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Target Platform</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => setRule(prev => ({ ...prev, platform: 'etsy' }))}
+                                className={'p-3 rounded-2xl border-2 flex items-center gap-2 transition-all ' + (rule.platform === 'etsy' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:border-gray-200 text-gray-500')}
+                            >
+                                <Store className="w-4 h-4" /> <span className="text-sm font-semibold">Etsy</span>
+                            </button>
+                            <button 
+                                onClick={() => setRule(prev => ({ ...prev, platform: 'shopify' }))}
+                                className={'p-3 rounded-2xl border-2 flex items-center gap-2 transition-all ' + (rule.platform === 'shopify' ? 'border-green-600 bg-green-50 text-green-700' : 'border-gray-100 hover:border-gray-200 text-gray-500')}
+                            >
+                                <ShoppingBag className="w-4 h-4" /> <span className="text-sm font-semibold">Shopify</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-center py-2 px-4 bg-gray-50 rounded-2xl border border-gray-100 text-xs font-medium text-gray-600">
+                            {rule.platform === 'etsy' ? (
+                                <>Shopify ({shopCurrencies.shopify}) <ArrowRight className="w-3 h-3 mx-2" /> Etsy ({shopCurrencies.etsy})</>
+                            ) : (
+                                <>Etsy ({shopCurrencies.etsy}) <ArrowRight className="w-3 h-3 mx-2" /> Shopify ({shopCurrencies.shopify})</>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Adjustment</label>
+                                <select 
+                                    value={rule.type}
+                                    onChange={e => setRule(prev => ({ ...prev, type: e.target.value as any }))}
+                                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                >
+                                    <option value="percentage">Percentage (%)</option>
+                                    <option value="fixed">Fixed Amount</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Value</label>
+                                <div className="relative">
+                                    <input 
+                                        type="number" 
+                                        value={rule.value}
+                                        onChange={e => setRule(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
+                                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none pl-10"
+                                    />
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold font-mono">
+                                        {rule.type === 'percentage' ? '%' : (rule.platform === 'etsy' ? shopCurrencies.etsy : shopCurrencies.shopify)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rounding</label>
+                            <select 
+                                value={rule.rounding}
+                                onChange={e => setRule(prev => ({ ...prev, rounding: e.target.value as any }))}
+                                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="none">No rounding</option>
+                                <option value="nearest_99">Round to .99</option>
+                                <option value="nearest_95">Round to .95</option>
+                                <option value="round_up">Round up</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-6 bg-gray-50/50 flex gap-3">
+                    <button 
+                        onClick={onClose}
+                        className="flex-1 py-3 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={() => onSave(rule)}
+                        disabled={isSaving}
+                        className="flex-[2] py-3 bg-indigo-600 text-white text-sm font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+                    >
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        Save Rule
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

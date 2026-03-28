@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
+import { getShop } from '@/app/api/sync/lib/etsy'
 
 export type ShopConnection = {
     connected: boolean
@@ -313,3 +314,74 @@ export async function setShopPlanPending(shopDomain: string) {
         .eq('shop_domain', shopDomain)
         .or('plan_type.eq.guest,plan_type.eq.none,plan_type.eq.basic,plan_type.is.null');
 }
+
+/**
+ * Live sync shop currencies from Shopify and Etsy APIs and update the database
+ */
+export async function syncShopCurrencies(): Promise<{ shopify: string; etsy: string }> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return { shopify: 'USD', etsy: 'USD' }
+
+    // Fetch the shop record
+    const { data: shop, error: shopError } = await supabase
+        .from('shops')
+        .select('id, shop_domain, access_token, etsy_shop_id, etsy_access_token, shopify_currency, etsy_currency')
+        .eq('owner_id', ownerId)
+        .maybeSingle()
+
+    if (shopError || !shop) {
+        console.error('[syncShopCurrencies] Shop not found for owner:', ownerId)
+        return { shopify: 'USD', etsy: 'USD' }
+    }
+
+    let freshShopify = shop.shopify_currency || 'USD'
+    let freshEtsy = shop.etsy_currency || 'USD'
+
+    try {
+        // 1. Fetch live Shopify currency
+        if (shop.shop_domain && shop.access_token) {
+            const shopifyRes = await fetch(`https://${shop.shop_domain}/admin/api/2024-01/shop.json`, {
+                headers: {
+                    'X-Shopify-Access-Token': shop.access_token,
+                    'Content-Type': 'application/json'
+                }
+            })
+            if (shopifyRes.ok) {
+                const shopifyData = await shopifyRes.json()
+                freshShopify = shopifyData.shop?.currency || freshShopify
+            }
+        }
+
+        // 2. Fetch live Etsy currency
+        if (shop.etsy_shop_id && shop.etsy_access_token) {
+            try {
+                const etsyData = await getShop(shop.etsy_shop_id, shop.etsy_access_token)
+                if (etsyData.results && etsyData.results[0]) {
+                    freshEtsy = etsyData.results[0].currency_code || freshEtsy
+                }
+            } catch (e) {
+                console.error('[syncShopCurrencies] Etsy fetch failed:', e)
+            }
+        }
+
+        // 3. Update DB if changed
+        if (freshShopify !== shop.shopify_currency || freshEtsy !== shop.etsy_currency) {
+            await supabase
+                .from('shops')
+                .update({
+                    shopify_currency: freshShopify,
+                    etsy_currency: freshEtsy,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', shop.id)
+            
+            console.log(`[syncShopCurrencies] Updated currencies to ${freshShopify} (SH) and ${freshEtsy} (ET)`)
+        }
+
+        return { shopify: freshShopify, etsy: freshEtsy }
+    } catch (e) {
+        console.error('[syncShopCurrencies] General error:', e)
+        return { shopify: freshShopify, etsy: freshEtsy }
+    }
+}
+
