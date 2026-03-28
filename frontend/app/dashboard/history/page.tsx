@@ -5,7 +5,7 @@ import { getSyncHistory, type HistoryItem } from '../../actions/history';
 import {
     ShoppingBag, Store, Check, X, RefreshCw, AlertTriangle,
     ArrowRight, Clock, History, SkipForward, ChevronDown, ChevronUp,
-    Loader2, Zap
+    Loader2, Zap, Package
 } from 'lucide-react';
 
 export default function HistoryPage() {
@@ -197,23 +197,40 @@ export default function HistoryPage() {
                                         </div>
 
                                         {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <span className="text-sm font-black text-gray-900">{item.action}</span>
-                                                {item.product && (
-                                                    <span className="text-xs font-medium text-gray-400 truncate max-w-[200px]">• {item.product}</span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                {getDirectionIcons(item.direction, item.source)}
-                                                {item.oldStock !== null && item.newStock !== null && (
-                                                    <span className="text-xs font-bold text-gray-400">
-                                                        {item.oldStock} → {item.newStock}
+                                        <div className="flex-1 min-w-0 flex items-center gap-4">
+                                            {/* Product Image */}
+                                            {item.product && (
+                                                <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 shadow-sm overflow-hidden hidden sm:flex">
+                                                    {item.imageUrl ? (
+                                                        <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <Package className="w-4 h-4" />
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    {item.product ? (
+                                                        <>
+                                                            <span className="text-sm font-black text-gray-900 truncate max-w-[250px] md:max-w-md">{item.product}</span>
+                                                            <span className="text-xs font-medium text-gray-400 shrink-0">• {item.action}</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-sm font-black text-gray-900">{item.action}</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    {getDirectionIcons(item.direction, item.source)}
+                                                    {item.oldStock !== null && item.newStock !== null && (
+                                                        <span className="text-xs font-bold text-gray-400">
+                                                            {item.oldStock} → {item.newStock}
+                                                        </span>
+                                                    )}
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${statusConfig.labelColor}`}>
+                                                        {statusConfig.label}
                                                     </span>
-                                                )}
-                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${statusConfig.labelColor}`}>
-                                                    {statusConfig.label}
-                                                </span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -231,16 +248,20 @@ export default function HistoryPage() {
                                     {/* Expanded Details */}
                                     {isExpanded && (
                                         <div className="px-8 pb-5 pt-0 ml-[52px]">
-                                            <div className="bg-gray-50 rounded-xl p-4 text-xs font-mono space-y-1.5">
+                                            <div className="bg-gray-50 rounded-xl p-4 text-xs font-mono space-y-3">
                                                 {item.errorMessage && (
-                                                    <div className="text-red-600 font-bold">
-                                                        ❌ {item.errorMessage}
+                                                    <div className="flex items-start gap-2 text-red-600 bg-red-50/50 p-3 rounded-lg border border-red-100">
+                                                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                                        <div className="font-medium whitespace-pre-wrap break-words">{item.errorMessage}</div>
                                                     </div>
                                                 )}
                                                 {item.metadata && Object.keys(item.metadata).length > 0 && (
-                                                    <pre className="text-gray-500 whitespace-pre-wrap break-all">
-                                                        {JSON.stringify(item.metadata, null, 2)}
-                                                    </pre>
+                                                    <div className="text-gray-500 overflow-x-auto">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Technical Payload</div>
+                                                        <pre className="whitespace-pre-wrap break-all">
+                                                            {JSON.stringify(item.metadata, null, 2)}
+                                                        </pre>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

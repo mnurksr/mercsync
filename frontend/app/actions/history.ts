@@ -6,6 +6,7 @@ export type HistoryItem = {
     id: string
     action: string
     product: string | null
+    imageUrl: string | null
     source: string
     direction: string | null
     oldStock: number | null
@@ -32,7 +33,7 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
             id, source, event_type, direction,
             old_stock, new_stock, status, error_message, metadata,
             created_at,
-            inventory_items (name)
+            inventory_items (name, image_url)
         `)
         .in('shop_id', shopIds)
         .order('created_at', { ascending: false })
@@ -50,6 +51,7 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
         id: item.id,
         action: mapEventToAction(item.event_type, item.source),
         product: item.inventory_items?.name || null,
+        imageUrl: item.inventory_items?.image_url || null,
         source: item.source,
         direction: item.direction,
         oldStock: item.old_stock,
