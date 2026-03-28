@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { handleInventoryUpdate } from '../inventory-sync';
+import { handlePriceUpdate } from '../../../sync/price-sync';
 
 export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
             case 'products/create':
             case 'products/update':
                 console.log(`[Shopify Webhook] Product ${topic} for ${shop}: ${payload.id}`);
+                
+                // Fire-and-forget: Sync price if enabled
+                handlePriceUpdate(payload, shop, supabase).then((result: any) => {
+                    console.log(`[Shopify Webhook] Price sync result: ${result.status} — ${result.message}`);
+                }).catch((err: any) => {
+                    console.error(`[Shopify Webhook] Price sync error:`, err);
+                });
                 break;
 
             case 'products/delete':

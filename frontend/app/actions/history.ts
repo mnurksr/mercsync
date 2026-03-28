@@ -65,14 +65,10 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
 }
 
 function mapEventToAction(eventType: string, source: string): string {
-    const map: Record<string, string> = {
-        'stock_update': 'Stock Synchronized',
-        'price_update': 'Price Updated',
-        'order': source === 'etsy' ? 'Etsy Order Detected' : 'Shopify Order Processed',
-        'webhook': 'System Event',
-        'full_sync': 'Full Reconciliation'
-    }
-    return map[eventType] || eventType
+    if (eventType === 'stock_update') return 'Stock Synchronized';
+    if (eventType === 'price_update') return 'Price Synchronized';
+    if (eventType === 'order') return source === 'etsy' ? 'Etsy Order Detected' : 'Shopify Order Detected';
+    return eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
 function timeAgo(date: Date) {
