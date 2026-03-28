@@ -330,28 +330,28 @@ async function reconcileStagingLinks(shopId: string) {
     console.log(`[Sync] reconcileStagingLinks started for shop ${shopId}`);
     
     // 1. Fetch all Shopify and Etsy staging rows
-    const { data: sRows } = await supabase.from('staging_shopify_products').select('shopify_variant_id, etsy_variant_id').eq('shop_id', shopId);
+    const { data: sRows } = await supabase.from('staging_shopify_products').select('shopify_variant_id, etsy_variant_id, shopify_inventory_item_id').eq('shop_id', shopId);
     const { data: eRows } = await supabase.from('staging_etsy_products').select('shopify_variant_id, etsy_variant_id').eq('shop_id', shopId);
 
     if (!sRows || !eRows) return;
 
     // 2. Cross-reference: If Etsy row knows about Shopify but Shopify row is NULL
     for (const er of eRows) {
-        if (er.shopify_variant_id && !er.etsy_variant_id) {
-            // Safety: Skip rows with no data
-            continue;
-        }
-
-        if (er.shopify_variant_id && er.etsy_variant_id) {
+        if (er.shopify_variant_id) {
             // Does the Shopify row know about this?
-            const sr = sRows.find(s => s.shopify_variant_id === er.shopify_variant_id);
-            if (sr && !sr.etsy_variant_id) {
-                console.log(`[Sync] Reconciling: Linking Shopify variant ${er.shopify_variant_id} to Etsy variant ${er.etsy_variant_id}`);
+            // SEARCH BY BOTH VARIANT ID AND INVENTORY ITEM ID (Fixes the 47... vs 49... mismatch)
+            const sr = sRows.find(s => 
+                s.shopify_variant_id === er.shopify_variant_id || 
+                s.shopify_inventory_item_id === er.shopify_variant_id
+            );
+            
+            if (sr && !sr.etsy_variant_id && er.etsy_variant_id) {
+                console.log(`[Sync] Reconciling: Linking Shopify variant ${sr.shopify_variant_id} to Etsy variant ${er.etsy_variant_id}`);
                 await supabase
                     .from('staging_shopify_products')
                     .update({ etsy_variant_id: er.etsy_variant_id })
                     .eq('shop_id', shopId)
-                    .eq('shopify_variant_id', er.shopify_variant_id);
+                    .eq('shopify_variant_id', sr.shopify_variant_id);
             }
         }
     }
