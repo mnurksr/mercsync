@@ -480,9 +480,27 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             // Look for Etsy match in staging (BIDIRECTIONAL CHECK)
             // 1. Check if Shopify row points to Etsy
             let ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
-            // 2. ALSO check if any Etsy row points to this Shopify row (Bidirectional trust)
+            // 2. ALSO check if any Etsy row points to this Shopify row (Reverse Lookup)
             if (!ep) {
                 ep = eProds.find(e => e.shopify_variant_id === sp.shopify_variant_id);
+                
+                // [SELF-HEALING] If we found a link on the Etsy side, update the Shopify staging row!
+                if (ep) {
+                    console.log(`[Sync] Self-healing: Back-filling missing Etsy link for Shopify variant ${sp.shopify_variant_id}`);
+                    await supabase
+                        .from('staging_shopify_products')
+                        .update({ etsy_variant_id: ep.etsy_variant_id })
+                        .eq('shopify_variant_id', sp.shopify_variant_id)
+                        .eq('shop_id', shop.id);
+                }
+            } else if (ep && !ep.shopify_variant_id) {
+                // Conversely, if Shopify points to Etsy but Etsy row is missing the Shopify link
+                console.log(`[Sync] Self-healing: Back-filling missing Shopify link for Etsy variant ${ep.etsy_variant_id}`);
+                await supabase
+                    .from('staging_etsy_products')
+                    .update({ shopify_variant_id: sp.shopify_variant_id })
+                    .eq('etsy_variant_id', ep.etsy_variant_id)
+                    .eq('shop_id', shop.id);
             }
 
             let eId = null;
