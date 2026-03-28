@@ -53,8 +53,12 @@ export async function GET(req: NextRequest) {
 
         const creds = { shopDomain: shop, accessToken };
 
-        // 5. Fetch Initial Counts (Async)
-        const counts = await shopifyApi.getListingCounts(creds);
+        // 5. Fetch Initial Counts and Shop Details (Async)
+        const [counts, shopDetails] = await Promise.all([
+            shopifyApi.getListingCounts(creds),
+            shopifyApi.getShopDetails(creds)
+        ]);
+        const currency = shopDetails.shop?.currency || 'USD';
 
         // 6. Register Webhooks (Async)
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
@@ -71,6 +75,7 @@ export async function GET(req: NextRequest) {
                 is_active: true,
                 shopify_connected: true,
                 shopify_scope: scopes,
+                shopify_currency: currency,
                 last_token_refresh_at: new Date().toISOString(),
                 initial_product_counts: { shopify: counts },
                 // RESET TO FRESH STATE: Match n8n "guest" branding and clear Etsy legacy data

@@ -208,6 +208,13 @@ export async function getLocations(creds: ShopifyCredentials) {
 }
 
 /**
+ * Get shop details (including currency)
+ */
+export async function getShopDetails(creds: ShopifyCredentials) {
+    return shopifyFetch(creds, 'shop.json');
+}
+
+/**
  * Get products with optional status and pagination
  * Uses cursor-based pagination via page_info
  */

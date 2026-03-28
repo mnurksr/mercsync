@@ -48,8 +48,8 @@ export default function SettingsPage() {
 
     // Store connection state
     const [stores, setStores] = useState({
-        shopify: { connected: false, name: null as string | null, domain: null as string | null, plan_type: null as string | null },
-        etsy: { connected: false, name: null as string | null, shopId: null as string | null }
+        shopify: { connected: false, name: null as string | null, domain: null as string | null, plan_type: null as string | null, currency: 'USD' },
+        etsy: { connected: false, name: null as string | null, shopId: null as string | null, currency: 'USD' }
     });
 
     // Settings state
@@ -97,8 +97,19 @@ export default function SettingsPage() {
             ]);
 
             setStores({
-                shopify: { connected: shopify.connected, name: shopify.shop_domain, domain: shopify.shop_domain, plan_type: shopify.plan_type || null },
-                etsy: { connected: etsy.connected, name: etsy.shop_domain, shopId: null }
+                shopify: { 
+                    connected: shopify.connected, 
+                    name: shopify.shop_domain, 
+                    domain: shopify.shop_domain, 
+                    plan_type: shopify.plan_type || null,
+                    currency: shopify.shopify_currency || 'USD'
+                },
+                etsy: { 
+                    connected: etsy.connected, 
+                    name: etsy.shop_domain, 
+                    shopId: null,
+                    currency: etsy.etsy_currency || 'USD'
+                }
             });
 
             setSettings(savedSettings);
@@ -315,7 +326,7 @@ export default function SettingsPage() {
                         />
                     )}
                     {activeTab === 'pricing' && (
-                        <PricingTab settings={settings} updateField={updateField} />
+                        <PricingTab settings={settings} updateField={updateField} stores={stores} />
                     )}
                     {activeTab === 'notifications' && (
                         <NotificationsTab
@@ -384,6 +395,7 @@ function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyM
                 color="#95BF47"
                 connected={stores.shopify.connected}
                 domain={stores.shopify.domain}
+                currency={stores.shopify.currency}
                 onConnect={() => { setShopName(''); setShowShopifyModal(true); }}
                 onDisconnect={() => onDisconnect('shopify')}
                 adminUrl={stores.shopify.domain ? `https://${stores.shopify.domain}/admin` : undefined}
@@ -395,6 +407,7 @@ function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyM
                 color="#F56400"
                 connected={stores.etsy.connected}
                 domain={stores.etsy.name}
+                currency={stores.etsy.currency}
                 onConnect={() => { setShopName(''); setShowEtsyModal(true); }}
                 onDisconnect={() => onDisconnect('etsy')}
                 adminUrl="https://www.etsy.com/your/shops/me"
@@ -570,7 +583,7 @@ function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, 
 
 // ─── Price Rules Tab (improved UX + currency) ─
 
-function PricingTab({ settings, updateField }: { settings: ShopSettings; updateField: any }) {
+function PricingTab({ settings, updateField, stores }: { settings: ShopSettings; updateField: any; stores: any }) {
     const addRule = () => {
         const newRule: PriceRule = { platform: 'etsy', type: 'percentage', value: 0, rounding: 'none' };
         updateField('price_rules', [...settings.price_rules, newRule]);
@@ -591,19 +604,21 @@ function PricingTab({ settings, updateField }: { settings: ShopSettings; updateF
         <div className="space-y-4">
             <SectionHeader title="Price Sync Rules" description="Configure automatic price adjustments between platforms" />
 
-            {/* Currency Warning */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-                    <DollarSign className="w-4 h-4 text-amber-600" />
+            {/* Currency Integration Note */}
+            {(stores.shopify.currency !== stores.etsy.currency) && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start gap-3">
+                    <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                        <DollarSign className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-indigo-900">Multi-Currency Automation</p>
+                        <p className="text-xs text-indigo-700 mt-0.5">
+                            Auto-sync detected that your stores use different currencies: <span className="font-bold">{stores.shopify.currency}</span> and <span className="font-bold">{stores.etsy.currency}</span>.
+                            Prices will be automatically converted using live exchange rates before applying your rules.
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <p className="text-sm font-medium text-amber-900">Currency Note</p>
-                    <p className="text-xs text-amber-700 mt-0.5">
-                        If your Shopify and Etsy stores use different currencies, price rules will apply to the raw numeric values.
-                        Currency conversion is not yet automatic — set your markup percentage to account for the exchange rate difference.
-                    </p>
-                </div>
-            </div>
+            )}
 
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
                 <SettingRow
@@ -963,30 +978,59 @@ function SelectBox({ value, onChange, options }: { value: string; onChange: (v: 
     );
 }
 
-function StoreCard({ name, icon, color, connected, domain, onConnect, onDisconnect, adminUrl }: {
-    name: string; icon: React.ReactNode; color: string; connected: boolean; domain: string | null;
-    onConnect: () => void; onDisconnect: () => void; adminUrl?: string;
+function StoreCard({ name, icon, color, connected, domain, currency, onConnect, onDisconnect, adminUrl }: {
+    name: string;
+    icon: React.ReactNode;
+    color: string;
+    connected: boolean;
+    domain: string | null;
+    currency?: string;
+    onConnect: () => void;
+    onDisconnect: () => void;
+    adminUrl?: string;
 }) {
     return (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-md transition-all">
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: color }}>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all hover:shadow-md">
+            <div className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-5 w-full md:w-auto">
+                    <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
+                        style={{ backgroundColor: color }}
+                    >
                         {icon}
                     </div>
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-900">{name}</h3>
-                        {connected ? (
-                            <>
-                                <p className="text-sm text-gray-500">{domain}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="w-2 h-2 bg-green-500 rounded-full" />
-                                    <span className="text-xs text-green-600 font-medium">Connected</span>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <h3 className="text-lg font-bold text-gray-900">{name}</h3>
+                            {connected && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-100 flex items-center gap-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Connected
+                                    </span>
+                                    {currency && (
+                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wider rounded-md border border-gray-200">
+                                            {currency}
+                                        </span>
+                                    )}
                                 </div>
-                            </>
-                        ) : (
-                            <p className="text-sm text-gray-400">Not connected</p>
+                            )}
+                        </div>
+                        {connected && (
+                            <div className="flex items-center gap-3">
+                                <p className="text-sm font-medium text-gray-500 truncate max-w-[200px]">{domain}</p>
+                                {adminUrl && (
+                                    <a
+                                        href={adminUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                    >
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                )}
+                            </div>
                         )}
+                        {!connected && <p className="text-sm text-gray-400">Not connected</p>}
                     </div>
                 </div>
 

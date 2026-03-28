@@ -1,10 +1,11 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getInventory, updateInventory } from './lib/etsy';
+import { convertCurrency } from '@/utils/currency';
 
 /**
  * Calculates a target price based on a base price and a set of rules.
  */
-function calculatePrice(basePrice: number, rules: any[], targetPlatform: 'etsy' | 'shopify'): number | null {
+export function calculatePrice(basePrice: number, rules: any[], targetPlatform: 'etsy' | 'shopify'): number | null {
     // Find the rule where the target is the requested platform
     const rule = rules.find(r => r.platform === targetPlatform);
     if (!rule) return null; // No rule defined for this target
@@ -120,7 +121,7 @@ export async function handlePriceUpdate(
         // 1. Validate connection and retrieve internal shop_id
         const { data: shops } = await supabase
             .from('shops')
-            .select('id, etsy_shop_id, etsy_token, etsy_token_expires_at, is_active, shopify_connected, etsy_connected')
+            .select('id, etsy_shop_id, etsy_token, etsy_token_expires_at, is_active, shopify_connected, etsy_connected, shopify_currency, etsy_currency')
             .eq('shop_domain', shopDomain)
             .limit(1);
 
@@ -184,7 +185,12 @@ export async function handlePriceUpdate(
             if (!shVariant || !shVariant.price) continue;
 
             const basePrice = parseFloat(shVariant.price);
-            const calculatedTargetPrice = calculatePrice(basePrice, settings.price_rules, 'etsy');
+            
+            // Apply Currency Conversion first if needed
+            const convertedPrice = convertCurrency(basePrice, shop.shopify_currency, shop.etsy_currency);
+            
+            // Then apply local pricing rules
+            const calculatedTargetPrice = calculatePrice(convertedPrice, settings.price_rules, 'etsy');
 
             if (calculatedTargetPrice !== null) {
                 priceUpdates.push({
@@ -193,8 +199,8 @@ export async function handlePriceUpdate(
                 });
                 
                 // Track for logging
-                oldPrices[mapping.etsy_variant_id!] = basePrice; // Track Shopify base price
-                newPrices[mapping.etsy_variant_id!] = calculatedTargetPrice; // Track targeted Etsy price
+                oldPrices[mapping.etsy_variant_id!] = basePrice; // Track original Shopify price
+                newPrices[mapping.etsy_variant_id!] = calculatedTargetPrice; // Track calculated Etsy price
             }
         }
 

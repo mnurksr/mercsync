@@ -10,6 +10,8 @@ export type ShopConnection = {
     platform: 'shopify' | 'etsy'
     owner_id?: string | null
     plan_type?: string | null
+    shopify_currency?: string
+    etsy_currency?: string
     debugMessage?: string
 }
 
@@ -36,7 +38,7 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
         }
     }
 
-    let shopQuery = supabase.from('shops').select('shop_domain, etsy_shop_id, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token');
+    let shopQuery = supabase.from('shops').select('shop_domain, etsy_shop_id, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token, shopify_currency, etsy_currency');
 
     if (testShopDomain) {
         // Test mode: bypass auth using admin client, query by shop domain
@@ -93,6 +95,8 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 platform: 'shopify',
                 owner_id: data.owner_id,
                 plan_type: data.plan_type,
+                shopify_currency: data.shopify_currency,
+                etsy_currency: data.etsy_currency,
                 debugMessage: isConnected
                     ? `Connected (has_token=${!!data.access_token})`
                     : `Not connected. has_token=${!!data.access_token}`
@@ -140,6 +144,8 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 platform: 'etsy',
                 owner_id: data.owner_id,
                 plan_type: data.plan_type,
+                shopify_currency: data.shopify_currency,
+                etsy_currency: data.etsy_currency,
                 debugMessage: isConnected
                     ? `Connected (has_token=${!!data.etsy_access_token})`
                     : `Not connected. has_token=${!!data.etsy_access_token}`

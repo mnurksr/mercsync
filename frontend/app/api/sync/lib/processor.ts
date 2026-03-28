@@ -10,6 +10,8 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import * as shopifyApi from './shopify';
 import * as etsyApi from './etsy';
 import { sendLog, sendStockSync, sendProductClone, markCompleted, markFailed } from './progress';
+import { convertCurrency } from '@/utils/currency';
+import { calculatePrice } from '../price-sync';
 
 const supabase = createAdminClient();
 
@@ -46,6 +48,7 @@ type CloneProduct = {
         stock: number;
         selected: boolean;
     }[];
+    price_rule?: any; // Optional rule to apply during clone
 };
 
 type SyncPayload = {
@@ -832,6 +835,17 @@ async function cloneToEtsy(
         ? product.variants.filter(v => v.selected !== false)
         : undefined;
 
+    // 2.5 Pricing Rules & Currency
+    const { data: settings } = await supabase
+        .from('shop_settings')
+        .select('price_rules')
+        .eq('shop_id', shop.id)
+        .maybeSingle();
+
+    const ruleToApply = product.price_rule || (settings?.price_rules || []);
+    const shCurr = shop.shopify_currency || 'USD';
+    const etCurr = shop.etsy_currency || 'USD';
+
     // === VARIANT INJECTION: Append to existing Etsy listing ===
     let targetListingId = product.target_id;
 
@@ -908,8 +922,14 @@ async function cloneToEtsy(
 
         const newProducts = variantsToAdd.map((cv: any) => {
             const stock = Math.max(1, cv.stock || 1);
+            
+            // Apply Currency Conversion + Pricing Rules
+            const basePrice = parseFloat(cv.price || 0);
+            const convertedPrice = convertCurrency(basePrice, shCurr, etCurr);
+            const finalPrice = calculatePrice(convertedPrice, ruleToApply, 'etsy') || convertedPrice;
+
             const offering: any = {
-                price: parseFloat(cv.price || 0),
+                price: finalPrice,
                 quantity: stock,
                 is_enabled: true
             };
@@ -990,12 +1010,20 @@ async function cloneToEtsy(
 
     // === STANDARD CLONE: Create new listing ===
     // 3. Build Etsy payloads (using clone variant data if available)
+    // Apply rules to cloneVariants if present
+    const processedCloneVariants = cloneVariants?.map(v => {
+        const basePrice = parseFloat(v.price.toString());
+        const convertedPrice = convertCurrency(basePrice, shCurr, etCurr);
+        const finalPrice = calculatePrice(convertedPrice, ruleToApply, 'etsy') || convertedPrice;
+        return { ...v, price: finalPrice };
+    });
+
     const { listingPayload, inventoryPayload } = etsyApi.buildListingPayload(
         shopifyProduct,
         dbStocks || [],
         shippingProfileId,
         readinessStateId,
-        cloneVariants,
+        processedCloneVariants,
         {
             title: product.title,
             description: product.description

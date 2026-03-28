@@ -50,6 +50,10 @@ export async function GET(req: NextRequest) {
             }, { status: 404 });
         }
 
+        // 3.1 Fetch Full Shop Details for Currency
+        const fullShop = await etsyApi.getShop(shopData.shop_id, access_token);
+        const etsyCurrency = fullShop.currency_code || 'USD';
+
         // 4. Update Database (public.shops) - Manual Check-then-Save (Matches n8n logic and bypasses missing unique constraints)
         const shopUpdate: any = {
             owner_id,
@@ -58,6 +62,7 @@ export async function GET(req: NextRequest) {
             etsy_refresh_token: refresh_token,
             etsy_shop_id: shopData.shop_id.toString(),
             etsy_token_expires_at: expiresAt,
+            etsy_currency: etsyCurrency,
             is_active: true,
             last_token_refresh_at: new Date().toISOString()
         };

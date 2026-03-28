@@ -45,6 +45,10 @@ export default function ProductsPage() {
 
     const [syncJobId, setSyncJobId] = useState<string | null>(null);
     const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+    
+    // Shop Metadata
+    const [shopCurrencies, setShopCurrencies] = useState<{ shopify: string, etsy: string }>({ shopify: 'USD', etsy: 'USD' });
+    const [pricingRules, setPricingRules] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
@@ -68,6 +72,30 @@ export default function ProductsPage() {
 
             setItems(itemList);
             setStats(statsData);
+
+            // Fetch Shop Details for Pricing Engine
+            const { data: shops } = await supabase
+                .from('shops')
+                .select('id, shopify_currency, etsy_currency')
+                .limit(1)
+                .single();
+
+            if (shops) {
+                setShopCurrencies({
+                    shopify: shops.shopify_currency || 'USD',
+                    etsy: shops.etsy_currency || 'USD'
+                });
+
+                const { data: settings } = await supabase
+                    .from('shop_settings')
+                    .select('price_rules')
+                    .eq('shop_id', shops.id)
+                    .maybeSingle();
+                
+                if (settings?.price_rules) {
+                    setPricingRules(settings.price_rules);
+                }
+            }
         } catch (error) {
             console.error('Failed to load listings:', error);
             toast.error('Failed to load products.');
@@ -217,9 +245,11 @@ export default function ProductsPage() {
         const selectedListings = filteredItems.filter(i => selectedItems.has(i.id) && i.matchStatus !== 'synced');
         if (selectedListings.length === 0) return;
 
-        // For bulk, we'll just add them to the queue with default mappings
+        const targetPlatform = activePlatform === 'shopify' ? 'etsy' : 'shopify';
+        // For bulk, we'll apply the default rule for the target platform if it exists
+        const defaultRule = pricingRules.find(r => r.platform === targetPlatform);
+
         setCrossListing(prev => {
-            const targetPlatform = activePlatform === 'shopify' ? 'etsy' : 'shopify';
             const listKey = targetPlatform === 'shopify' ? 'to_shopify' : 'to_etsy';
             const newList = [...prev[listKey]];
 
@@ -239,7 +269,8 @@ export default function ProductsPage() {
                             price: v.price,
                             stock: v.stock,
                             selected: true
-                        }))
+                        })),
+                        price_rule: defaultRule || null
                     });
                 }
             });
@@ -247,7 +278,7 @@ export default function ProductsPage() {
             return { ...prev, [listKey]: newList };
         });
 
-        toast.success(`Added ${selectedListings.length} items to clone queue.`);
+        toast.success(`Added ${selectedListings.length} items to clone queue with ${defaultRule ? 'dynamic pricing' : 'default pricing'}.`);
         setSelectedItems(new Set());
     };
 
@@ -673,6 +704,8 @@ export default function ProductsPage() {
                 targetPlatform={cloneModal.targetPlatform}
                 initialData={cloneModal.initialData}
                 targetId={cloneModal.targetId}
+                shopCurrencies={shopCurrencies}
+                pricingRules={pricingRules}
             />
             <SyncProgressModal
                 isOpen={isProgressModalOpen}

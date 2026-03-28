@@ -24,6 +24,7 @@ export type CrossListingItem = {
     description?: string;
     image?: string;
     variants?: CrossListingVariant[];
+    price_rule?: any; // Added for pricing engine
 };
 
 // Generic source data structure that can come from Staging or Products page
@@ -53,6 +54,8 @@ type CloneModalProps = {
     targetPlatform: 'shopify' | 'etsy';
     initialData?: CrossListingItem;
     targetId?: string;
+    shopCurrencies?: { shopify: string, etsy: string };
+    pricingRules?: any[];
 };
 
 export default function CloneModal({
@@ -62,7 +65,9 @@ export default function CloneModal({
     sourceData,
     targetPlatform,
     initialData,
-    targetId
+    targetId,
+    shopCurrencies,
+    pricingRules
 }: CloneModalProps) {
     const [formData, setFormData] = useState({
         title: '',
@@ -71,14 +76,19 @@ export default function CloneModal({
         stock: 0,
         description: '',
         image: '',
-        variants: [] as CrossListingVariant[]
+        variants: [] as CrossListingVariant[],
+        apply_pricing_rule: false,
+        selected_rule: null as any
     });
 
     useEffect(() => {
         if (isOpen && sourceData) {
-            if (initialData) {
-                const initialVariants = sourceData.variants.map(v => {
-                    const existingData = initialData.variants?.find(iv => iv.source_variant_id === v.platformId);
+            const defaultRule = pricingRules?.find(r => r.platform === targetPlatform);
+            
+            // Build variants based on sourceData and potentially initialData
+            const buildVariants = () => {
+                return sourceData.variants.map(v => {
+                    const existingData = initialData?.variants?.find(iv => iv.source_variant_id === v.platformId);
                     if (existingData) {
                         return { ...existingData, selected: true };
                     }
@@ -88,10 +98,14 @@ export default function CloneModal({
                         sku: v.sku || '',
                         price: v.price ?? 0,
                         stock: v.stockQuantity ?? 0,
-                        selected: false
+                        selected: initialData ? false : true // Default all selected for new clone, none for edit unless matched
                     };
                 });
+            };
 
+            const initialVariants = buildVariants();
+
+            if (initialData) {
                 setFormData({
                     title: initialData.title,
                     sku: initialData.sku || '',
@@ -99,20 +113,11 @@ export default function CloneModal({
                     stock: initialData.stock,
                     description: initialData.description || '',
                     image: initialData.image || '',
-                    variants: initialVariants
+                    variants: initialVariants,
+                    apply_pricing_rule: !!initialData.price_rule,
+                    selected_rule: initialData.price_rule || defaultRule || null
                 });
             } else {
-                const initialVariants = sourceData.variants.map(v => {
-                    return {
-                        source_variant_id: v.platformId || '',
-                        title: v.variantTitle || '',
-                        sku: v.sku || '',
-                        price: v.price ?? 0,
-                        stock: v.stockQuantity ?? 0,
-                        selected: true
-                    };
-                });
-
                 setFormData({
                     title: sourceData.title || '',
                     sku: sourceData.sku || '',
@@ -120,11 +125,13 @@ export default function CloneModal({
                     stock: sourceData.stock || 0,
                     description: sourceData.description || '',
                     image: sourceData.imageUrl || '',
-                    variants: initialVariants
+                    variants: initialVariants,
+                    apply_pricing_rule: !!defaultRule,
+                    selected_rule: defaultRule || null
                 });
             }
         }
-    }, [isOpen, initialData, sourceData]);
+    }, [isOpen, initialData, sourceData, pricingRules, targetPlatform]);
 
     const handleInputChange = (field: keyof typeof formData, value: string | number) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -242,6 +249,69 @@ export default function CloneModal({
                         </div>
                     </div>
 
+                    {/* Pricing Rule Integration */}
+                    <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                                    <Info className="w-4 h-4" />
+                                </span>
+                                <div>
+                                    <h5 className="text-sm font-bold text-gray-900">Dynamic Pricing</h5>
+                                    <p className="text-[10px] text-gray-500">Apply rules and currency conversion</p>
+                                </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={formData.apply_pricing_rule}
+                                    onChange={e => setFormData(prev => ({ ...prev, apply_pricing_rule: e.target.checked }))}
+                                    className="sr-only peer" 
+                                />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        {formData.apply_pricing_rule && (
+                            <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <div className="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Source Currency</p>
+                                        <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                            {shopCurrencies?.shopify || 'USD'}
+                                            <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded">Base</span>
+                                        </p>
+                                    </div>
+                                    <div className="bg-white p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Target Currency</p>
+                                        <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                            {shopCurrencies?.etsy || 'USD'}
+                                            <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded">Target</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <select 
+                                    value={formData.selected_rule?.platform || ''}
+                                    onChange={e => {
+                                        const rule = pricingRules?.find(r => r.platform === e.target.value);
+                                        setFormData(prev => ({ ...prev, selected_rule: rule }));
+                                    }}
+                                    className="w-full px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                >
+                                    <option value="">No specific rule (Use defaults)</option>
+                                    {pricingRules?.map((r, idx) => (
+                                        <option key={idx} value={r.platform}>
+                                            Rule for {r.platform === 'etsy' ? 'Etsy' : 'Shopify'} ({r.adjustment_type === 'percentage' ? r.adjustment_value + '%' : r.adjustment_value + ' fixed'})
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-[10px] text-indigo-600 mt-2 font-medium bg-indigo-50 p-2 rounded-lg">
+                                    Final price will be calculated during synchronization using the latest exchange rates.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Description */}
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Description</label>
@@ -341,7 +411,8 @@ export default function CloneModal({
                                 stock: formData.stock,
                                 description: formData.description,
                                 image: formData.image,
-                                variants: selectedVariants
+                                variants: selectedVariants,
+                                price_rule: formData.apply_pricing_rule ? formData.selected_rule : null
                             });
                         }}
                         className="px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-green-200 text-sm flex items-center gap-2"

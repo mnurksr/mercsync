@@ -113,6 +113,13 @@ export async function getMe(accessToken: string) {
 }
 
 /**
+ * Get Specific Shop Details
+ */
+export async function getShop(shopId: string | number, accessToken: string) {
+    return etsyFetch(`/shops/${shopId}`, accessToken);
+}
+
+/**
  * Get listing counts for a shop across all possible states
  */
 export async function getListingCounts(shopId: string | number, accessToken: string) {
