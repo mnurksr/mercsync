@@ -56,7 +56,10 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
 
     try {
         if (platform === 'shopify') {
-            const { data, error } = await shopQuery
+            const { data, error } = await supabase
+                .from('shops')
+                .select('shop_domain, etsy_shop_id, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token, shopify_currency, etsy_currency')
+                .eq(testShopDomain ? 'shop_domain' : 'owner_id', testShopDomain || resolvedOwnerId)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle()
@@ -64,30 +67,39 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
             console.log('getConnectedShop: Query result', { data, error })
 
             if (error) {
-                console.error('getConnectedShop: Database error', error)
+                console.warn('getConnectedShop: Potential schema mismatch, falling back to core fields', error)
+                // Fallback attempt: select only core fields (without currency)
+                const { data: coreData, error: coreError } = await supabase
+                    .from('shops')
+                    .select('shop_domain, etsy_shop_id, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, access_token, etsy_access_token')
+                    .eq(testShopDomain ? 'shop_domain' : 'owner_id', testShopDomain || resolvedOwnerId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                
+                if (coreError || !coreData) {
+                    return { connected: false, shop_domain: null, last_sync: null, platform: 'shopify', debugMessage: coreError?.message || 'Not found' }
+                }
+                
+                const isConnected = !!coreData.access_token && !!coreData.shop_domain;
                 return {
-                    connected: false,
-                    shop_domain: null,
-                    last_sync: null,
+                    connected: isConnected,
+                    shop_domain: coreData.shop_domain,
+                    last_sync: coreData.created_at ? new Date(coreData.created_at).toLocaleString() : 'Just now',
                     platform: 'shopify',
-                    debugMessage: `DB Error: ${error.message} (Hint: Check RLS)`
+                    owner_id: coreData.owner_id,
+                    plan_type: coreData.plan_type,
+                    shopify_currency: 'USD',
+                    etsy_currency: 'USD',
+                    debugMessage: `Fallback: ${isConnected}`
                 }
             }
 
             if (!data) {
-                console.log('getConnectedShop: No shop found')
-                return {
-                    connected: false,
-                    shop_domain: null,
-                    last_sync: null,
-                    platform: 'shopify',
-                    debugMessage: `No shop record found.`
-                }
+                return { connected: false, shop_domain: null, last_sync: null, platform: 'shopify', debugMessage: 'No shop record found.' }
             }
 
-            // Connection logic: Trust the token presence as the ultimate source of truth
             const isConnected = !!data.access_token && !!data.shop_domain;
-
             return {
                 connected: isConnected,
                 shop_domain: data.shop_domain,
@@ -95,48 +107,55 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 platform: 'shopify',
                 owner_id: data.owner_id,
                 plan_type: data.plan_type,
-                shopify_currency: data.shopify_currency,
-                etsy_currency: data.etsy_currency,
-                debugMessage: isConnected
-                    ? `Connected (has_token=${!!data.access_token})`
-                    : `Not connected. has_token=${!!data.access_token}`
+                shopify_currency: data.shopify_currency || 'USD',
+                etsy_currency: data.etsy_currency || 'USD',
+                debugMessage: `Connected (has_token=${!!data.access_token})`
             }
         }
 
         // Etsy connection logic
         if (platform === 'etsy') {
-            const { data, error } = await shopQuery
+            const { data, error } = await supabase
+                .from('shops')
+                .select('shop_domain, etsy_shop_id, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, etsy_access_token, shopify_currency, etsy_currency')
+                .eq(testShopDomain ? 'shop_domain' : 'owner_id', testShopDomain || resolvedOwnerId)
                 .order('created_at', { ascending: false })
                 .limit(1)
                 .maybeSingle()
 
-            console.log('getConnectedShop (etsy): Query result', { data, error })
-
             if (error) {
-                console.error('getConnectedShop (etsy): Database error', error)
+                // Core fields fallback for Etsy
+                const { data: coreData, error: coreError } = await supabase
+                    .from('shops')
+                    .select('shop_domain, etsy_shop_id, is_active, plan_type, created_at, owner_id, shopify_connected, etsy_connected, etsy_access_token')
+                    .eq(testShopDomain ? 'shop_domain' : 'owner_id', testShopDomain || resolvedOwnerId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+                
+                if (coreError || !coreData) {
+                    return { connected: false, shop_domain: null, last_sync: null, platform: 'etsy', debugMessage: coreError?.message || 'Not found' }
+                }
+
+                const isConnected = !!coreData.etsy_access_token && coreData.etsy_access_token.length > 0;
                 return {
-                    connected: false,
-                    shop_domain: null,
-                    last_sync: null,
+                    connected: isConnected,
+                    shop_domain: coreData.etsy_shop_id ? `${coreData.etsy_shop_id} (Etsy Shop)` : (coreData.shop_domain || 'Connected'),
+                    last_sync: coreData.created_at ? new Date(coreData.created_at).toLocaleString() : 'Just now',
                     platform: 'etsy',
-                    debugMessage: `DB Error: ${error.message} (Hint: Check RLS)`
+                    owner_id: coreData.owner_id,
+                    plan_type: coreData.plan_type,
+                    shopify_currency: 'USD',
+                    etsy_currency: 'USD',
+                    debugMessage: `Fallback: ${isConnected}`
                 }
             }
 
             if (!data) {
-                console.log('getConnectedShop (etsy): No shop found')
-                return {
-                    connected: false,
-                    shop_domain: null,
-                    last_sync: null,
-                    platform: 'etsy',
-                    debugMessage: `No shop record found`
-                }
+                return { connected: false, shop_domain: null, last_sync: null, platform: 'etsy', debugMessage: 'No shop record found' }
             }
 
-            // Connection logic: Trust the token presence
             const isConnected = !!data.etsy_access_token && data.etsy_access_token.length > 0;
-
             return {
                 connected: isConnected,
                 shop_domain: data.etsy_shop_id ? `${data.etsy_shop_id} (Etsy Shop)` : (data.shop_domain || 'Connected'),
@@ -144,11 +163,9 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 platform: 'etsy',
                 owner_id: data.owner_id,
                 plan_type: data.plan_type,
-                shopify_currency: data.shopify_currency,
-                etsy_currency: data.etsy_currency,
-                debugMessage: isConnected
-                    ? `Connected (has_token=${!!data.etsy_access_token})`
-                    : `Not connected. has_token=${!!data.etsy_access_token}`
+                shopify_currency: data.shopify_currency || 'USD',
+                etsy_currency: data.etsy_currency || 'USD',
+                debugMessage: `Connected (has_token=${!!data.etsy_access_token})`
             }
         }
 
