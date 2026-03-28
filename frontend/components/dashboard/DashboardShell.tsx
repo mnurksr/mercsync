@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import {
-    Settings, Bell,
+    Settings,
     RefreshCw, Box, History, Layers, LayoutDashboard
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { usePathname, useRouter } from 'next/navigation';
+import NotificationBell from './NotificationBell';
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
     const { supabase, user } = useAuth();
@@ -78,9 +79,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                         >
                             <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </button>
-                        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors relative">
-                            <Bell className="w-5 h-5" />
-                        </button>
+                        <NotificationBell />
                         <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-sm font-semibold text-white">
                             {user?.email?.charAt(0).toUpperCase() || 'U'}
                         </div>

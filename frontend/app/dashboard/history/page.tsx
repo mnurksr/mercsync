@@ -16,12 +16,12 @@ export default function HistoryPage() {
 
     useEffect(() => {
         loadData();
-    }, [filterStatus]);
+    }, []);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const data = await getSyncHistory(filterStatus);
+            const data = await getSyncHistory('all');
             setHistory(data);
         } catch (error) {
             console.error('Failed to load history:', error);
@@ -99,9 +99,14 @@ export default function HistoryPage() {
         { key: 'skipped', label: 'Skipped' }
     ];
 
-    // Stats
+    // Stats calculated from ALL loaded items
     const successCount = history.filter(h => h.status === 'success').length;
     const failedCount = history.filter(h => h.status === 'failed').length;
+
+    // Items to display based on selected filter
+    const displayedHistory = filterStatus === 'all' 
+        ? history 
+        : history.filter(h => h.status === filterStatus);
 
     return (
         <div className="w-full pb-16">
@@ -170,17 +175,17 @@ export default function HistoryPage() {
                             </div>
                         ))}
                     </div>
-                ) : history.length === 0 ? (
+                ) : displayedHistory.length === 0 ? (
                     <div className="px-8 py-24 text-center">
                         <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                             <History className="w-10 h-10 text-gray-300" />
                         </div>
-                        <p className="text-xl font-black text-gray-900">No sync events yet</p>
-                        <p className="text-sm font-medium text-gray-400 mt-2">Events will appear here when stock syncs happen.</p>
+                        <p className="text-xl font-black text-gray-900">No events found</p>
+                        <p className="text-sm font-medium text-gray-400 mt-2">Try changing your filter or sync a product.</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-gray-50">
-                        {history.map((item) => {
+                        {displayedHistory.map((item) => {
                             const statusConfig = getStatusConfig(item.status);
                             const isExpanded = expandedId === item.id;
                             const hasDetails = item.errorMessage || (item.metadata && Object.keys(item.metadata).length > 0);
