@@ -324,10 +324,10 @@ async function saveStagingMatches(shopId: string, finalMatched: any[]) {
 }
 
 // ─────────────────────────────────────────────
-// Phase 1.2: Reconcile Staging Links (The Root Fix)
+// Phase 1.2: Reconcile Staging Links (The Professional Fix)
 // ─────────────────────────────────────────────
 async function reconcileStagingLinks(shopId: string) {
-    console.log(`[Sync] reconcileStagingLinks started for shop ${shopId}`);
+    console.log(`[Sync] reconcileStagingLinks started for shop ${shopId} (ID Standardization Active)`);
     
     // 1. Fetch all Shopify and Etsy staging rows
     const { data: sRows } = await supabase.from('staging_shopify_products').select('shopify_variant_id, etsy_variant_id, shopify_inventory_item_id').eq('shop_id', shopId);
@@ -335,45 +335,50 @@ async function reconcileStagingLinks(shopId: string) {
 
     if (!sRows || !eRows) return;
 
-    // 2. Cross-reference: If Etsy row knows about Shopify but Shopify row is NULL
+    // 2. Cross-reference and CLEAN: Replace Inventory IDs (49...) with Variant IDs (47...)
     for (const er of eRows) {
         if (er.shopify_variant_id) {
-            // Does the Shopify row know about this?
-            // SEARCH BY BOTH VARIANT ID AND INVENTORY ITEM ID
+            // Find the Shopify row. It might match by Variant ID (Standard) or Inventory ID (Wrong but common)
             const sr = sRows.find(s => 
                 String(s.shopify_variant_id) === String(er.shopify_variant_id) || 
                 String(s.shopify_inventory_item_id) === String(er.shopify_variant_id)
             );
             
-            if (sr && !sr.etsy_variant_id && er.etsy_variant_id) {
-                console.log(`[Sync] Reconciling: Linking Shopify variant ${sr.shopify_variant_id} (found via ${er.shopify_variant_id}) to Etsy variant ${er.etsy_variant_id}`);
-                
-                // [FIX] CRITICAL: Must use sr.shopify_variant_id (the 47... ID) for the .eq() filter
-                // because er.shopify_variant_id might be the 49... (Inventory ID) which won't match the col!
-                const { error } = await supabase
-                    .from('staging_shopify_products')
-                    .update({ etsy_variant_id: er.etsy_variant_id })
-                    .eq('shop_id', shopId)
-                    .eq('shopify_variant_id', sr.shopify_variant_id);
+            if (sr) {
+                // [STANDARD CLEANUP] If Etsy row is using the Inventory ID (49...), change it to the Variant ID (47...)
+                if (String(er.shopify_variant_id) === String(sr.shopify_inventory_item_id) && String(sr.shopify_variant_id) !== String(er.shopify_variant_id)) {
+                    console.log(`[Sync] Standardizing ID: Replacing Inventory ID ${er.shopify_variant_id} with Variant ID ${sr.shopify_variant_id} in Etsy table.`);
+                    await supabase
+                        .from('staging_etsy_products')
+                        .update({ shopify_variant_id: sr.shopify_variant_id })
+                        .eq('shop_id', shopId)
+                        .eq('etsy_variant_id', er.etsy_variant_id);
+                }
 
-                if (error) console.error(`[Sync] Reconciliation update failed:`, error.message);
+                // [LINKING] Back-fill the Shopify side with the Etsy ID
+                if (!sr.etsy_variant_id && er.etsy_variant_id) {
+                    console.log(`[Sync] Reconciling: Linking Shopify variant ${sr.shopify_variant_id} to Etsy variant ${er.etsy_variant_id}`);
+                    await supabase
+                        .from('staging_shopify_products')
+                        .update({ etsy_variant_id: er.etsy_variant_id })
+                        .eq('shop_id', shopId)
+                        .eq('shopify_variant_id', sr.shopify_variant_id);
+                }
             }
         }
     }
 
-    // 3. Cross-reference: If Shopify row knows about Etsy but Etsy row is NULL
+    // 3. Reverse Link Maintenance
     for (const sr of sRows) {
         if (sr.etsy_variant_id && sr.shopify_variant_id) {
             const er = eRows.find(e => String(e.etsy_variant_id) === String(sr.etsy_variant_id));
-            if (er && !er.shopify_variant_id) {
-                console.log(`[Sync] Reconciling: Linking Etsy variant ${sr.etsy_variant_id} to Shopify variant ${sr.shopify_variant_id}`);
-                const { error } = await supabase
+            if (er && String(er.shopify_variant_id) !== String(sr.shopify_variant_id)) {
+                console.log(`[Sync] Maintenance: Ensuring Etsy variant ${er.etsy_variant_id} points to Variant ID ${sr.shopify_variant_id} (Standardized)`);
+                await supabase
                     .from('staging_etsy_products')
                     .update({ shopify_variant_id: sr.shopify_variant_id })
                     .eq('shop_id', shopId)
                     .eq('etsy_variant_id', er.etsy_variant_id);
-                
-                if (error) console.error(`[Sync] Reconciliation update failed (Etsy side):`, error.message);
             }
         }
     }
