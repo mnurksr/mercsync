@@ -90,13 +90,34 @@ export async function GET(req: NextRequest) {
                 .from('shops')
                 .update(shopUpdate)
                 .eq('id', existingShop.id);
-            dbOperationError = updateError;
+            
+            if (updateError) {
+                console.warn('[Etsy Callback] Update failed, retrying without currency column...', updateError);
+                const { etsy_currency, shopify_currency, ...safeUpdate } = shopUpdate;
+                const { error: secondUpdateError } = await supabase
+                    .from('shops')
+                    .update(safeUpdate)
+                    .eq('id', existingShop.id);
+                dbOperationError = secondUpdateError;
+            } else {
+                dbOperationError = updateError;
+            }
         } else {
             console.log(`[Etsy Callback] Inserting new shop record for owner ${owner_id}`);
             const { error: insertError } = await supabase
                 .from('shops')
                 .insert(shopUpdate);
-            dbOperationError = insertError;
+            
+            if (insertError) {
+                console.warn('[Etsy Callback] Insert failed, retrying without currency column...', insertError);
+                const { etsy_currency, shopify_currency, ...safeInsert } = shopUpdate;
+                const { error: secondInsertError } = await supabase
+                    .from('shops')
+                    .insert(safeInsert);
+                dbOperationError = secondInsertError;
+            } else {
+                dbOperationError = insertError;
+            }
         }
 
         if (dbOperationError) {

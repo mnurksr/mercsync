@@ -64,30 +64,40 @@ export async function GET(req: NextRequest) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
         await shopifyApi.registerWebhooks(creds, appUrl);
 
-        // 7. Upsert to DB
-        // initial_product_counts should be a JSON object like { shopify: { active: X, ... } }
+        // 7. Upsert to DB - Safely handle missing currency columns
+        const upsertData: any = {
+            shop_domain: shop,
+            owner_id: owner_id,
+            access_token: accessToken,
+            is_active: true,
+            shopify_connected: true,
+            shopify_scope: scopes,
+            shopify_currency: currency,
+            last_token_refresh_at: new Date().toISOString(),
+            initial_product_counts: { shopify: counts },
+            plan_type: 'guest',
+            etsy_connected: false,
+            etsy_access_token: null,
+            etsy_refresh_token: null
+        };
+
         const { error: upsertError } = await supabase
             .from('shops')
-            .upsert({
-                shop_domain: shop,
-                owner_id: owner_id,
-                access_token: accessToken,
-                is_active: true,
-                shopify_connected: true,
-                shopify_scope: scopes,
-                shopify_currency: currency,
-                last_token_refresh_at: new Date().toISOString(),
-                initial_product_counts: { shopify: counts },
-                // RESET TO FRESH STATE: Match n8n "guest" branding and clear Etsy legacy data
-                plan_type: 'guest',
-                etsy_connected: false,
-                etsy_access_token: null,
-                etsy_refresh_token: null
-            }, { onConflict: 'shop_domain' });
+            .upsert(upsertData, { onConflict: 'shop_domain' });
 
         if (upsertError) {
-            console.error('[Shopify Callback] DB Error:', upsertError);
-            throw new Error('Failed to save Shopify credentials');
+            console.warn('[Shopify Callback] Initial upsert failed, retrying without currency column...', upsertError);
+            // If the error is about a missing column (likely 422 or 42P01/42703 in Postgres)
+            // we remove the currency field and try again.
+            const { shopify_currency, ...safeUpsertData } = upsertData;
+            const { error: secondUpsertError } = await supabase
+                .from('shops')
+                .upsert(safeUpsertData, { onConflict: 'shop_domain' });
+            
+            if (secondUpsertError) {
+                console.error('[Shopify Callback] Secondary upsert failed:', secondUpsertError);
+                throw new Error('Failed to save Shopify credentials even without currency column');
+            }
         }
 
         // 8. Redirect back to Shopify Admin App (Strictly match working n8n structure)

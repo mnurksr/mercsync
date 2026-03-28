@@ -73,14 +73,26 @@ export default function ProductsPage() {
             setItems(itemList);
             setStats(statsData);
 
-            // Fetch Shop Details for Pricing Engine
-            const { data: shops } = await supabase
+            // Fetch Shop Details for Pricing Engine - Safely
+            const { data: shops, error: shopError } = await supabase
                 .from('shops')
                 .select('id, shopify_currency, etsy_currency')
                 .limit(1)
-                .single();
+                .maybeSingle();
 
-            if (shops) {
+            if (shopError) {
+                console.warn('ProductsPage: Failed to fetch currency columns, falling back to USD', shopError);
+                // Try again with just ID to get shop ID for settings
+                const { data: baseShop } = await supabase.from('shops').select('id').limit(1).maybeSingle();
+                if (baseShop) {
+                    const { data: settings } = await supabase
+                        .from('shop_settings')
+                        .select('price_rules')
+                        .eq('shop_id', baseShop.id)
+                        .maybeSingle();
+                    if (settings?.price_rules) setPricingRules(settings.price_rules);
+                }
+            } else if (shops) {
                 setShopCurrencies({
                     shopify: shops.shopify_currency || 'USD',
                     etsy: shops.etsy_currency || 'USD'
