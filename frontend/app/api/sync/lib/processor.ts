@@ -293,19 +293,25 @@ async function saveStagingMatches(shopId: string, finalMatched: any[]) {
     for (const item of finalMatched) {
         if (!item.shopify_variant_id || !item.etsy_variant_id) continue;
 
-        // Update Shopify Staging Product
+        // 1. Update Shopify Staging Product (Link to Etsy)
         const { error: shEr } = await supabase
             .from('staging_shopify_products')
-            .update({ etsy_variant_id: item.etsy_variant_id })
+            .update({ 
+                etsy_variant_id: item.etsy_variant_id,
+                updated_at: new Date().toISOString() 
+            })
             .eq('shop_id', shopId)
             .eq('shopify_variant_id', item.shopify_variant_id);
 
         if (shEr) console.error(`[Sync] Failed to link Shopify variant ${item.shopify_variant_id} to Etsy ${item.etsy_variant_id}:`, shEr.message);
 
-        // Update Etsy Staging Product
+        // 2. Update Etsy Staging Product (Link to Shopify)
         const { error: etEr } = await supabase
             .from('staging_etsy_products')
-            .update({ shopify_variant_id: item.shopify_variant_id })
+            .update({ 
+                shopify_variant_id: item.shopify_variant_id,
+                updated_at: new Date().toISOString() 
+            })
             .eq('shop_id', shopId)
             .eq('etsy_variant_id', item.etsy_variant_id);
 

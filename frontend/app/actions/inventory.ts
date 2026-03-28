@@ -114,24 +114,36 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         return []
     }
 
-    // Fetch the "other" platform stocks for matched variants
-    const matchedOtherIds = (items || [])
-        .map(i => platform === 'shopify' ? i.etsy_variant_id : i.shopify_variant_id)
-        .filter(Boolean);
+    // 1. Collect IDs for bidirectional lookup
+    const myVariantIds = (items || []).map(i => platform === 'shopify' ? i.shopify_variant_id : i.etsy_variant_id).filter(Boolean);
+    const pointedToIds = (items || []).map(i => platform === 'shopify' ? i.etsy_variant_id : i.shopify_variant_id).filter(Boolean);
 
     let otherStocksMap: { [key: string]: number } = {};
-    if (matchedOtherIds.length > 0) {
-        const otherIdField = platform === 'shopify' ? 'etsy_variant_id' : 'shopify_variant_id';
-        const { data: otherItems } = await supabase
-            .from(otherTableName)
-            .select(`${otherIdField}, stock_quantity`)
-            .in(otherIdField, matchedOtherIds);
+    let matchedBackMap: { [key: string]: string } = {}; // Map our ID -> their ID if they point to us
 
-        if (otherItems) {
-            otherItems.forEach((oi: any) => {
-                otherStocksMap[oi[otherIdField]] = oi.stock_quantity || 0;
-            });
-        }
+    const otherIdField = platform === 'shopify' ? 'etsy_variant_id' : 'shopify_variant_id';
+    const myIdFieldInOtherTable = platform === 'shopify' ? 'shopify_variant_id' : 'etsy_variant_id';
+
+    // 2. Fetch from other table with bidirectional awareness
+    // We look for items that WE point to OR items that point TO US
+    const { data: otherItems } = await supabase
+        .from(otherTableName)
+        .select(`shopify_variant_id, etsy_variant_id, stock_quantity`)
+        .or(`${otherIdField}.in.(${pointedToIds.join(',')}),${myIdFieldInOtherTable}.in.(${myVariantIds.join(',')})`);
+
+    if (otherItems) {
+        otherItems.forEach((oi: any) => {
+            const theirId = oi[otherIdField];
+            const pointsToMeId = oi[myIdFieldInOtherTable];
+
+            // If we point to them
+            if (theirId) otherStocksMap[theirId] = oi.stock_quantity || 0;
+            
+            // If they point to us, we should know about it!
+            if (pointsToMeId) {
+                matchedBackMap[pointsToMeId] = theirId;
+            }
+        });
     }
 
     // Group variants into Listings
@@ -140,8 +152,12 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     (items || []).forEach(item => {
         const groupId = item[parentIdField] || item.id;
         const otherVariantId = platform === 'shopify' ? item.etsy_variant_id : item.shopify_variant_id;
-        const isMatched = !!otherVariantId;
-        const otherStock = isMatched ? (otherStocksMap[otherVariantId] || 0) : undefined;
+        const linkedBackVariantId = matchedBackMap[platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id];
+        
+        // Product is matched if either side has a pointer
+        const finalOtherVariantId = otherVariantId || linkedBackVariantId;
+        const isMatched = !!finalOtherVariantId;
+        const otherStock = isMatched ? (otherStocksMap[finalOtherVariantId!] || 0) : undefined;
 
         if (!groups[groupId]) {
             groups[groupId] = {
