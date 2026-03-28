@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getStagingProducts, clearStagingTables, type StagingProduct } from '@/app/actions/staging';
-import { getShopifyLocations } from '@/app/actions/shop';
+import { getShopifyLocations, getConnectedShop } from '@/app/actions/shop';
 import {
     ArrowLeft, ShoppingBag, Store, RefreshCw, Search,
     Check, X, Loader2, Link2, Sparkles, Wand2, ArrowRight, RotateCcw, Copy,
@@ -726,6 +726,10 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
     const [shopifyProducts, setShopifyProducts] = useState<StagingProduct[]>(cache?.shopify || []);
     const [etsyProducts, setEtsyProducts] = useState<StagingProduct[]>(cache?.etsy || []);
+    const [shopCurrencies, setShopCurrencies] = useState<{ shopify: string, etsy: string }>({ shopify: 'USD', etsy: 'USD' });
+    const [pricingRules, setPricingRules] = useState<any[]>([]);
+    const [globalRuleId, setGlobalRuleId] = useState<string | null>(null);
+    const [applyRuleToAll, setApplyRuleToAll] = useState(false);
 
     // Derived Groups
     const shopifyGroups = useMemo(() => groupProducts(shopifyProducts, 'shopify'), [shopifyProducts]);
@@ -1012,13 +1016,26 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const load = async () => {
         try {
             console.log('[StagingInterface] load() called with currentUserId:', currentUserId);
-            const [s, e] = await Promise.all([
+            const [s, e, shopifyInfo, etsyInfo, rulesRes] = await Promise.all([
                 getStagingProducts('shopify', currentUserId),
-                getStagingProducts('etsy', currentUserId)
+                getStagingProducts('etsy', currentUserId),
+                getConnectedShop('shopify', currentUserId),
+                getConnectedShop('etsy', currentUserId),
+                fetch(`/api/sync/settings?owner_id=${currentUserId}`).then(r => r.json().catch(() => ({})))
             ]);
+            
             console.log('[StagingInterface] loaded products:', { shopify: s.length, etsy: e.length });
             setShopifyProducts(s);
             setEtsyProducts(e);
+            setShopCurrencies({
+                shopify: shopifyInfo?.shopify_currency || 'USD',
+                etsy: etsyInfo?.etsy_currency || 'USD'
+            });
+            
+            // Extract pricing rules from settings if available
+            if (rulesRes?.pricing_rules) {
+                setPricingRules(rulesRes.pricing_rules);
+            }
         } catch (err) {
             console.error(err);
         } finally {
@@ -1624,6 +1641,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     targetId = group.etsy.variants.find(v => !!v.etsyListingId)?.etsyListingId || (group.etsy.id && !group.etsy.id.includes('-') ? group.etsy.id : undefined);
                 }
 
+                const selectedRule = applyRuleToAll ? pricingRules.find(r => r.id === globalRuleId) : null;
+
                 setCrossListing(prev => ({
                     ...prev,
                     [target]: [...prev[target].filter(c => c.source_id !== sourceId), {
@@ -1634,7 +1653,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         price: firstVariant?.price || 0,
                         stock: firstVariant?.stockQuantity || 0,
                         image: firstVariant?.imageUrl || group.items[0]?.shopify?.imageUrl || group.items[0]?.etsy?.imageUrl || '',
-                        variants: variantsToQueue
+                        variants: variantsToQueue,
+                        price_rule: selectedRule
                     }]
                 }));
             }
@@ -1781,6 +1801,67 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                         </div>
                                     </div>
                                 </div>
+                                <div className="mb-6 p-5 bg-white rounded-2xl border border-indigo-100 shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between border-b border-gray-50 pb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-indigo-50 p-3 rounded-2xl">
+                                                <Sparkles className="w-6 h-6 text-indigo-600" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-gray-900">Currency & Pricing Rules</h3>
+                                                <p className="text-xs text-gray-500">Auto-convert prices and apply profit margins during cloning</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase block mb-0.5">Shopify</span>
+                                                <span className="text-sm font-bold text-gray-700">{shopCurrencies.shopify}</span>
+                                            </div>
+                                            <ArrowRight className="w-3.5 h-3.5 text-gray-300" />
+                                            <div className="bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-100">
+                                                <span className="text-[10px] font-bold text-orange-400 uppercase block mb-0.5">Etsy</span>
+                                                <span className="text-sm font-bold text-orange-700">{shopCurrencies.etsy}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex-1 space-y-1">
+                                            <p className="text-sm font-semibold text-gray-800">Apply a pricing rule for for all clones?</p>
+                                            <p className="text-xs text-gray-500">This will automatically apply your profit margin to every product added to the cloning queue.</p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={applyRuleToAll}
+                                                    onChange={e => setApplyRuleToAll(e.target.checked)}
+                                                    className="sr-only peer" 
+                                                />
+                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                            </label>
+                                            
+                                            {applyRuleToAll && (
+                                                <select 
+                                                    value={globalRuleId || ''}
+                                                    onChange={e => setGlobalRuleId(e.target.value)}
+                                                    className="min-w-[200px] px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none animate-in fade-in slide-in-from-right-2"
+                                                >
+                                                    <option value="">Select a rule...</option>
+                                                    {pricingRules.map((r, idx) => (
+                                                        <option key={r.id || idx} value={r.id}>
+                                                            {r.platform === 'etsy' ? 'Etsy Rule' : 'Shopify Rule'} ({r.adjustment_type === 'percentage' ? r.adjustment_value + '%' : r.adjustment_value + ' fixed'})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {applyRuleToAll && !globalRuleId && (
+                                        <p className="text-[10px] text-red-500 font-medium animate-pulse">Please select a pricing rule to proceed with automatic application.</p>
+                                    )}
+                                </div>
+
                                 {catalogGroups.length === 0 ? (
                                     <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
                                         <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
@@ -1807,7 +1888,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                 {!catalogGroups.every(g => isGroupQueued(g)) && (
                                                     <button
                                                         onClick={queueAllMissing}
-                                                        className="h-9 px-4 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors"
+                                                        disabled={applyRuleToAll && !globalRuleId}
+                                                        className="h-9 px-4 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-indigo-200/50"
                                                     >
                                                         <Copy className="w-4 h-4" /> Clone All Missing
                                                     </button>
@@ -2016,6 +2098,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     targetPlatform={cloneModal.targetPlatform}
                     initialData={cloneModal.initialData}
                     targetId={cloneModal.targetId}
+                    shopCurrencies={shopCurrencies}
+                    pricingRules={pricingRules}
                 />
             </>
         );

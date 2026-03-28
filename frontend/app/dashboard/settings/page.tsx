@@ -604,16 +604,36 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
         <div className="space-y-4">
             <SectionHeader title="Price Sync Rules" description="Configure automatic price adjustments between platforms" />
 
-            {/* Currency Integration Note */}
+            {/* Currency Integration Indicators */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#95BF47]/10 rounded-xl flex items-center justify-center shrink-0">
+                        <ShoppingBag className="w-6 h-6 text-[#95BF47]" />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Shopify Currency</p>
+                        <p className="text-lg font-black text-gray-900">{stores.shopify.currency}</p>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#F56400]/10 rounded-xl flex items-center justify-center shrink-0">
+                        <Store className="w-6 h-6 text-[#F56400]" />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Etsy Currency</p>
+                        <p className="text-lg font-black text-gray-900">{stores.etsy.currency}</p>
+                    </div>
+                </div>
+            </div>
+
             {(stores.shopify.currency !== stores.etsy.currency) && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-start gap-3">
+                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex items-start gap-3">
                     <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
                         <DollarSign className="w-4 h-4 text-indigo-600" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-indigo-900">Multi-Currency Automation</p>
-                        <p className="text-xs text-indigo-700 mt-0.5">
-                            Auto-sync detected that your stores use different currencies: <span className="font-bold">{stores.shopify.currency}</span> and <span className="font-bold">{stores.etsy.currency}</span>.
+                        <p className="text-sm font-bold text-indigo-900">Multi-Currency Automation Active</p>
+                        <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
                             Prices will be automatically converted using live exchange rates before applying your rules.
                         </p>
                     </div>
@@ -908,7 +928,7 @@ function AdvancedTab() {
                 <div className="p-6 flex items-center justify-between">
                     <div>
                         <h3 className="font-semibold text-gray-900">Clear Staging Data</h3>
-                        <p className="text-sm text-gray-500">Remove all imported product data from staging tables. Your live products won't be affected.</p>
+                        <p className="text-sm text-gray-500">Remove all imported product data from staging tables. Your live products won&apos;t be affected.</p>
                     </div>
                     <button className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors">
                         Clear Data
@@ -917,7 +937,7 @@ function AdvancedTab() {
                 <div className="p-6 flex items-center justify-between">
                     <div>
                         <h3 className="font-semibold text-gray-900">Reset All Matches</h3>
-                        <p className="text-sm text-gray-500">Remove all product matches between Shopify and Etsy. You'll need to re-match them.</p>
+                        <p className="text-sm text-gray-500">Remove all product matches between Shopify and Etsy. You&apos;ll need to re-match them.</p>
                     </div>
                     <button className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors">
                         Reset Matches

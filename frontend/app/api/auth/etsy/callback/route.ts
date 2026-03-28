@@ -51,8 +51,10 @@ export async function GET(req: NextRequest) {
         }
 
         // 3.1 Fetch Full Shop Details for Currency
-        const fullShop = await etsyApi.getShop(shopData.shop_id, access_token);
-        const etsyCurrency = fullShop.currency_code || 'USD';
+        const fullShopRes = await etsyApi.getShop(shopData.shop_id, access_token);
+        const etsyCurrency = (fullShopRes.results && fullShopRes.results.length > 0) 
+            ? fullShopRes.results[0].currency_code 
+            : (fullShopRes.currency_code || 'USD');
 
         // 4. Update Database (public.shops) - Manual Check-then-Save (Matches n8n logic and bypasses missing unique constraints)
         const shopUpdate: any = {

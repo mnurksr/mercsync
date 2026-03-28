@@ -104,32 +104,29 @@ export default function CloneModal({
             };
 
             const initialVariants = buildVariants();
+            const dataToSet = initialData ? {
+                title: initialData.title,
+                sku: initialData.sku || '',
+                price: initialData.price,
+                stock: initialData.stock,
+                description: initialData.description || '',
+                image: initialData.image || '',
+                variants: initialVariants,
+                apply_pricing_rule: !!initialData.price_rule,
+                selected_rule: initialData.price_rule || defaultRule || null
+            } : {
+                title: sourceData.title || '',
+                sku: sourceData.sku || '',
+                price: sourceData.price || 0,
+                stock: sourceData.stock || 0,
+                description: sourceData.description || '',
+                image: sourceData.imageUrl || '',
+                variants: initialVariants,
+                apply_pricing_rule: !!defaultRule,
+                selected_rule: defaultRule || null
+            };
 
-            if (initialData) {
-                setFormData({
-                    title: initialData.title,
-                    sku: initialData.sku || '',
-                    price: initialData.price,
-                    stock: initialData.stock,
-                    description: initialData.description || '',
-                    image: initialData.image || '',
-                    variants: initialVariants,
-                    apply_pricing_rule: !!initialData.price_rule,
-                    selected_rule: initialData.price_rule || defaultRule || null
-                });
-            } else {
-                setFormData({
-                    title: sourceData.title || '',
-                    sku: sourceData.sku || '',
-                    price: sourceData.price || 0,
-                    stock: sourceData.stock || 0,
-                    description: sourceData.description || '',
-                    image: sourceData.imageUrl || '',
-                    variants: initialVariants,
-                    apply_pricing_rule: !!defaultRule,
-                    selected_rule: defaultRule || null
-                });
-            }
+            setFormData(dataToSet);
         }
     }, [isOpen, initialData, sourceData, pricingRules, targetPlatform]);
 
