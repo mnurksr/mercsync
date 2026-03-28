@@ -719,6 +719,15 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                         location_inventory_map: JSON.stringify(locMap),
                         etsy_variant_id: cv.source_variant_id // Link back to source
                     }, { onConflict: 'shopify_inventory_item_id' });
+
+                // [FIX] Bidirectional Link: Update Etsy side so it also shows "Matched"
+                if (cv.source_variant_id) {
+                    await supabase
+                        .from('staging_etsy_products')
+                        .update({ shopify_variant_id: variant.id.toString() })
+                        .eq('shop_id', shop.id)
+                        .eq('etsy_variant_id', cv.source_variant_id);
+                }
             } catch (e: any) {
                 console.warn(`[Sync] Failed to add variant ${cv.title}:`, e.message);
             }
@@ -800,6 +809,16 @@ async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
                 location_inventory_map: JSON.stringify(locMap),
                 etsy_variant_id: cv ? cv.source_variant_id : dbRows[i]?.etsy_variant_id // Link back to source
             }, { onConflict: 'shopify_inventory_item_id' });
+
+        // [FIX] Bidirectional Link: Update Etsy side so it also shows "Matched"
+        const sourceEtsyVarId = cv ? cv.source_variant_id : dbRows[i]?.etsy_variant_id;
+        if (sourceEtsyVarId) {
+            await supabase
+                .from('staging_etsy_products')
+                .update({ shopify_variant_id: variant.id.toString() })
+                .eq('shop_id', shop.id)
+                .eq('etsy_variant_id', sourceEtsyVarId);
+        }
     }
 }
 
