@@ -1,47 +1,46 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type HistoryItem = {
     id: string
     action: string
     product: string | null
-    from: string | null
-    to: string | null
-    change: string
+    source: string
+    direction: string | null
+    oldStock: number | null
+    newStock: number | null
+    status: 'success' | 'failed' | 'skipped'
+    errorMessage: string | null
+    metadata: any
     time: string
-    status: 'success' | 'warning' | 'error'
+    rawTime: string
 }
 
-export async function getSyncHistory(filter: string = 'all', ownerId?: string): Promise<HistoryItem[]> {
-    let supabase;
-    let resolvedOwnerId = ownerId;
+export async function getSyncHistory(filter: string = 'all'): Promise<HistoryItem[]> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return []
 
-    if (ownerId) {
-        supabase = createAdminClient()
-    } else {
-        const context = await getValidatedUserContext()
-        supabase = context.supabase
-        resolvedOwnerId = context.ownerId
-
-        if (!resolvedOwnerId) return []
-    }
-
-    const { data: userShops } = await supabase.from('shops').select('id').eq('owner_id', resolvedOwnerId)
+    const { data: userShops } = await supabase.from('shops').select('id').eq('owner_id', ownerId)
     const shopIds = userShops?.map(s => s.id) || []
 
     if (shopIds.length === 0) return []
 
     let query = supabase
-        .from('inventory_ledger')
+        .from('sync_logs')
         .select(`
-            id, created_at, reason_code, change_amount, previous_balance, new_balance, source_platform,
+            id, source, event_type, direction,
+            old_stock, new_stock, status, error_message, metadata,
+            created_at,
             inventory_items (name)
         `)
         .in('shop_id', shopIds)
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(100)
+
+    if (filter !== 'all') {
+        query = query.eq('status', filter)
+    }
 
     const { data, error } = await query
 
@@ -49,27 +48,29 @@ export async function getSyncHistory(filter: string = 'all', ownerId?: string): 
 
     return data.map((item: any) => ({
         id: item.id,
-        action: mapReasonToAction(item.reason_code),
-        product: item.inventory_items?.name || 'Unknown',
-        from: item.source_platform || 'system',
-        to: null, // Ledger is single source usually
-        change: `${item.previous_balance} → ${item.new_balance}`,
+        action: mapEventToAction(item.event_type, item.source),
+        product: item.inventory_items?.name || null,
+        source: item.source,
+        direction: item.direction,
+        oldStock: item.old_stock,
+        newStock: item.new_stock,
+        status: item.status,
+        errorMessage: item.error_message,
+        metadata: item.metadata || {},
         time: timeAgo(new Date(item.created_at)),
-        status: 'success' // Defaulting to success
+        rawTime: item.created_at
     }))
 }
 
-function mapReasonToAction(code: string) {
+function mapEventToAction(eventType: string, source: string): string {
     const map: Record<string, string> = {
-        'ORDER': 'Order Fulfilled',
-        'RESTOCK': 'Restock',
-        'DAMAGE': 'Damage Adjustment',
-        'RETURN': 'Return Processed',
-        'ADJUSTMENT': 'Manual Adjustment',
-        'SHIPMENT': 'Shipment',
-        'RESERVATION_EXPIRED': 'Reservation Expired'
+        'stock_update': 'Stock Synchronized',
+        'price_update': 'Price Updated',
+        'order': source === 'etsy' ? 'Etsy Order Detected' : 'Shopify Order Processed',
+        'webhook': 'System Event',
+        'full_sync': 'Full Reconciliation'
     }
-    return map[code] || code
+    return map[eventType] || eventType
 }
 
 function timeAgo(date: Date) {
@@ -79,5 +80,7 @@ function timeAgo(date: Date) {
     if (minutes < 60) return `${minutes}m ago`
     const hours = Math.floor(minutes / 60)
     if (hours < 24) return `${hours}h ago`
-    return `${Math.floor(hours / 24)}d ago`
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days}d ago`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
