@@ -383,39 +383,52 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         try {
             let existingItem = null;
 
-            // Priority 1: Look by variant IDs
+            // Priority 1: Look by variant IDs (CRITICAL: Search BOTH columns for BOTH IDs to merge fragments)
             if (sVarId) {
-                const { data } = await supabase.from('inventory_items').select('id, master_stock').eq('shop_id', shop.id).eq('shopify_variant_id', sVarId).maybeSingle();
+                const { data } = await supabase.from('inventory_items')
+                    .select('id, master_stock, shopify_product_id, shopify_variant_id, etsy_listing_id, etsy_variant_id, image_url, shopify_inventory_item_id, shopify_stock_snapshot, etsy_stock_snapshot, shopify_updated_at, etsy_updated_at, location_inventory_map, selected_location_ids')
+                    .eq('shop_id', shop.id)
+                    .or(`shopify_variant_id.eq.${sVarId},etsy_variant_id.eq.${eVarId || 'NONE'}`)
+                    .maybeSingle();
                 existingItem = data;
             }
             if (!existingItem && eVarId) {
-                const { data } = await supabase.from('inventory_items').select('id, master_stock').eq('shop_id', shop.id).eq('etsy_variant_id', eVarId).maybeSingle();
+                const { data } = await supabase.from('inventory_items')
+                    .select('id, master_stock, shopify_product_id, shopify_variant_id, etsy_listing_id, etsy_variant_id, image_url, shopify_inventory_item_id, shopify_stock_snapshot, etsy_stock_snapshot, shopify_updated_at, etsy_updated_at, location_inventory_map, selected_location_ids')
+                    .eq('shop_id', shop.id)
+                    .eq('etsy_variant_id', eVarId)
+                    .maybeSingle();
                 existingItem = data;
             }
 
             // Priority 2: Look by SKU
             if (!existingItem && sku && !sku.startsWith('SKU-') && sku !== 'NO-SKU') {
-                const { data } = await supabase.from('inventory_items').select('id, master_stock').eq('shop_id', shop.id).eq('sku', sku).maybeSingle();
+                const { data } = await supabase.from('inventory_items')
+                    .select('id, master_stock, shopify_product_id, shopify_variant_id, etsy_listing_id, etsy_variant_id, image_url, shopify_inventory_item_id, shopify_stock_snapshot, etsy_stock_snapshot, shopify_updated_at, etsy_updated_at, location_inventory_map, selected_location_ids')
+                    .eq('shop_id', shop.id)
+                    .eq('sku', sku)
+                    .maybeSingle();
                 existingItem = data;
             }
 
+            // [FIX] Fragmentation Cleanup: If we have an existing item but its IDs are swapped or partial, merge them.
             const payload: any = {
                 shop_id: shop.id,
                 sku,
                 name: title,
-                shopify_product_id: sId,
-                shopify_variant_id: sVarId,
-                etsy_listing_id: eId,
-                etsy_variant_id: eVarId,
-                image_url: metadata?.image_url,
+                shopify_product_id: sId || (existingItem?.shopify_product_id),
+                shopify_variant_id: sVarId || (existingItem?.shopify_variant_id),
+                etsy_listing_id: eId || (existingItem?.etsy_listing_id),
+                etsy_variant_id: eVarId || (existingItem?.etsy_variant_id),
+                image_url: metadata?.image_url || existingItem?.image_url,
                 status: metadata?.status || 'Matching',
-                shopify_inventory_item_id: metadata?.shopify_inventory_item_id,
-                shopify_stock_snapshot: metadata?.shopify_stock_snapshot || 0,
-                etsy_stock_snapshot: metadata?.etsy_stock_snapshot || 0,
-                shopify_updated_at: metadata?.shopify_updated_at,
-                etsy_updated_at: metadata?.etsy_updated_at,
-                location_inventory_map: metadata?.location_inventory_map || {},
-                selected_location_ids: metadata?.selected_location_ids || [],
+                shopify_inventory_item_id: metadata?.shopify_inventory_item_id || existingItem?.shopify_inventory_item_id,
+                shopify_stock_snapshot: metadata?.shopify_stock_snapshot || existingItem?.shopify_stock_snapshot || 0,
+                etsy_stock_snapshot: metadata?.etsy_stock_snapshot || existingItem?.etsy_stock_snapshot || 0,
+                shopify_updated_at: metadata?.shopify_updated_at || existingItem?.shopify_updated_at,
+                etsy_updated_at: metadata?.etsy_updated_at || existingItem?.etsy_updated_at,
+                location_inventory_map: metadata?.location_inventory_map || existingItem?.location_inventory_map || {},
+                selected_location_ids: metadata?.selected_location_ids || existingItem?.selected_location_ids || [],
                 updated_at: new Date().toISOString()
             };
 
@@ -464,11 +477,16 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 selected_location_ids: sp.selected_location_ids || [],
             };
 
-            // Look for Etsy match in staging
-            const ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
+            // Look for Etsy match in staging (BIDIRECTIONAL CHECK)
+            // 1. Check if Shopify row points to Etsy
+            let ep = eProds.find(e => e.etsy_variant_id === sp.etsy_variant_id);
+            // 2. ALSO check if any Etsy row points to this Shopify row (Bidirectional trust)
+            if (!ep) {
+                ep = eProds.find(e => e.shopify_variant_id === sp.shopify_variant_id);
+            }
 
             let eId = null;
-            let eVarId = sp.etsy_variant_id; // Use the ID from Shopify staging if present
+            let eVarId = sp.etsy_variant_id || (ep ? ep.etsy_variant_id : null); 
 
             if (ep) {
                 eId = ep.etsy_listing_id;
@@ -507,18 +525,32 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             const sku = (!rawSku || rawSku === 'NO-SKU') ? `SKU-${ep.etsy_variant_id}` : rawSku;
             const title = ep.name;
 
-            const metadata = {
+            const metadata: any = {
                 image_url: ep.image_url,
                 status: 'Matching',
                 etsy_stock_snapshot: ep.stock_quantity,
                 etsy_updated_at: ep.etsy_updated_at,
             };
 
+            // If this Etsy product has a shopify_variant_id but it wasn't matched above, 
+            // it means the Shopify item might be missing from staging or filtered.
+            // We should still link them if the info is there!
+            let sId = null;
+            let sVarId = ep.shopify_variant_id;
+            if (sVarId) {
+                const spMatch = sProds.find(s => s.shopify_variant_id === sVarId);
+                if (spMatch) {
+                    sId = spMatch.shopify_product_id;
+                    metadata.shopify_stock_snapshot = spMatch.stock_quantity;
+                    metadata.shopify_updated_at = spMatch.shopify_updated_at;
+                }
+            }
+
             await upsertInvItem(
                 sku,
                 title,
-                null,
-                null,
+                sId,
+                sVarId,
                 ep.etsy_listing_id,
                 ep.etsy_variant_id,
                 metadata
