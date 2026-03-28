@@ -94,6 +94,10 @@ export async function processSync(payload: SyncPayload) {
 
         let completedSteps = 0;
 
+        // ── Phase 1.2: Reconcile Missing Links ──
+        await sendLog(job_id, 'Reconciling cross-platform links...', 8, 100);
+        await reconcileStagingLinks(shop.id);
+
         // ── Phase 1.5: Save Staging Matches ──
         await sendLog(job_id, 'Saving variant matches to staging tables...', 10, 100);
         await saveStagingMatches(shop.id, parsed.finalMatched);
@@ -316,6 +320,55 @@ async function saveStagingMatches(shopId: string, finalMatched: any[]) {
             .eq('etsy_variant_id', item.etsy_variant_id);
 
         if (etEr) console.error(`[Sync] Failed to link Etsy variant ${item.etsy_variant_id} to Shopify ${item.shopify_variant_id}:`, etEr.message);
+    }
+}
+
+// ─────────────────────────────────────────────
+// Phase 1.2: Reconcile Staging Links (The Root Fix)
+// ─────────────────────────────────────────────
+async function reconcileStagingLinks(shopId: string) {
+    console.log(`[Sync] reconcileStagingLinks started for shop ${shopId}`);
+    
+    // 1. Fetch all Shopify and Etsy staging rows
+    const { data: sRows } = await supabase.from('staging_shopify_products').select('shopify_variant_id, etsy_variant_id').eq('shop_id', shopId);
+    const { data: eRows } = await supabase.from('staging_etsy_products').select('shopify_variant_id, etsy_variant_id').eq('shop_id', shopId);
+
+    if (!sRows || !eRows) return;
+
+    // 2. Cross-reference: If Etsy row knows about Shopify but Shopify row is NULL
+    for (const er of eRows) {
+        if (er.shopify_variant_id && !er.etsy_variant_id) {
+            // Safety: Skip rows with no data
+            continue;
+        }
+
+        if (er.shopify_variant_id && er.etsy_variant_id) {
+            // Does the Shopify row know about this?
+            const sr = sRows.find(s => s.shopify_variant_id === er.shopify_variant_id);
+            if (sr && !sr.etsy_variant_id) {
+                console.log(`[Sync] Reconciling: Linking Shopify variant ${er.shopify_variant_id} to Etsy variant ${er.etsy_variant_id}`);
+                await supabase
+                    .from('staging_shopify_products')
+                    .update({ etsy_variant_id: er.etsy_variant_id })
+                    .eq('shop_id', shopId)
+                    .eq('shopify_variant_id', er.shopify_variant_id);
+            }
+        }
+    }
+
+    // 3. Cross-reference: If Shopify row knows about Etsy but Etsy row is NULL
+    for (const sr of sRows) {
+        if (sr.etsy_variant_id && sr.shopify_variant_id) {
+            const er = eRows.find(e => e.etsy_variant_id === sr.etsy_variant_id);
+            if (er && !er.shopify_variant_id) {
+                console.log(`[Sync] Reconciling: Linking Etsy variant ${sr.etsy_variant_id} to Shopify variant ${sr.shopify_variant_id}`);
+                await supabase
+                    .from('staging_etsy_products')
+                    .update({ shopify_variant_id: sr.shopify_variant_id })
+                    .eq('shop_id', shopId)
+                    .eq('etsy_variant_id', sr.etsy_variant_id);
+            }
+        }
     }
 }
 
