@@ -21,6 +21,8 @@ AND e.shopify_variant_id IS NULL;
 -- Item B: Has etsy_variant_id, no shopify_variant_id
 -- Logic: If they are linked in staging, merge B into A and delete B.
 
+DROP TABLE IF EXISTS items_to_merge_temp;
+CREATE TEMP TABLE items_to_merge_temp AS
 WITH linked_pairs AS (
     SELECT 
         s.shop_id,
@@ -32,21 +34,20 @@ WITH linked_pairs AS (
     JOIN staging_etsy_products e ON s.etsy_variant_id = e.etsy_variant_id
     WHERE s.shopify_variant_id IS NOT NULL 
     AND s.etsy_variant_id IS NOT NULL
-),
-items_to_merge AS (
-    SELECT 
-        lp.shop_id,
-        lp.shopify_variant_id,
-        lp.etsy_variant_id,
-        lp.shopify_product_id,
-        lp.etsy_listing_id,
-        i_shop.id as shopify_item_id,
-        i_etsy.id as etsy_item_id
-    FROM linked_pairs lp
-    JOIN inventory_items i_shop ON i_shop.shopify_variant_id = lp.shopify_variant_id AND i_shop.shop_id = lp.shop_id
-    JOIN inventory_items i_etsy ON i_etsy.etsy_variant_id = lp.etsy_variant_id AND i_etsy.shop_id = lp.shop_id
-    WHERE i_shop.id <> i_etsy.id -- Only if they are separate rows
 )
+SELECT 
+    lp.shop_id,
+    lp.shopify_variant_id,
+    lp.etsy_variant_id,
+    lp.shopify_product_id,
+    lp.etsy_listing_id,
+    i_shop.id as shopify_item_id,
+    i_etsy.id as etsy_item_id
+FROM linked_pairs lp
+JOIN inventory_items i_shop ON i_shop.shopify_variant_id = lp.shopify_variant_id AND i_shop.shop_id = lp.shop_id
+JOIN inventory_items i_etsy ON i_etsy.etsy_variant_id = lp.etsy_variant_id AND i_etsy.shop_id = lp.shop_id
+WHERE i_shop.id <> i_etsy.id;
+
 -- Update the "Shopify" row with Etsy data
 UPDATE inventory_items i
 SET 
@@ -54,12 +55,12 @@ SET
     etsy_listing_id = m.etsy_listing_id,
     status = 'Matching', -- Reset status to matching after merge
     updated_at = NOW()
-FROM items_to_merge m
+FROM items_to_merge_temp m
 WHERE i.id = m.shopify_item_id;
 
 -- Delete the redundant "Etsy-only" row
 DELETE FROM inventory_items
-WHERE id IN (SELECT etsy_item_id FROM items_to_merge);
+WHERE id IN (SELECT etsy_item_id FROM items_to_merge_temp);
 
 -- 3. ENSURE TRIGGER EXISTENCE (For future safety)
 CREATE OR REPLACE FUNCTION sync_shopify_to_etsy_staging()
