@@ -37,6 +37,11 @@ export type ShopSettings = {
     auto_sync_enabled: boolean
     sync_frequency: SyncFrequency
     stock_buffer: number
+    
+    // Auto Product Sync
+    auto_create_products: boolean
+    auto_update_products: boolean
+    auto_delete_products: boolean
 
     // Price
     price_sync_enabled: boolean
@@ -56,6 +61,9 @@ const DEFAULT_SETTINGS: ShopSettings = {
     auto_sync_enabled: false,
     sync_frequency: '6h',
     stock_buffer: 0,
+    auto_create_products: false,
+    auto_update_products: false,
+    auto_delete_products: false,
     price_sync_enabled: false,
     price_rules: [],
     notification_channels: { in_app: true, email: false, slack_webhook_url: null },
@@ -94,6 +102,9 @@ export async function getSettings(): Promise<ShopSettings> {
         auto_sync_enabled: settings.auto_sync_enabled ?? DEFAULT_SETTINGS.auto_sync_enabled,
         sync_frequency: settings.sync_frequency || DEFAULT_SETTINGS.sync_frequency,
         stock_buffer: settings.stock_buffer ?? DEFAULT_SETTINGS.stock_buffer,
+        auto_create_products: settings.auto_create_products ?? DEFAULT_SETTINGS.auto_create_products,
+        auto_update_products: settings.auto_update_products ?? DEFAULT_SETTINGS.auto_update_products,
+        auto_delete_products: settings.auto_delete_products ?? DEFAULT_SETTINGS.auto_delete_products,
         price_sync_enabled: settings.price_sync_enabled ?? DEFAULT_SETTINGS.price_sync_enabled,
         price_rules: settings.price_rules || DEFAULT_SETTINGS.price_rules,
         notification_channels: settings.notification_channels || DEFAULT_SETTINGS.notification_channels,

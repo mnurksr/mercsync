@@ -174,6 +174,34 @@ export async function createProduct(
 }
 
 /**
+ * Update an existing Product
+ */
+export async function updateProduct(
+    creds: ShopifyCredentials,
+    productId: string | number,
+    productPayload: any
+) {
+    return shopifyFetch(creds, `products/${productId}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ product: productPayload })
+    });
+}
+
+/**
+ * Update a specific Variant
+ */
+export async function updateVariant(
+    creds: ShopifyCredentials,
+    variantId: string | number,
+    variantPayload: any
+) {
+    return shopifyFetch(creds, `variants/${variantId}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ variant: variantPayload })
+    });
+}
+
+/**
  * Get a product from Shopify by ID
  * Replaces: GET /products/{id}.json
  */

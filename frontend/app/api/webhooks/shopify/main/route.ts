@@ -3,6 +3,7 @@ import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { handleInventoryUpdate } from '../inventory-sync';
 import { handlePriceUpdate } from '../../../sync/price-sync';
+import { handleProductSync } from '../product-sync';
 
 export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
@@ -56,12 +57,28 @@ export async function POST(req: NextRequest) {
                 }).catch((err: any) => {
                     console.error(`[Shopify Webhook] Price sync error:`, err);
                 });
+
+                // Fire-and-forget: Auto Create/Update to Etsy
+                handleProductSync(payload, topic, shop, supabase).then((result: any) => {
+                    console.log(`[Shopify Webhook] Product sync result: ${result.status} — ${result.message}`);
+                }).catch((err: any) => {
+                    console.error(`[Shopify Webhook] Product sync error:`, err);
+                });
                 break;
 
             case 'products/delete':
                 console.log(`[Shopify Webhook] Product deleted for ${shop}: ${payload.id}`);
+                
                 // Find shop to get ID
                 const { data: theShop } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
+                
+                // Fire-and-forget: Auto Delete from Etsy
+                handleProductSync(payload, topic, shop, supabase).then((result: any) => {
+                    console.log(`[Shopify Webhook] Product Delete sync result: ${result.status} — ${result.message}`);
+                }).catch((err: any) => {
+                    console.error(`[Shopify Webhook] Product Delete sync error:`, err);
+                });
+
                 if (theShop) {
                     // Remove from staging
                     await supabase

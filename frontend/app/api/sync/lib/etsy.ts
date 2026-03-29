@@ -212,6 +212,35 @@ export async function createListing(
 }
 
 /**
+ * Update an existing Etsy listing
+ * Replaces: PUT /shops/{shop_id}/listings/{listing_id}
+ */
+export async function updateListing(
+    shopId: string | number,
+    listingId: string | number,
+    accessToken: string,
+    listingPayload: any
+) {
+    return etsyFetch(`/shops/${shopId}/listings/${listingId}`, accessToken, {
+        method: 'PUT',
+        body: JSON.stringify(listingPayload)
+    });
+}
+
+/**
+ * Delete an Etsy listing
+ * Replaces: DELETE /application/listings/{listing_id}
+ */
+export async function deleteListing(
+    listingId: string | number,
+    accessToken: string
+) {
+    return etsyFetch(`/listings/${listingId}`, accessToken, {
+        method: 'DELETE'
+    });
+}
+
+/**
  * Upload an image to an Etsy listing
  * Replaces: POST /shops/{id}/listings/{listing_id}/images
  *

@@ -60,6 +60,9 @@ export default function SettingsPage() {
         auto_sync_enabled: false,
         sync_frequency: '1h',
         stock_buffer: 0,
+        auto_create_products: false,
+        auto_update_products: false,
+        auto_delete_products: false,
         price_sync_enabled: false,
         price_rules: [],
         notification_channels: { in_app: true, email: false, slack_webhook_url: null },
@@ -445,6 +448,36 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                     <ToggleSwitch
                         enabled={settings.auto_sync_enabled}
                         onChange={(v) => updateField('auto_sync_enabled', v)}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    label="Auto-Create Products"
+                    description="When a new product is created on the source platform, automatically clone it to the destination platform as a Draft."
+                >
+                    <ToggleSwitch
+                        enabled={settings.auto_create_products}
+                        onChange={(v) => updateField('auto_create_products', v)}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    label="Auto-Update Products"
+                    description="When a product's title, price, or description changes safely replicate changes to the matched platform."
+                >
+                    <ToggleSwitch
+                        enabled={settings.auto_update_products}
+                        onChange={(v) => updateField('auto_update_products', v)}
+                    />
+                </SettingRow>
+
+                <SettingRow
+                    label="Auto-Delete Products"
+                    description="When a product is deleted safely delete or deactivate the matched item on the destination platform."
+                >
+                    <ToggleSwitch
+                        enabled={settings.auto_delete_products}
+                        onChange={(v) => updateField('auto_delete_products', v)}
                     />
                 </SettingRow>
 

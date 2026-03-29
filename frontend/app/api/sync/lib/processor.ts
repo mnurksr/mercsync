@@ -741,7 +741,7 @@ async function syncEtsyStock(shop: any, update: StockUpdate, allUpdates: StockUp
 // Phase 2: Clone to Shopify
 // ─────────────────────────────────────────────
 
-async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
+export async function cloneToShopify(shop: any, product: CloneProduct, jobId: string) {
     const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
     // 1. Get source product from staging_etsy_products
