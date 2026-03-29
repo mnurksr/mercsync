@@ -20,7 +20,7 @@ import {
     type ShopSettings, type SyncDirection,
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
-import { clearStagingData, resetMatches } from '../../actions/advanced';
+import { wipeAllAppData } from '../../actions/advanced';
 
 // ─── Tab definitions ─────────────────────────
 
@@ -934,34 +934,28 @@ function BillingTab({ stores }: { stores: any }) {
 
 function AdvancedTab() {
     const toast = useToast();
-    const [clearing, setClearing] = useState(false);
-    const [resetting, setResetting] = useState(false);
+    const router = useRouter();
+    const [wiping, setWiping] = useState(false);
 
-    const handleClearData = async () => {
-        if (!confirm('Are you sure you want to clear all staging data? This will remove all imported products from the app but will NOT delete them from Shopify or Etsy.')) return;
-        setClearing(true);
+    const handleWipeData = async () => {
+        if (!confirm('🚨 WARNING: Are you strictly sure you want to wipe all application data? This will delete all imported products, inventory mappings, and staging data from the application (Your actual Shopify/Etsy stores will NOT be affected).')) return;
+        
+        setWiping(true);
         try {
-            const res = await clearStagingData();
-            if (res.success) toast.success(res.message);
-            else toast.error(res.message);
+            const res = await wipeAllAppData();
+            if (res.success) {
+                toast.success('App data wiped successfully. Redirecting to import page...');
+                // Redirect user to products page so they can re-import
+                setTimeout(() => {
+                    router.push('/dashboard/products');
+                }, 1500);
+            } else {
+                toast.error(res.message);
+                setWiping(false);
+            }
         } catch (e: any) {
             toast.error(e.message);
-        } finally {
-            setClearing(false);
-        }
-    };
-
-    const handleResetMatches = async () => {
-        if (!confirm('Are you sure you want to reset all product matches? You will need to link your products again before they can sync.')) return;
-        setResetting(true);
-        try {
-            const res = await resetMatches();
-            if (res.success) toast.success(res.message);
-            else toast.error(res.message);
-        } catch (e: any) {
-            toast.error(e.message);
-        } finally {
-            setResetting(false);
+            setWiping(false);
         }
     };
 
@@ -972,28 +966,15 @@ function AdvancedTab() {
             <div className="bg-white rounded-2xl border border-red-200 divide-y divide-red-100">
                 <div className="p-6 flex items-center justify-between">
                     <div>
-                        <h3 className="font-semibold text-gray-900">Clear Staging Data</h3>
-                        <p className="text-sm text-gray-500">Remove all imported product data from staging tables. Your live products won&apos;t be affected.</p>
+                        <h3 className="font-semibold text-gray-900">Wipe All App Data</h3>
+                        <p className="text-sm text-gray-500">Completely resets your testing data. Deletes all imported staging data, inventory items, and matches from the app. Use this to start fresh.</p>
                     </div>
                     <button 
-                        onClick={handleClearData}
-                        disabled={clearing}
-                        className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                        onClick={handleWipeData}
+                        disabled={wiping}
+                        className="px-4 py-2 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
                     >
-                        {clearing ? 'Clearing...' : 'Clear Data'}
-                    </button>
-                </div>
-                <div className="p-6 flex items-center justify-between">
-                    <div>
-                        <h3 className="font-semibold text-gray-900">Reset All Matches</h3>
-                        <p className="text-sm text-gray-500">Remove all product matches between Shopify and Etsy. You&apos;ll need to re-match them.</p>
-                    </div>
-                    <button 
-                        onClick={handleResetMatches}
-                        disabled={resetting}
-                        className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-                    >
-                        {resetting ? 'Resetting...' : 'Reset Matches'}
+                        {wiping ? 'Wiping Data...' : 'Wipe Data & Restart'}
                     </button>
                 </div>
             </div>

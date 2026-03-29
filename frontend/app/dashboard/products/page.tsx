@@ -23,6 +23,7 @@ export default function ProductsPage() {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
     const [items, setItems] = useState<ListingItem[]>([]);
     const [stats, setStats] = useState({ total: 0, unmatched: 0, outOfStock: 0 });
 
@@ -113,6 +114,51 @@ export default function ProductsPage() {
             toast.error('Failed to load products.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleReimport = async () => {
+        setIsImporting(true);
+        toast.info('Starting fresh import from stores, please do not close the page...');
+        try {
+            const activeUserId = user?.id;
+            if (!activeUserId) throw new Error('Not authenticated');
+
+            const { data: shop } = await supabase.from('shops').select('shop_domain, etsy_shop_id').eq('owner_id', activeUserId).maybeSingle();
+            if (!shop) throw new Error('Shop configuration not found');
+
+            const importPromises = [
+                fetch('/api/sync/shopify-import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ownerId: activeUserId, options: { shopify: ['active', 'draft'] } })
+                })
+            ];
+
+            if (shop.etsy_shop_id) {
+                importPromises.push(
+                    fetch('/api/sync/etsy-import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ owner_id: activeUserId, shop_domain: shop.etsy_shop_id, filters: ['active', 'draft'] })
+                    })
+                );
+            }
+
+            const responses = await Promise.all(importPromises);
+            if (!responses.every(r => r.ok)) {
+                throw new Error('One or more store imports failed. Please check your connections.');
+            }
+
+            toast.success('Successfully imported base data. Redirecting to matching interface...');
+            setTimeout(() => {
+                router.push('/dashboard/mapper');
+            }, 1500);
+        } catch (e: any) {
+            console.error('Re-import error:', e);
+            toast.error(e.message || 'Failed to trigger import');
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -327,7 +373,17 @@ export default function ProductsPage() {
 
                 {/* Platform Toggle */}
                 {/* Header Actions */}
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
+                    <button
+                        onClick={handleReimport}
+                        disabled={isImporting || isLoading}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 hover:bg-white hover:border-gray-300 rounded-xl text-sm font-semibold shadow-sm transition-all animate-in fade-in"
+                        title="Fetch latest updates from active stores"
+                    >
+                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <RefreshCw className="w-4 h-4" />}
+                        Sync Products
+                    </button>
+
                     {selectedItems.size > 0 && (
                         <button
                             onClick={handleBulkClone}
@@ -471,11 +527,30 @@ export default function ProductsPage() {
                                 ))
                             ) : filteredItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center text-gray-500">
-                                        <div className="flex flex-col items-center justify-center">
-                                            <Package className="w-12 h-12 text-gray-300 mb-3" />
-                                            <p className="text-lg font-medium text-gray-900">No products found</p>
-                                            <p className="text-sm mt-1">Try adjusting your search or platform view.</p>
+                                    <td colSpan={7} className="px-6 py-20 text-center text-gray-500 bg-white">
+                                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                                            <div className="w-16 h-16 bg-gray-50 flex items-center justify-center rounded-2xl mb-4 border border-gray-100 shadow-sm">
+                                                <Package className="w-8 h-8 text-gray-400" />
+                                            </div>
+                                            {stats.total === 0 ? (
+                                                <>
+                                                    <p className="text-xl font-bold text-gray-900 mb-2">No Products in Database</p>
+                                                    <p className="text-sm text-gray-500 mb-8 max-w-xs text-center">It looks like your staging database is empty. You need to fetch products from your connected stores to get started.</p>
+                                                    <button 
+                                                        onClick={handleReimport} 
+                                                        disabled={isImporting} 
+                                                        className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
+                                                    >
+                                                        {isImporting ? <Loader2 className="w-5 h-5 animate-spin"/> : <RefreshCw className="w-5 h-5" />}
+                                                        {isImporting ? 'Fetching...' : 'Fetch Store Products'}
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="text-lg font-bold text-gray-900 mb-1">No products found</p>
+                                                    <p className="text-sm">Try adjusting your search or platform view filter.</p>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
