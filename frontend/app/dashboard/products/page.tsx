@@ -7,7 +7,8 @@ import { getConnectedShop } from '../../actions/shop';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
-    ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy, Pencil, RefreshCw
+    ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy, Pencil, RefreshCw,
+    Archive, FileText, AlertCircle
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
 import { useAuth } from '@/components/AuthProvider';
@@ -51,6 +52,19 @@ export default function ProductsPage() {
     // Shop Metadata
     const [shopCurrencies, setShopCurrencies] = useState<{ shopify: string, etsy: string }>({ shopify: 'USD', etsy: 'USD' });
     const [pricingRules, setPricingRules] = useState<any[]>([]);
+
+    // Import Modal
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [shopifyFilters, setShopifyFilters] = useState<string[]>(['active', 'draft']);
+    const [etsyFilters, setEtsyFilters] = useState<string[]>(['active', 'draft']);
+
+    const toggleFilter = (platform: 'shopify' | 'etsy', filter: string) => {
+        if (platform === 'shopify') {
+            setShopifyFilters(prev => prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter]);
+        } else {
+            setEtsyFilters(prev => prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter]);
+        }
+    };
 
     useEffect(() => {
         loadData();
@@ -119,34 +133,50 @@ export default function ProductsPage() {
     };
 
     const handleReimport = async () => {
+        setShowImportModal(false);
         setIsImporting(true);
         toast.info('Starting fresh import from stores, please do not close the page...');
         try {
             const activeUserId = await getUserId();
             if (!activeUserId) throw new Error('Not authenticated');
 
-            // Server action kullan - iFrame içinde browser Supabase güvenilmez
             const shopInfo = await getConnectedShop('shopify');
             if (!shopInfo.connected || !shopInfo.shop_domain) throw new Error('Shop configuration not found');
 
             const etsyInfo = await getConnectedShop('etsy');
 
-            const importPromises = [
-                fetch('/api/sync/shopify-import', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ownerId: activeUserId, options: { shopify: ['active', 'draft'] } })
-                })
-            ];
+            if (shopifyFilters.length === 0 && etsyFilters.length === 0) {
+                toast.warning('Lütfen en az bir ürün tipi seçin.');
+                setIsImporting(false);
+                return;
+            }
 
-            if (etsyInfo.connected && etsyInfo.shop_domain) {
+            const importPromises = [];
+
+            if (shopifyFilters.length > 0) {
+                importPromises.push(
+                    fetch('/api/sync/shopify-import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ownerId: activeUserId, options: { shopify: shopifyFilters } })
+                    })
+                );
+            }
+
+            if (etsyInfo.connected && etsyInfo.shop_domain && etsyFilters.length > 0) {
                 importPromises.push(
                     fetch('/api/sync/etsy-import', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ owner_id: activeUserId, shop_domain: etsyInfo.shop_domain, filters: ['active', 'draft'] })
+                        body: JSON.stringify({ owner_id: activeUserId, shop_domain: etsyInfo.shop_domain, filters: etsyFilters })
                     })
                 );
+            }
+
+            if (importPromises.length === 0) {
+                toast.warning('İçe aktarılacak mağaza bulunamadı.');
+                setIsImporting(false);
+                return;
             }
 
             const responses = await Promise.all(importPromises);
@@ -379,7 +409,7 @@ export default function ProductsPage() {
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
                     <button
-                        onClick={handleReimport}
+                        onClick={() => setShowImportModal(true)}
                         disabled={isImporting || isLoading}
                         className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 hover:bg-white hover:border-gray-300 rounded-xl text-sm font-semibold shadow-sm transition-all animate-in fade-in"
                         title="Fetch latest updates from active stores"
@@ -541,7 +571,7 @@ export default function ProductsPage() {
                                                     <p className="text-xl font-bold text-gray-900 mb-2">No Products in Database</p>
                                                     <p className="text-sm text-gray-500 mb-8 max-w-xs text-center">It looks like your staging database is empty. You need to fetch products from your connected stores to get started.</p>
                                                     <button 
-                                                        onClick={handleReimport} 
+                                                        onClick={() => setShowImportModal(true)} 
                                                         disabled={isImporting} 
                                                         className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
                                                     >
@@ -787,6 +817,88 @@ export default function ProductsPage() {
             </div>
 
             {/* Modals */}
+
+            {/* Import Filter Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowImportModal(false)}>
+                    <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900">Import Options</h2>
+                                    <p className="text-sm text-gray-500 mt-0.5">Hangi ürün tiplerini dahil etmek istiyorsun?</p>
+                                </div>
+                                <button onClick={() => setShowImportModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><X className="w-4 h-4 text-gray-400" /></button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-2 gap-6">
+                            {/* Shopify */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <ShoppingBag className="w-4 h-4 text-blue-600" />
+                                    <span className="text-sm font-bold text-gray-800">Shopify</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {[
+                                        { key: 'active', label: 'Active', icon: <Box className="w-3.5 h-3.5 text-green-600" />, color: 'bg-green-50 border-green-100' },
+                                        { key: 'draft', label: 'Draft', icon: <FileText className="w-3.5 h-3.5 text-gray-500" />, color: 'bg-gray-50 border-gray-100' },
+                                        { key: 'archived', label: 'Archived', icon: <Archive className="w-3.5 h-3.5 text-orange-500" />, color: 'bg-orange-50 border-orange-100' },
+                                    ].map(f => (
+                                        <button
+                                            key={f.key}
+                                            onClick={() => toggleFilter('shopify', f.key)}
+                                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${shopifyFilters.includes(f.key) ? `${f.color} ring-1 ring-blue-400` : 'bg-white border-gray-100 opacity-50'}`}
+                                        >
+                                            <div className="flex items-center gap-2">{f.icon}<span className="text-sm font-medium text-gray-700">{f.label}</span></div>
+                                            {shopifyFilters.includes(f.key) && <Check className="w-4 h-4 text-blue-600" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Etsy */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Store className="w-4 h-4 text-orange-500" />
+                                    <span className="text-sm font-bold text-gray-800">Etsy</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {[
+                                        { key: 'active', label: 'Active', icon: <Box className="w-3.5 h-3.5 text-green-600" />, color: 'bg-green-50 border-green-100' },
+                                        { key: 'draft', label: 'Draft', icon: <FileText className="w-3.5 h-3.5 text-gray-500" />, color: 'bg-gray-50 border-gray-100' },
+                                        { key: 'expired', label: 'Expired', icon: <AlertCircle className="w-3.5 h-3.5 text-red-500" />, color: 'bg-red-50 border-red-100' },
+                                        { key: 'inactive', label: 'Inactive', icon: <AlertCircle className="w-3.5 h-3.5 text-gray-400" />, color: 'bg-gray-50 border-gray-100' },
+                                    ].map(f => (
+                                        <button
+                                            key={f.key}
+                                            onClick={() => toggleFilter('etsy', f.key)}
+                                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${etsyFilters.includes(f.key) ? `${f.color} ring-1 ring-orange-400` : 'bg-white border-gray-100 opacity-50'}`}
+                                        >
+                                            <div className="flex items-center gap-2">{f.icon}<span className="text-sm font-medium text-gray-700">{f.label}</span></div>
+                                            {etsyFilters.includes(f.key) && <Check className="w-4 h-4 text-orange-500" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex justify-end gap-3">
+                            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">İptal</button>
+                            <button
+                                onClick={handleReimport}
+                                disabled={isImporting || (shopifyFilters.length === 0 && etsyFilters.length === 0)}
+                                className="px-6 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                {isImporting ? 'İçe Aktarılıyor...' : 'Başlat'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Clone Modal */}
             <CloneModal
                 isOpen={cloneModal.isOpen}
                 onClose={() => setCloneModal({ isOpen: false, sourceData: null, targetPlatform: 'shopify', initialData: undefined, targetId: undefined })}
