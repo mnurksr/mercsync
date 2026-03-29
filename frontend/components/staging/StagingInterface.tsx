@@ -2570,6 +2570,31 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 confirmLabel="Yes, Go Back"
                 cancelLabel="Cancel"
             />
+
+            {/* Global Saving Overlay */}
+            {savingOverlay && (
+                <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                    <div className="bg-white rounded-2xl p-8 flex flex-col items-center max-w-sm w-full shadow-2xl">
+                        {savingOverlay === 'loading' ? (
+                            <>
+                                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-6">
+                                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Saving Matches...</h3>
+                                <p className="text-center text-sm text-gray-500">Please wait while we secure your matched products.</p>
+                            </>
+                        ) : (
+                            <>
+                                <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mb-6 text-green-600">
+                                    <Check className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Matches Saved!</h3>
+                                <p className="text-center text-sm text-gray-500">Redirecting to products dashboard...</p>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

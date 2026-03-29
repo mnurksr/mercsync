@@ -18,7 +18,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
 
   // Hide global header on these routes as they have their own implementation
   const hideHeaderRoutes = ['/login', '/', '/dashboard', '/privacy', '/terms'];
-  const shouldHideHeader = hideHeaderRoutes.includes(pathname) || pathname.startsWith('/dashboard') || pathname.startsWith('/setup') || pathname.startsWith('/billing');
+  const shouldHideHeader = hideHeaderRoutes.includes(pathname) || pathname.startsWith('/dashboard') || pathname.startsWith('/setup') || pathname.startsWith('/billing') || pathname.startsWith('/staging');
 
   if (shouldHideHeader) return <>{children}</>;
 
