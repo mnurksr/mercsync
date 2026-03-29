@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPlatformListings, getInventoryStats, getUserId, type ListingItem } from '../../actions/inventory';
+import { getConnectedShop } from '../../actions/shop';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
@@ -124,8 +125,11 @@ export default function ProductsPage() {
             const activeUserId = await getUserId();
             if (!activeUserId) throw new Error('Not authenticated');
 
-            const { data: shop } = await supabase.from('shops').select('shop_domain, etsy_shop_id').eq('owner_id', activeUserId).maybeSingle();
-            if (!shop) throw new Error('Shop configuration not found');
+            // Server action kullan - iFrame içinde browser Supabase güvenilmez
+            const shopInfo = await getConnectedShop('shopify');
+            if (!shopInfo.connected || !shopInfo.shop_domain) throw new Error('Shop configuration not found');
+
+            const etsyInfo = await getConnectedShop('etsy');
 
             const importPromises = [
                 fetch('/api/sync/shopify-import', {
@@ -135,12 +139,12 @@ export default function ProductsPage() {
                 })
             ];
 
-            if (shop.etsy_shop_id) {
+            if (etsyInfo.connected && etsyInfo.shop_domain) {
                 importPromises.push(
                     fetch('/api/sync/etsy-import', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ owner_id: activeUserId, shop_domain: shop.etsy_shop_id, filters: ['active', 'draft'] })
+                        body: JSON.stringify({ owner_id: activeUserId, shop_domain: etsyInfo.shop_domain, filters: ['active', 'draft'] })
                     })
                 );
             }
