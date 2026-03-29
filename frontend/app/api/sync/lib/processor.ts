@@ -61,15 +61,9 @@ type ParsedPayload = {
 
 // ─────────────────────────────────────────────
 // Entry Point
-import fs from 'fs';
-
 export async function processSync(payload: SyncPayload) {
     const { job_id, user_id, initial_state, final_state } = payload;
     console.log(`[Sync] processSync started for job ${job_id} with user ${user_id}`);
-    try {
-        fs.writeFileSync('/tmp/payload.json', JSON.stringify(payload, null, 2));
-    } catch (e) { }
-    console.dir({ initial_state, final_state }, { depth: null }); // DEBUG LOG
 
     try {
         // 1. Parse the payload (same logic as "Parse & Prepare Data1" in n8n)

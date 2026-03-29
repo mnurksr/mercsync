@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
                     .from('shop_settings')
                     .select('auto_sync_enabled, sync_direction, stock_buffer')
                     .eq('shop_id', shop.id)
-                    .single();
+                    .maybeSingle();
 
                 if (!settings?.auto_sync_enabled) {
                     console.log(`${logPrefix} Auto-sync disabled for shop ${shop.id}. Skipping.`);

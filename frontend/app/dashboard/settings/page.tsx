@@ -20,6 +20,7 @@ import {
     type ShopSettings, type SyncDirection,
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
+import { clearStagingData, resetMatches } from '../../actions/advanced';
 
 // ─── Tab definitions ─────────────────────────
 
@@ -932,6 +933,38 @@ function BillingTab({ stores }: { stores: any }) {
 // ─── Advanced Tab ────────────────────────────
 
 function AdvancedTab() {
+    const toast = useToast();
+    const [clearing, setClearing] = useState(false);
+    const [resetting, setResetting] = useState(false);
+
+    const handleClearData = async () => {
+        if (!confirm('Are you sure you want to clear all staging data? This will remove all imported products from the app but will NOT delete them from Shopify or Etsy.')) return;
+        setClearing(true);
+        try {
+            const res = await clearStagingData();
+            if (res.success) toast.success(res.message);
+            else toast.error(res.message);
+        } catch (e: any) {
+            toast.error(e.message);
+        } finally {
+            setClearing(false);
+        }
+    };
+
+    const handleResetMatches = async () => {
+        if (!confirm('Are you sure you want to reset all product matches? You will need to link your products again before they can sync.')) return;
+        setResetting(true);
+        try {
+            const res = await resetMatches();
+            if (res.success) toast.success(res.message);
+            else toast.error(res.message);
+        } catch (e: any) {
+            toast.error(e.message);
+        } finally {
+            setResetting(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
             <SectionHeader title="Advanced" description="Danger zone — use with caution" />
@@ -942,8 +975,12 @@ function AdvancedTab() {
                         <h3 className="font-semibold text-gray-900">Clear Staging Data</h3>
                         <p className="text-sm text-gray-500">Remove all imported product data from staging tables. Your live products won&apos;t be affected.</p>
                     </div>
-                    <button className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors">
-                        Clear Data
+                    <button 
+                        onClick={handleClearData}
+                        disabled={clearing}
+                        className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                        {clearing ? 'Clearing...' : 'Clear Data'}
                     </button>
                 </div>
                 <div className="p-6 flex items-center justify-between">
@@ -951,8 +988,12 @@ function AdvancedTab() {
                         <h3 className="font-semibold text-gray-900">Reset All Matches</h3>
                         <p className="text-sm text-gray-500">Remove all product matches between Shopify and Etsy. You&apos;ll need to re-match them.</p>
                     </div>
-                    <button className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors">
-                        Reset Matches
+                    <button 
+                        onClick={handleResetMatches}
+                        disabled={resetting}
+                        className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                        {resetting ? 'Resetting...' : 'Reset Matches'}
                     </button>
                 </div>
             </div>

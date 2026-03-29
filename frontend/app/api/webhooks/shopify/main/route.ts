@@ -60,11 +60,32 @@ export async function POST(req: NextRequest) {
 
             case 'products/delete':
                 console.log(`[Shopify Webhook] Product deleted for ${shop}: ${payload.id}`);
+                // Find shop to get ID
+                const { data: theShop } = await supabase.from('shops').select('id').eq('shop_domain', shop).single();
+                if (theShop) {
+                    // Remove from staging
+                    await supabase
+                        .from('staging_shopify_products')
+                        .delete()
+                        .eq('shop_id', theShop.id)
+                        .eq('shopify_product_id', payload.id.toString());
+                    
+                    // Remove from inventory_items
+                    await supabase
+                        .from('inventory_items')
+                        .delete()
+                        .eq('shop_id', theShop.id)
+                        .eq('shopify_product_id', payload.id.toString());
+                        
+                    console.log(`[Shopify Webhook] Cleaned up DB records for deleted product ${payload.id}`);
+                }
                 break;
 
             case 'orders/create':
             case 'orders/updated':
-                console.log(`[Shopify Webhook] Order ${topic} for ${shop}: ${payload.id}`);
+                // Note: Shopify automatically reduces inventory and fires `inventory_levels/update` 
+                // when an order is created. We rely on that webhook for sync instead of this one.
+                console.log(`[Shopify Webhook] Order ${topic} for ${shop}: ${payload.id}. Stock handled via inventory_levels/update.`);
                 break;
 
             case 'inventory_levels/update':
