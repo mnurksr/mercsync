@@ -55,8 +55,8 @@ export default function ProductsPage() {
 
     // Import Modal
     const [showImportModal, setShowImportModal] = useState(false);
-    const [shopifyFilters, setShopifyFilters] = useState<string[]>(['active', 'draft']);
-    const [etsyFilters, setEtsyFilters] = useState<string[]>(['active', 'draft']);
+    const [shopifyFilters, setShopifyFilters] = useState<string[]>(['active']);
+    const [etsyFilters, setEtsyFilters] = useState<string[]>(['active']);
 
     const toggleFilter = (platform: 'shopify' | 'etsy', filter: string) => {
         if (platform === 'shopify') {
@@ -146,7 +146,7 @@ export default function ProductsPage() {
             const etsyInfo = await getConnectedShop('etsy');
 
             if (shopifyFilters.length === 0 && etsyFilters.length === 0) {
-                toast.warning('Lütfen en az bir ürün tipi seçin.');
+                toast.warning('Please select at least one product type to import.');
                 setIsImporting(false);
                 return;
             }
@@ -174,7 +174,7 @@ export default function ProductsPage() {
             }
 
             if (importPromises.length === 0) {
-                toast.warning('İçe aktarılacak mağaza bulunamadı.');
+                toast.warning('No stores available to import from.');
                 setIsImporting(false);
                 return;
             }
@@ -826,7 +826,7 @@ export default function ProductsPage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h2 className="text-lg font-bold text-gray-900">Import Options</h2>
-                                    <p className="text-sm text-gray-500 mt-0.5">Hangi ürün tiplerini dahil etmek istiyorsun?</p>
+                                    <p className="text-sm text-gray-500 mt-0.5">Select which product types to include in the import.</p>
                                 </div>
                                 <button onClick={() => setShowImportModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><X className="w-4 h-4 text-gray-400" /></button>
                             </div>
@@ -884,14 +884,14 @@ export default function ProductsPage() {
                         </div>
 
                         <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex justify-end gap-3">
-                            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">İptal</button>
+                            <button onClick={() => setShowImportModal(false)} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
                             <button
                                 onClick={handleReimport}
                                 disabled={isImporting || (shopifyFilters.length === 0 && etsyFilters.length === 0)}
                                 className="px-6 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
                             >
                                 {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                {isImporting ? 'İçe Aktarılıyor...' : 'Başlat'}
+                                {isImporting ? 'Importing...' : 'Start Import'}
                             </button>
                         </div>
                     </div>
