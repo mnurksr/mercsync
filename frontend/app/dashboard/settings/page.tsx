@@ -14,7 +14,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations } from '../../actions/shop';
+import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations, saveShopifyLocations, getShopMainLocationId } from '../../actions/shop';
 import {
     getSettings, updateSettings,
     type ShopSettings, type SyncDirection,
@@ -117,7 +117,10 @@ export default function SettingsPage() {
 
             // Load locations if Shopify connected
             if (shopify.connected) {
-                const locResult = await fetchShopifyLocations();
+                const [locResult, savedPrimaryId] = await Promise.all([
+                    fetchShopifyLocations(),
+                    getShopMainLocationId()
+                ]);
                 if (locResult.success && locResult.data) {
                     const locs = locResult.data.map((l: any) => ({
                         id: l.id?.toString(),
@@ -127,10 +130,21 @@ export default function SettingsPage() {
                     }));
                     setLocations(locs);
 
-                    // Set selected locations from staging data
-                    const activeLocs = locs.filter(l => l.active).map(l => l.id);
-                    setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : locs.length > 0 ? [locs[0].id] : []);
-                    setPrimaryLocationId(activeLocs.length > 0 ? activeLocs[0] : locs.length > 0 ? locs[0].id : null);
+                    // Use saved primary from DB if available, otherwise fall back to first active
+                    if (savedPrimaryId) {
+                        setPrimaryLocationId(savedPrimaryId);
+                        // Select all active locations, ensuring the saved primary is included
+                        const activeLocs = locs.filter(l => l.active).map(l => l.id);
+                        const selected = activeLocs.includes(savedPrimaryId)
+                            ? activeLocs
+                            : [savedPrimaryId, ...activeLocs];
+                        setSelectedLocationIds(selected.length > 0 ? selected : locs.length > 0 ? [locs[0].id] : []);
+                    } else {
+                        // No saved primary — fall back to first active location
+                        const activeLocs = locs.filter(l => l.active).map(l => l.id);
+                        setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : locs.length > 0 ? [locs[0].id] : []);
+                        setPrimaryLocationId(activeLocs.length > 0 ? activeLocs[0] : locs.length > 0 ? locs[0].id : null);
+                    }
                 }
             }
         } catch (error) {
@@ -169,20 +183,11 @@ export default function SettingsPage() {
                 ...selectedLocationIds.filter(id => id !== primaryLocationId)
             ];
 
-            const res = await fetch('/api/sync/location-id', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    owner_id: user?.id,
-                    shopify_location_ids: sortedLocations
-                })
-            });
-
-            const data = await res.json();
-            if (data.success) {
+            const result = await saveShopifyLocations(sortedLocations);
+            if (result.success) {
                 toast.success('Location settings saved');
             } else {
-                toast.error(data.error || 'Failed to save locations');
+                toast.error(result.message || 'Failed to save locations');
             }
         } catch (err: any) {
             toast.error(`Error: ${err.message}`);

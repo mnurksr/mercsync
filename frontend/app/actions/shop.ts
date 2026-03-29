@@ -322,3 +322,114 @@ export async function syncShopCurrencies(): Promise<{ shopify: string; etsy: str
     return { shopify: 'USD', etsy: 'USD' }
 }
 
+/**
+ * Server Action: Save Shopify location settings.
+ * Replaces the broken client-side fetch to /api/sync/location-id
+ * which fails in Shopify iframe because user?.id is null.
+ * 
+ * Uses getValidatedUserContext() to resolve the owner via cookie.
+ */
+export async function saveShopifyLocations(
+    locationIds: string[]
+): Promise<{ success: boolean; message: string }> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+
+    if (!ownerId) {
+        return { success: false, message: 'Not authenticated' }
+    }
+
+    if (!locationIds || locationIds.length === 0) {
+        return { success: false, message: 'No locations selected' }
+    }
+
+    try {
+        // 1. Get shop
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id, shop_domain, access_token')
+            .eq('owner_id', ownerId)
+            .maybeSingle()
+
+        if (!shop || !shop.shop_domain || !shop.access_token) {
+            return { success: false, message: 'Shop not found or not fully connected' }
+        }
+
+        // 2. Save primary location (first in the array) to shops.main_location_id
+        const primaryLocationId = locationIds[0]
+        await supabase
+            .from('shops')
+            .update({ main_location_id: primaryLocationId })
+            .eq('id', shop.id)
+
+        // 3. Fetch inventory levels for all selected locations from Shopify
+        const url = `https://${shop.shop_domain}/admin/api/2024-01/inventory_levels.json?location_ids=${locationIds.join(',')}`
+        const res = await fetch(url, {
+            headers: {
+                'X-Shopify-Access-Token': shop.access_token,
+                'Content-Type': 'application/json'
+            }
+        })
+
+        if (!res.ok) {
+            console.error('[saveShopifyLocations] Shopify API error:', await res.text())
+            // Still return success — location was saved, just stock aggregation failed
+            return { success: true, message: 'Location saved. Stock aggregation skipped due to API error.' }
+        }
+
+        const levelsData = await res.json()
+        const levels = levelsData.inventory_levels || []
+
+        // 4. Aggregate stock by inventory_item_id
+        const stockMap: Record<string, number> = {}
+        levels.forEach((level: any) => {
+            const itemId = level.inventory_item_id.toString()
+            const available = level.available || 0
+            stockMap[itemId] = (stockMap[itemId] || 0) + available
+        })
+
+        // 5. Update staging products with aggregated stock
+        const adminSupabase = createAdminClient()
+        const aggregatedItems = Object.keys(stockMap)
+        const chunkSize = 50
+
+        for (let i = 0; i < aggregatedItems.length; i += chunkSize) {
+            const chunk = aggregatedItems.slice(i, i + chunkSize)
+            await Promise.all(chunk.map(async (itemId: string) => {
+                const totalStock = stockMap[itemId]
+                await adminSupabase
+                    .from('staging_shopify_products')
+                    .update({
+                        stock_quantity: totalStock,
+                        selected_location_ids: locationIds,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('shopify_inventory_item_id', itemId)
+            }))
+        }
+
+        return {
+            success: true,
+            message: `Updated stock levels for ${aggregatedItems.length} items across ${locationIds.length} locations.`
+        }
+    } catch (e: any) {
+        console.error('[saveShopifyLocations] Error:', e)
+        return { success: false, message: e.message }
+    }
+}
+
+/**
+ * Server Action: Get the saved main_location_id from the shops table.
+ * Used by the Settings Locations tab to correctly show the primary location.
+ */
+export async function getShopMainLocationId(): Promise<string | null> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return null
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('main_location_id')
+        .eq('owner_id', ownerId)
+        .maybeSingle()
+
+    return shop?.main_location_id?.toString() || null
+}
