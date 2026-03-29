@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
 import { cloneToShopify } from '../../sync/lib/processor';
+import { createNotification } from '@/app/actions/notifications';
 
 export const maxDuration = 300; // Allows up to 5 mins execution
 
@@ -105,8 +106,15 @@ export async function GET(req: NextRequest) {
                                         price: newPrice
                                     });
                                 }
-                            } catch(e) {
+                            } catch(e: any) {
                                 console.error(`[Etsy Products Cron] Failed to update Shopify Product ${matched.shopify_product_id}:`, e);
+                                await createNotification(
+                                    supabase,
+                                    shop.id,
+                                    'sync_failed',
+                                    'Auto-Update Failed',
+                                    `Failed to update Shopify product ${matched.shopify_product_id} from Etsy listing ${listingId}. Error: ${e.message}`
+                                );
                             }
                         } else if (!matched && auto_create_products) {
                             console.log(`[Etsy Products Cron] Auto-Creating Shopify Product from Etsy ${listingId}`);
@@ -134,8 +142,15 @@ export async function GET(req: NextRequest) {
                                     }]
                                 };
                                 await cloneToShopify(shop, cloneProduct, 'cron-job');
-                            } catch(e) {
+                            } catch(e: any) {
                                 console.error(`[Etsy Products Cron] Failed to create Shopify Product for Etsy ${listingId}:`, e);
+                                await createNotification(
+                                    supabase,
+                                    shop.id,
+                                    'sync_failed',
+                                    'Auto-Create Failed',
+                                    `Failed to automatically create Shopify product from Etsy listing ${listingId}. Error: ${e.message}`
+                                );
                             }
                         }
                     }

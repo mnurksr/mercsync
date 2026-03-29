@@ -10,6 +10,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
+import { createNotification } from '../../../actions/notifications';
 
 type SyncResult = {
     status: 'success' | 'failed' | 'skipped';
@@ -214,6 +215,27 @@ export async function handleInventoryUpdate(
 
         console.log(`${logPrefix} Stock change: ${oldStock} → ${effectiveStock} (shopify total: ${totalShopifyStock}, buffer: ${stockBuffer})`);
 
+        // --- Notification Triggers ---
+        if (effectiveStock === 0) {
+            await createNotification(
+                supabase,
+                shop.id,
+                'stock_zero',
+                'Stock Reached Zero',
+                `Product (Item ID: ${inventoryItemId}) is now out of stock on all platforms.`,
+                `/dashboard/inventory`
+            );
+        } else if (totalShopifyStock <= stockBuffer && stockBuffer > 0) {
+            await createNotification(
+                supabase,
+                shop.id,
+                'oversell_risk',
+                'Over-sell Risk Detected',
+                `Shopify stock (${totalShopifyStock}) is less than or equal to your buffer (${stockBuffer}). Etsy stock set to 0 to prevent overselling.`,
+                `/dashboard/inventory`
+            );
+        }
+
         // ── 7. Push to Etsy if matched ──
         let etsySyncResult: 'success' | 'failed' | 'skipped' = 'skipped';
         let etsyError: string | null = null;
@@ -248,6 +270,16 @@ export async function handleInventoryUpdate(
                     etsySyncResult = 'failed';
                     etsyError = err.message;
                     console.error(`${logPrefix} ❌ Etsy push failed after ${attempt} attempts:`, err.message);
+
+                    // Trigger Sync Failure Notification
+                    await createNotification(
+                        supabase,
+                        shop.id,
+                        'sync_failed',
+                        'Etsy Sync Failed',
+                        `Failed to push stock update to Etsy listing ${item.etsy_listing_id}. Error: ${err.message}`,
+                        `/dashboard/inventory`
+                    );
                 }
             }
         } else {
