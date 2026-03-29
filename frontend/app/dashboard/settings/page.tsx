@@ -822,10 +822,13 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                     <ToggleSwitch enabled={settings.notification_events.sync_failed} onChange={(v) => updateEvent('sync_failed', v)} />
                 </SettingRow>
                 <SettingRow label="Low stock alert" description="When stock drops below a threshold you set">
-                    <div className="flex items-center gap-3">
-                        <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
+                    <div className="flex items-center gap-4">
                         {settings.notification_events.oversell_risk && (
-                            <div className="flex items-center gap-1.5">
+                            <motion.div 
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-1.5"
+                            >
                                 <span className="text-xs text-gray-400">below</span>
                                 <input
                                     type="number"
@@ -833,11 +836,12 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                                     max={1000}
                                     value={settings.low_stock_threshold || 5}
                                     onChange={(e) => updateField('low_stock_threshold', Math.max(1, parseInt(e.target.value) || 5))}
-                                    className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-gray-50"
                                 />
                                 <span className="text-xs text-gray-400">units</span>
-                            </div>
+                            </motion.div>
                         )}
+                        <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
                     </div>
                 </SettingRow>
                 <SettingRow label="New order" description="When a new order comes in from any platform">
