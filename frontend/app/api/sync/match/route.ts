@@ -54,7 +54,10 @@ export async function POST(req: Request) {
 
             if (sData || eData) {
                 const sku = sData?.sku || eData?.sku || 'NO-SKU';
-                const title = sData?.title || eData?.title || 'Unknown Product';
+                const name = sData?.name || eData?.name || 'Unknown Product';
+                const sStock = sData?.stock_quantity ?? 0;
+                const eStock = eData?.stock_quantity ?? 0;
+                const masterStock = sStock > 0 ? sStock : (eStock > 0 ? eStock : 0);
                 
                 // Lookup existing inventory item to prevent duplication
                 const { data: existing } = await supabase.from('inventory_items')
@@ -66,15 +69,17 @@ export async function POST(req: Request) {
                 const inventoryPayload = {
                     shop_id: realShopId,
                     sku,
-                    name: title,
+                    name: name,
+                    status: 'Matching',
                     shopify_product_id: sData?.shopify_product_id,
                     shopify_variant_id: item.shopify_variant_id,
+                    shopify_inventory_item_id: sData?.shopify_inventory_item_id,
                     etsy_listing_id: eData?.etsy_listing_id,
                     etsy_variant_id: item.etsy_variant_id,
                     image_url: sData?.image_url || eData?.image_url,
-                    master_stock: sData?.stock ?? eData?.stock ?? 0,
-                    shopify_stock_snapshot: sData?.stock,
-                    etsy_stock_snapshot: eData?.stock,
+                    master_stock: masterStock,
+                    shopify_stock_snapshot: sStock,
+                    etsy_stock_snapshot: eStock,
                     selected_location_ids: mainLocId ? [mainLocId] : [],
                     updated_at: new Date().toISOString()
                 };
