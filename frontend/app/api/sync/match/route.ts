@@ -4,22 +4,18 @@ import { createAdminClient } from '@/utils/supabase/admin';
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { shop_id, matches } = body;
+        const { shop_id, matches } = body; // shop_id is actually owner_id from client
 
         if (!shop_id) {
             return NextResponse.json({ error: 'Missing shop_id' }, { status: 400 });
         }
 
-        if (!matches || !Array.isArray(matches)) {
-            return NextResponse.json({ error: 'Invalid matches payload' }, { status: 400 });
-        }
-
         const supabase = createAdminClient();
 
-        // Get actual shop ID
+        // 1. Get Shop Info (Location IDs)
         const { data: shops } = await supabase
             .from('shops')
-            .select('id, main_location_id')
+            .select('id, selected_location_ids, main_location_id')
             .eq('owner_id', shop_id)
             .limit(1);
 
@@ -28,73 +24,158 @@ export async function POST(req: Request) {
         }
 
         const realShopId = shops[0].id;
+        const selectedLocIds: string[] = Array.isArray(shops[0].selected_location_ids) 
+            ? shops[0].selected_location_ids 
+            : [];
+        
         const mainLocId = shops[0].main_location_id ? shops[0].main_location_id.toString().split(',')[0].trim() : null;
 
-        const results = [];
-        
-        for (const item of matches) {
-            if (!item.shopify_variant_id || !item.etsy_variant_id) continue;
+        // 2. Perform Matching Pass (Update Staging Tables)
+        if (matches && Array.isArray(matches)) {
+            for (const item of matches) {
+                if (!item.shopify_variant_id || !item.etsy_variant_id) continue;
 
-            // 1. Update Staging Tables (Cross-Link)
-            const { error: shEr } = await supabase
-                .from('staging_shopify_products')
-                .update({ etsy_variant_id: item.etsy_variant_id })
-                .eq('shop_id', realShopId)
-                .eq('shopify_variant_id', item.shopify_variant_id);
-
-            const { error: etEr } = await supabase
-                .from('staging_etsy_products')
-                .update({ shopify_variant_id: item.shopify_variant_id })
-                .eq('shop_id', realShopId)
-                .eq('etsy_variant_id', item.etsy_variant_id);
-
-            // 2. Fetch full staging data to populate inventory_items
-            const { data: sData } = await supabase.from('staging_shopify_products').select('*').eq('shop_id', realShopId).eq('shopify_variant_id', item.shopify_variant_id).maybeSingle();
-            const { data: eData } = await supabase.from('staging_etsy_products').select('*').eq('shop_id', realShopId).eq('etsy_variant_id', item.etsy_variant_id).maybeSingle();
-
-            if (sData || eData) {
-                const sku = sData?.sku || eData?.sku || 'NO-SKU';
-                const name = sData?.name || eData?.name || 'Unknown Product';
-                const sStock = sData?.stock_quantity ?? 0;
-                const eStock = eData?.stock_quantity ?? 0;
-                const masterStock = sStock > 0 ? sStock : (eStock > 0 ? eStock : 0);
-                
-                // Lookup existing inventory item to prevent duplication
-                const { data: existing } = await supabase.from('inventory_items')
-                    .select('id')
+                await supabase
+                    .from('staging_shopify_products')
+                    .update({ etsy_variant_id: item.etsy_variant_id })
                     .eq('shop_id', realShopId)
-                    .or(`shopify_variant_id.eq.${item.shopify_variant_id},etsy_variant_id.eq.${item.etsy_variant_id}`)
-                    .maybeSingle();
+                    .eq('shopify_variant_id', item.shopify_variant_id);
 
-                const inventoryPayload = {
-                    shop_id: realShopId,
-                    sku,
-                    name: name,
-                    status: 'Matching',
-                    shopify_product_id: sData?.shopify_product_id,
-                    shopify_variant_id: item.shopify_variant_id,
-                    shopify_inventory_item_id: sData?.shopify_inventory_item_id,
-                    etsy_listing_id: eData?.etsy_listing_id,
-                    etsy_variant_id: item.etsy_variant_id,
-                    image_url: sData?.image_url || eData?.image_url,
-                    master_stock: masterStock,
-                    shopify_stock_snapshot: sStock,
-                    etsy_stock_snapshot: eStock,
-                    selected_location_ids: mainLocId ? [mainLocId] : [],
-                    updated_at: new Date().toISOString()
-                };
+                await supabase
+                    .from('staging_etsy_products')
+                    .update({ shopify_variant_id: item.shopify_variant_id })
+                    .eq('shop_id', realShopId)
+                    .eq('etsy_variant_id', item.etsy_variant_id);
+            }
+        }
 
-                if (existing) {
-                    await supabase.from('inventory_items').update(inventoryPayload).eq('id', existing.id);
+        // 3. Fetch ALL Staging Products for Persistence
+        const { data: sStaging } = await supabase.from('staging_shopify_products').select('*').eq('shop_id', realShopId);
+        const { data: eStaging } = await supabase.from('staging_etsy_products').select('*').eq('shop_id', realShopId);
+
+        const shopifyMap = new Map();
+        const etsyMap = new Map();
+
+        sStaging?.forEach(s => shopifyMap.set(s.shopify_variant_id, s));
+        eStaging?.forEach(e => etsyMap.set(e.etsy_variant_id, e));
+
+        const processedShopifyVariants = new Set();
+        const processedEtsyVariants = new Set();
+
+        // 4. Process into inventory_items
+        const finalSelectedLocs = selectedLocIds.length > 0 ? selectedLocIds : (mainLocId ? [mainLocId] : []);
+
+        // 4.1. Process All Shopify Staging (Including Matched)
+        for (const sItem of (sStaging || [])) {
+            processedShopifyVariants.add(sItem.shopify_variant_id);
+            
+            const matchedEtsy = sItem.etsy_variant_id ? etsyMap.get(sItem.etsy_variant_id) : null;
+            if (matchedEtsy) processedEtsyVariants.add(matchedEtsy.etsy_variant_id);
+
+            // Calculate Shopify Stock from Selected Locations
+            let sStock = 0;
+            const locMap = typeof sItem.location_inventory_map === 'string' 
+                ? JSON.parse(sItem.location_inventory_map) 
+                : (sItem.location_inventory_map || {});
+
+            if (selectedLocIds.length > 0) {
+                selectedLocIds.forEach(locId => {
+                    const stock = locMap[locId] ?? 0;
+                    sStock += parseInt(stock.toString());
+                });
+            } else {
+                sStock = sItem.stock_quantity ?? 0;
+            }
+
+            const eStock = matchedEtsy?.stock_quantity ?? 0;
+            
+            // STATUS & MASTER STOCK LOGIC
+            // If they match -> Synced, Master = Stock
+            // If they dont match -> MISMATCH, Master = 0
+            // If single sided -> Marketplace Only, Master = Stock
+            let status = 'Marketplace Only';
+            let masterStock = sStock;
+
+            if (matchedEtsy) {
+                if (sStock === eStock) {
+                    status = 'Synced';
+                    masterStock = sStock;
                 } else {
-                    await supabase.from('inventory_items').insert(inventoryPayload);
+                    status = 'MISMATCH';
+                    masterStock = 0; // Forced 0 as per user request if not equal
                 }
             }
 
-            results.push({ variant: item.shopify_variant_id, error: shEr || etEr });
+            const inventoryPayload = {
+                shop_id: realShopId,
+                sku: sItem.sku || matchedEtsy?.sku || 'NO-SKU',
+                name: sItem.name || matchedEtsy?.name || 'Unknown Product',
+                status: status,
+                shopify_product_id: sItem.shopify_product_id,
+                shopify_variant_id: sItem.shopify_variant_id,
+                shopify_inventory_item_id: sItem.shopify_inventory_item_id,
+                etsy_listing_id: matchedEtsy?.etsy_listing_id || null,
+                etsy_variant_id: matchedEtsy?.etsy_variant_id || null,
+                image_url: sItem.image_url || matchedEtsy?.image_url,
+                master_stock: masterStock,
+                shopify_stock_snapshot: sStock,
+                etsy_stock_snapshot: matchedEtsy ? eStock : null,
+                location_inventory_map: locMap,
+                selected_location_ids: finalSelectedLocs,
+                updated_at: new Date().toISOString()
+            };
+
+            // Enhanced lookup to ensure we identify existing items across platforms
+            const { data: existing } = await supabase.from('inventory_items')
+                .select('id')
+                .eq('shop_id', realShopId)
+                .or(`shopify_variant_id.eq.${sItem.shopify_variant_id}${matchedEtsy ? `,etsy_variant_id.eq.${matchedEtsy.etsy_variant_id}` : ''}`)
+                .maybeSingle();
+
+            if (existing) {
+                await supabase.from('inventory_items').update(inventoryPayload).eq('id', existing.id);
+            } else {
+                await supabase.from('inventory_items').insert(inventoryPayload);
+            }
         }
 
-        return NextResponse.json({ success: true, results });
+        // 4.2. Process Etsy-Only Staging (not matched above)
+        for (const eItem of (eStaging || [])) {
+            if (processedEtsyVariants.has(eItem.etsy_variant_id)) continue;
+
+            const inventoryPayload = {
+                shop_id: realShopId,
+                sku: eItem.sku || 'NO-SKU',
+                name: eItem.name || 'Unknown Etsy Product',
+                status: 'Marketplace Only',
+                shopify_product_id: null,
+                shopify_variant_id: null,
+                shopify_inventory_item_id: null,
+                etsy_listing_id: eItem.etsy_listing_id,
+                etsy_variant_id: eItem.etsy_variant_id,
+                image_url: eItem.image_url,
+                master_stock: eItem.stock_quantity ?? 0,
+                shopify_stock_snapshot: null,
+                etsy_stock_snapshot: eItem.stock_quantity ?? 0,
+                location_inventory_map: {},
+                selected_location_ids: finalSelectedLocs,
+                updated_at: new Date().toISOString()
+            };
+
+            const { data: existing } = await supabase.from('inventory_items')
+                .select('id')
+                .eq('shop_id', realShopId)
+                .eq('etsy_variant_id', eItem.etsy_variant_id)
+                .maybeSingle();
+
+            if (existing) {
+                await supabase.from('inventory_items').update(inventoryPayload).eq('id', existing.id);
+            } else {
+                await supabase.from('inventory_items').insert(inventoryPayload);
+            }
+        }
+
+        return NextResponse.json({ success: true });
 
     } catch (e: any) {
         console.error('Match save API error:', e);
