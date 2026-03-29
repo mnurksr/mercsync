@@ -500,24 +500,6 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                     />
                 </SettingRow>
 
-
-                {/* Low Stock Alert Threshold */}
-                <SettingRow
-                    label="Low Stock Alert"
-                    description="Get notified when stock drops below this level (0 = disabled)"
-                >
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="number"
-                            min={0}
-                            max={1000}
-                            value={settings.low_stock_threshold}
-                            onChange={(e) => updateField('low_stock_threshold', Math.max(0, parseInt(e.target.value) || 0))}
-                            className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-400">units</span>
-                    </div>
-                </SettingRow>
             </div>
         </div>
     );
@@ -839,8 +821,24 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                 <SettingRow label="Sync failed" description="When a stock sync operation fails">
                     <ToggleSwitch enabled={settings.notification_events.sync_failed} onChange={(v) => updateEvent('sync_failed', v)} />
                 </SettingRow>
-                <SettingRow label="Over-sell risk" description="When stock levels are critically low">
-                    <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
+                <SettingRow label="Low stock alert" description="When stock drops below a threshold you set">
+                    <div className="flex items-center gap-3">
+                        <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
+                        {settings.notification_events.oversell_risk && (
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-gray-400">below</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={1000}
+                                    value={settings.low_stock_threshold || 5}
+                                    onChange={(e) => updateField('low_stock_threshold', Math.max(1, parseInt(e.target.value) || 5))}
+                                    className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="text-xs text-gray-400">units</span>
+                            </div>
+                        )}
+                    </div>
                 </SettingRow>
                 <SettingRow label="New order" description="When a new order comes in from any platform">
                     <ToggleSwitch enabled={settings.notification_events.new_order} onChange={(v) => updateEvent('new_order', v)} />
