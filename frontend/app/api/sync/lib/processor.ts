@@ -755,9 +755,23 @@ export async function cloneToShopify(shop: any, product: CloneProduct, jobId: st
     }
 
     // Build selected variant data from clone payload
-    const cloneVariants = product.variants?.length > 0
+    const cloneVariantsSrc = product.variants?.length > 0
         ? product.variants.filter(v => v.selected !== false)
         : undefined;
+
+    // 2.5 Pricing Rules for Shopify target
+    const { data: settings } = await supabase
+        .from('shop_settings')
+        .select('price_rules')
+        .eq('shop_id', shop.id)
+        .maybeSingle();
+
+    const ruleToApply = product.price_rule || (settings?.price_rules || []);
+
+    const cloneVariants = cloneVariantsSrc?.map(v => ({
+        ...v,
+        price: calculatePrice(parseFloat(v.price as any || 0), ruleToApply, 'shopify') || v.price
+    }));
 
     // === VARIANT INJECTION: Append to existing product ===
     if (product.target_id) {

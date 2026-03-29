@@ -4,6 +4,7 @@ import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
 import { cloneToShopify } from '../../sync/lib/processor';
 import { createNotification } from '@/app/actions/notifications';
+import { calculatePrice } from '../../sync/price-sync';
 
 export const maxDuration = 300; // Allows up to 5 mins execution
 
@@ -34,7 +35,8 @@ export async function GET(req: NextRequest) {
                     sync_direction,
                     auto_create_products,
                     auto_update_products,
-                    auto_delete_products
+                    auto_delete_products,
+                    price_rules
                 )
             `)
             .eq('is_active', true)
@@ -57,7 +59,8 @@ export async function GET(req: NextRequest) {
             const canPull = settings.sync_direction === 'bidirectional' || settings.sync_direction === 'etsy_to_shopify';
             if (!canPull) continue;
 
-            const { auto_create_products, auto_update_products, auto_delete_products } = settings;
+            const { auto_create_products, auto_update_products, auto_delete_products, price_rules } = settings;
+            const shopifyPriceRules = price_rules || [];
             if (!auto_create_products && !auto_update_products && !auto_delete_products) continue;
 
             console.log(`[Etsy Products Cron] Processing shop ${shop.shop_domain} (${shop.etsy_shop_id})`);
@@ -91,7 +94,9 @@ export async function GET(req: NextRequest) {
                             try {
                                 console.log(`[Etsy Products Cron] Auto-Updating Shopify Product ${matched.shopify_product_id} from Etsy ${listingId}`);
                                 const priceNode = listing.price;
-                                const newPrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor).toString() : null;
+                                const basePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
+                                const newPrice = basePrice ? calculatePrice(basePrice, shopifyPriceRules, 'shopify') || basePrice : null;
+
                                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
                                 await shopifyApi.updateProduct(creds, matched.shopify_product_id, {
@@ -103,7 +108,7 @@ export async function GET(req: NextRequest) {
                                 if (newPrice) {
                                     await shopifyApi.updateVariant(creds, matched.shopify_variant_id, {
                                         id: matched.shopify_variant_id,
-                                        price: newPrice
+                                        price: newPrice.toString()
                                     });
                                 }
                             } catch(e: any) {
@@ -139,9 +144,11 @@ export async function GET(req: NextRequest) {
                                         price: cPrice,
                                         stock: listing.quantity || 1,
                                         selected: true
-                                    }]
+                                    }],
+                                    price_rule: shopifyPriceRules
                                 };
                                 await cloneToShopify(shop, cloneProduct, 'cron-job');
+
                             } catch(e: any) {
                                 console.error(`[Etsy Products Cron] Failed to create Shopify Product for Etsy ${listingId}:`, e);
                                 await createNotification(
