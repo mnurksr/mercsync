@@ -298,6 +298,7 @@ export default function InventoryPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [items, setItems] = useState<InventoryItem[]>([]);
+    const [platformFilter, setPlatformFilter] = useState<'all' | 'shopify' | 'etsy'>('all');
     const [isSyncing, setIsSyncing] = useState(false);
     const [shopLocations, setShopLocations] = useState<{ id: string, name: string, active: boolean }[]>([]);
 
@@ -337,6 +338,45 @@ export default function InventoryPage() {
             setIsLoading(false);
         }
     };
+
+    // --- Filter & Sort Logic ---
+    const filteredAndSortedItems = useMemo(() => {
+        let result = items;
+
+        // Platform Filter
+        if (platformFilter === 'shopify') {
+            result = result.filter(i => i.shopify_variant_id && !i.etsy_variant_id);
+        } else if (platformFilter === 'etsy') {
+            result = result.filter(i => i.etsy_variant_id && !i.shopify_variant_id);
+        }
+
+        // Search Filter
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(i => 
+                i.sku?.toLowerCase().includes(q) || 
+                i.name?.toLowerCase().includes(q)
+            );
+        }
+
+        // Sort: Matched first, then Marketplace Only (single sided)
+        return [...result].sort((a, b) => {
+            const aIsMatched = a.shopify_variant_id && a.etsy_variant_id;
+            const bIsMatched = b.shopify_variant_id && b.etsy_variant_id;
+
+            if (aIsMatched && !bIsMatched) return -1;
+            if (!aIsMatched && bIsMatched) return 1;
+
+            // Secondary: Sort by status priority
+            const statusOrder: Record<string, number> = { 'Action Required': 0, 'Mismatch': 1, 'Synced': 2 };
+            const aOrder = statusOrder[a.status as string] ?? 3;
+            const bOrder = statusOrder[b.status as string] ?? 3;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+
+            // Last: Alphabetical by name
+            return (a.name || '').localeCompare(b.name || '');
+        });
+    }, [items, platformFilter, searchQuery]);
 
     const loadLocations = async () => {
         const locs = await getShopifyLocations();
@@ -444,12 +484,16 @@ export default function InventoryPage() {
     };
 
     const getStockStatus = (item: InventoryItem) => {
-        if (item.status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-        // Compare actual platform snapshots — if they differ, it's a mismatch
-        if (item.shopify_variant_id && item.etsy_variant_id && item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
+        if (!item.shopify_variant_id || !item.etsy_variant_id) {
+            return { label: 'Marketplace Only', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
+        }
+        if (item.status === 'Action Required' || item.status === 'MISMATCH' || item.status === 'Mismatch') {
             return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
         }
-        if (item.status === 'Mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        // Compare actual platform snapshots — if they differ, it's a mismatch
+        if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
+            return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        }
         return { label: 'In Sync', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
     };
 
@@ -484,16 +528,39 @@ export default function InventoryPage() {
             </div>
 
             {/* Filters & Search */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-2 mb-8 flex items-center gap-4">
-                <div className="relative flex-1">
-                    <Search className="w-5 h-5 text-gray-400 absolute left-5 top-1/2 -translate-y-1/2" />
-                    <input
-                        type="text"
-                        placeholder="Search by SKU or product name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-14 pr-6 py-4.5 bg-transparent text-gray-900 rounded-2xl focus:outline-none transition-all text-base font-bold placeholder:text-gray-300"
-                    />
+            <div className="flex flex-col md:flex-row gap-4 mb-8">
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-2 flex-1 flex items-center gap-4">
+                    <div className="relative flex-1">
+                        <Search className="w-5 h-5 text-gray-400 absolute left-5 top-1/2 -translate-y-1/2" />
+                        <input
+                            type="text"
+                            placeholder="Search by SKU or product name..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-14 pr-6 py-4 bg-transparent text-gray-900 rounded-2xl focus:outline-none transition-all text-sm font-bold placeholder:text-gray-300"
+                        />
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 flex items-center gap-1 shrink-0">
+                    {[
+                        { id: 'all', label: 'All Listings', icon: Layers },
+                        { id: 'shopify', label: 'Shopify Only', icon: ShoppingBag },
+                        { id: 'etsy', label: 'Etsy Only', icon: Store },
+                    ].map((btn) => (
+                        <button
+                            key={btn.id}
+                            onClick={() => setPlatformFilter(btn.id as any)}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
+                                platformFilter === btn.id 
+                                    ? 'bg-gray-900 text-white shadow-lg' 
+                                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <btn.icon className={`w-3.5 h-3.5 ${platformFilter === btn.id ? 'text-indigo-400' : 'text-gray-300'}`} />
+                            {btn.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -529,20 +596,20 @@ export default function InventoryPage() {
                                         <td className="pl-4 pr-8 py-6 text-right"><div className="h-10 bg-gray-100 rounded-xl w-20 ml-auto"></div></td>
                                     </tr>
                                 ))
-                            ) : items.length === 0 ? (
+                            ) : filteredAndSortedItems.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-24 text-center">
                                         <div className="flex flex-col items-center justify-center text-gray-300">
                                             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
-                                                <Layers className="w-10 h-10 opacity-40" />
+                                                <AlertTriangle className="w-10 h-10 opacity-40" />
                                             </div>
-                                            <p className="text-xl font-black text-gray-900">Your Inventory is quiet.</p>
-                                            <p className="text-sm font-medium mt-2">Finish your shop setup to populate these records.</p>
+                                            <p className="text-xl font-black text-gray-900">No matching products found.</p>
+                                            <p className="text-sm font-medium mt-2">Adjust your filters or search terms.</p>
                                         </div>
                                     </td>
                                 </tr>
                             ) : (
-                                items.map((item) => {
+                                filteredAndSortedItems.map((item) => {
                                     const displayStatus = getStockStatus(item);
                                     const isSelected = selectedIds.includes(item.id);
                                     return (
@@ -616,16 +683,27 @@ export default function InventoryPage() {
                                                 </div>
                                             </td>
                                             <td className="pl-4 pr-8 py-4 text-right">
-                                                <button
-                                                    onClick={() => {
-                                                        setTargetItem(item);
-                                                        setSyncModalOpen(true);
-                                                    }}
-                                                    className="px-4 py-2.5 bg-gray-900 text-white font-black text-[10px] rounded-xl shadow-lg shadow-gray-200 hover:bg-black transition-all flex items-center gap-2 active:scale-95 ml-auto uppercase tracking-widest"
-                                                >
-                                                    <Zap className="w-3.5 h-3.5" />
-                                                    Sync
-                                                </button>
+                                                {item.shopify_variant_id && item.etsy_variant_id ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            setTargetItem(item);
+                                                            setSyncModalOpen(true);
+                                                        }}
+                                                        className="px-4 py-2.5 bg-gray-900 text-white font-black text-[10px] rounded-xl shadow-lg shadow-gray-200 hover:bg-black transition-all flex items-center gap-2 active:scale-95 ml-auto uppercase tracking-widest"
+                                                    >
+                                                        <Zap className="w-3.5 h-3.5 shadow-sm shadow-indigo-500/20" />
+                                                        Sync
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        disabled
+                                                        className="px-4 py-2.5 bg-gray-50 text-gray-300 font-bold text-[10px] rounded-xl border border-gray-100 ml-auto uppercase tracking-widest cursor-not-allowed flex items-center gap-2"
+                                                        title="Cannot sync single-platform items"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                        Locked
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     );
