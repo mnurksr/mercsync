@@ -5,8 +5,6 @@ import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/adm
 // ─── Types ───────────────────────────────────
 
 export type SyncDirection = 'shopify_to_etsy' | 'etsy_to_shopify' | 'bidirectional'
-export type ConflictStrategy = 'last_write_wins' | 'shopify_wins' | 'etsy_wins' | 'manual_review'
-export type SyncFrequency = '1h' | '6h' | '12h' | '24h'
 export type NotificationFrequency = 'instant' | 'hourly' | 'daily'
 
 export type PriceRule = {
@@ -33,9 +31,7 @@ export type NotificationEvents = {
 export type ShopSettings = {
     // Sync
     sync_direction: SyncDirection
-    conflict_strategy: ConflictStrategy
     auto_sync_enabled: boolean
-    sync_frequency: SyncFrequency
     stock_buffer: number
     
     // Auto Product Sync
@@ -58,9 +54,7 @@ export type ShopSettings = {
 
 const DEFAULT_SETTINGS: ShopSettings = {
     sync_direction: 'bidirectional',
-    conflict_strategy: 'last_write_wins',
     auto_sync_enabled: false,
-    sync_frequency: '6h',
     stock_buffer: 0,
     auto_create_products: false,
     auto_update_products: false,
@@ -100,9 +94,7 @@ export async function getSettings(): Promise<ShopSettings> {
 
     return {
         sync_direction: settings.sync_direction || DEFAULT_SETTINGS.sync_direction,
-        conflict_strategy: settings.conflict_strategy || DEFAULT_SETTINGS.conflict_strategy,
         auto_sync_enabled: settings.auto_sync_enabled ?? DEFAULT_SETTINGS.auto_sync_enabled,
-        sync_frequency: settings.sync_frequency || DEFAULT_SETTINGS.sync_frequency,
         stock_buffer: settings.stock_buffer ?? DEFAULT_SETTINGS.stock_buffer,
         auto_create_products: settings.auto_create_products ?? DEFAULT_SETTINGS.auto_create_products,
         auto_update_products: settings.auto_update_products ?? DEFAULT_SETTINGS.auto_update_products,
@@ -136,9 +128,7 @@ export async function updateSettings(
     const payload: any = { updated_at: new Date().toISOString() }
 
     if (updates.sync_direction !== undefined) payload.sync_direction = updates.sync_direction
-    if (updates.conflict_strategy !== undefined) payload.conflict_strategy = updates.conflict_strategy
     if (updates.auto_sync_enabled !== undefined) payload.auto_sync_enabled = updates.auto_sync_enabled
-    if (updates.sync_frequency !== undefined) payload.sync_frequency = updates.sync_frequency
     if (updates.stock_buffer !== undefined) payload.stock_buffer = updates.stock_buffer
     if (updates.price_sync_enabled !== undefined) payload.price_sync_enabled = updates.price_sync_enabled
     if (updates.price_rules !== undefined) payload.price_rules = updates.price_rules

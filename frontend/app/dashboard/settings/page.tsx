@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations, saveShopifyLocations, getShopLocationConfig } from '../../actions/shop';
 import {
     getSettings, updateSettings,
-    type ShopSettings, type SyncDirection, type ConflictStrategy, type SyncFrequency,
+    type ShopSettings, type SyncDirection,
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
 import { wipeAllAppData } from '../../actions/advanced';
@@ -56,9 +56,7 @@ export default function SettingsPage() {
     // Settings state
     const [settings, setSettings] = useState<ShopSettings>({
         sync_direction: 'bidirectional',
-        conflict_strategy: 'last_write_wins',
         auto_sync_enabled: false,
-        sync_frequency: '1h',
         stock_buffer: 0,
         auto_create_products: false,
         auto_update_products: false,
@@ -502,39 +500,6 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                     />
                 </SettingRow>
 
-                {/* Sync Frequency */}
-                <SettingRow
-                    label="Sync Frequency"
-                    description="How often to perform a deep check of all products for inconsistencies"
-                >
-                    <SelectBox
-                        value={settings.sync_frequency}
-                        onChange={(v) => updateField('sync_frequency', v as SyncFrequency)}
-                        options={[
-                            { value: '1h', label: 'Every Hour' },
-                            { value: '6h', label: 'Every 6 Hours' },
-                            { value: '12h', label: 'Every 12 Hours' },
-                            { value: '24h', label: 'Once Daily' }
-                        ]}
-                    />
-                </SettingRow>
-
-                {/* Conflict Strategy */}
-                <SettingRow
-                    label="Conflict Strategy"
-                    description="If data changes on both platforms at the same time, which side wins?"
-                >
-                    <SelectBox
-                        value={settings.conflict_strategy}
-                        onChange={(v) => updateField('conflict_strategy', v as ConflictStrategy)}
-                        options={[
-                            { value: 'last_write_wins', label: 'Last Write Wins (Recommended)' },
-                            { value: 'shopify_wins', label: 'Shopify Always Wins' },
-                            { value: 'etsy_wins', label: 'Etsy Always Wins' },
-                            { value: 'manual_review', label: 'Manual Review (Hold Sync)' }
-                        ]}
-                    />
-                </SettingRow>
 
                 {/* Stock Buffer */}
                 <SettingRow
