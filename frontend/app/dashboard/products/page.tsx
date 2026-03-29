@@ -156,7 +156,7 @@ export default function ProductsPage() {
 
             toast.success('Successfully imported base data. Redirecting to matching interface...');
             setTimeout(() => {
-                router.push('/dashboard/mapper');
+                router.push('/dashboard/staging');
             }, 1500);
         } catch (e: any) {
             console.error('Re-import error:', e);
