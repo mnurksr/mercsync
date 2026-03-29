@@ -55,6 +55,7 @@ type CloneModalProps = {
     initialData?: CrossListingItem;
     targetId?: string;
     pricingRules?: any[];
+    shopCurrencies?: { shopify: string, etsy: string };
 };
 
 export default function CloneModal({

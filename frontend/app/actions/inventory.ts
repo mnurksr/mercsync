@@ -15,6 +15,7 @@ export type PlatformVariant = {
     dbId: string
     shopifyProductId?: string
     shopifyVariantId?: string
+    shopifyInventoryItemId?: string
     etsyListingId?: string
     etsyVariantId?: string
 }
@@ -187,7 +188,8 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             imageUrl: item.image_url,
             isMatched,
             shopifyProductId: item.shopify_product_id,
-            shopifyVariantId: item.shopify_variant_id,
+            shopifyVariantId: item.shopify_variant_id, // Explicit 47...
+            shopifyInventoryItemId: item.shopify_inventory_item_id, // Explicit 49...
             etsyListingId: item.etsy_listing_id,
             etsyVariantId: item.etsy_variant_id
         });

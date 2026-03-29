@@ -175,7 +175,7 @@ export default function ProductsPage() {
             stock: item.totalStock,
             description: '', // Initial fetch might not have description, backend will use it if provided
             variants: item.variants.map(v => ({
-                platformId: v.id,
+                platformId: v.shopifyVariantId || v.id, // Ensure we use 47... if available
                 variantTitle: v.title,
                 sku: v.sku || '',
                 price: v.price,
@@ -275,7 +275,7 @@ export default function ProductsPage() {
                         stock: item.totalStock,
                         image: item.imageUrl || '',
                         variants: item.variants.map(v => ({
-                            source_variant_id: v.id,
+                            source_variant_id: v.shopifyVariantId || v.id, // Ensure we use 47... if available
                             title: v.title,
                             sku: v.sku || '',
                             price: v.price,

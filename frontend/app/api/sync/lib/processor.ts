@@ -1102,7 +1102,23 @@ async function cloneToEtsy(
             }
 
             // Find if this was one of the newly added variants to link the shopify_variant_id
-            const matchedNewVariant = (variantsToAdd || []).find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
+            let matchedNewVariant = (variantsToAdd || []).find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
+
+            // [ID SANITIZATION] Extremely robust check: If the received ID is a 49... (Inventory ID), 
+            // look up the correct 47... (Variant ID) from staging_shopify_products directly.
+            let finalShopifyVariantId = matchedNewVariant ? matchedNewVariant.source_variant_id : undefined;
+            if (finalShopifyVariantId && String(finalShopifyVariantId).startsWith('49')) {
+                console.log(`[Sync] Sanitizing ID: Incoming 49... ID ${finalShopifyVariantId} detected. Looking up real 47... ID.`);
+                const { data: realVariant } = await supabase
+                    .from('staging_shopify_products')
+                    .select('shopify_variant_id')
+                    .eq('shopify_inventory_item_id', finalShopifyVariantId)
+                    .maybeSingle();
+                if (realVariant?.shopify_variant_id) {
+                    finalShopifyVariantId = realVariant.shopify_variant_id;
+                    console.log(`[Sync] Sanitized: Replaced with ${finalShopifyVariantId}`);
+                }
+            }
 
             await supabase
                 .from('staging_etsy_products')
@@ -1121,16 +1137,16 @@ async function cloneToEtsy(
                     variant_title: variantTitle,
                     description: product.description || '',
                     has_variations: etsyInventory.products.length > 1,
-                    shopify_variant_id: matchedNewVariant ? matchedNewVariant.source_variant_id : undefined
+                    shopify_variant_id: finalShopifyVariantId
                 }, { onConflict: 'etsy_variant_id' });
 
             // [FIX] Bidirectional Link: Update Shopify side so dashboard shows "Matched"
-            if (matchedNewVariant?.source_variant_id) {
+            if (finalShopifyVariantId) {
                 await supabase
                     .from('staging_shopify_products')
                     .update({ etsy_variant_id: etsyProduct.product_id.toString() })
                     .eq('shop_id', shop.id)
-                    .eq('shopify_variant_id', matchedNewVariant.source_variant_id);
+                    .eq('shopify_variant_id', finalShopifyVariantId);
             }
         }
         return;
@@ -1248,6 +1264,17 @@ async function cloneToEtsy(
         // Find matching source variant from payload or assume index match
         const cv = cloneVariants ? cloneVariants[i] : (shopifyProduct.variants[i] ? { source_variant_id: shopifyProduct.variants[i].id.toString() } : null);
 
+        // [ID SANITIZATION] Standard Batch Clone Protection
+        let finalShopifyVariantId = cv ? cv.source_variant_id : undefined;
+        if (finalShopifyVariantId && String(finalShopifyVariantId).startsWith('49')) {
+            const { data: realVariant } = await supabase
+                .from('staging_shopify_products')
+                .select('shopify_variant_id')
+                .eq('shopify_inventory_item_id', finalShopifyVariantId)
+                .maybeSingle();
+            if (realVariant?.shopify_variant_id) finalShopifyVariantId = realVariant.shopify_variant_id;
+        }
+
         const offering = etsyProduct.offerings[0];
         const actualPrice = typeof offering.price === 'object'
             ? offering.price.amount / offering.price.divisor
@@ -1276,16 +1303,16 @@ async function cloneToEtsy(
                 description: etsyListing.description,
                 has_variations: etsyInventory.products.length > 1,
                 url: etsyListing.url,
-                shopify_variant_id: cv ? cv.source_variant_id : undefined // Link back to source
+                shopify_variant_id: finalShopifyVariantId // Link back to source
             }, { onConflict: 'etsy_variant_id' });
 
         // [FIX] Bidirectional Link: Update Shopify side so dashboard shows "Matched"
-        if (cv?.source_variant_id) {
+        if (finalShopifyVariantId) {
             await supabase
                 .from('staging_shopify_products')
                 .update({ etsy_variant_id: etsyProduct.product_id.toString() })
                 .eq('shop_id', shop.id)
-                .eq('shopify_variant_id', cv.source_variant_id);
+                .eq('shopify_variant_id', finalShopifyVariantId);
         }
     }
 }
