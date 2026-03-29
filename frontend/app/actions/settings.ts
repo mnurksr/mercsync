@@ -51,6 +51,7 @@ export type ShopSettings = {
     notification_channels: NotificationChannels
     notification_events: NotificationEvents
     notification_frequency: NotificationFrequency
+    notification_email: string | null
 }
 
 // ─── Default values ──────────────────────────
@@ -68,7 +69,8 @@ const DEFAULT_SETTINGS: ShopSettings = {
     price_rules: [],
     notification_channels: { in_app: true, email: false, slack_webhook_url: null },
     notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, new_order: false, token_expiring: true },
-    notification_frequency: 'instant'
+    notification_frequency: 'instant',
+    notification_email: null
 }
 
 // ─── Get Settings ────────────────────────────
@@ -109,7 +111,8 @@ export async function getSettings(): Promise<ShopSettings> {
         price_rules: settings.price_rules || DEFAULT_SETTINGS.price_rules,
         notification_channels: settings.notification_channels || DEFAULT_SETTINGS.notification_channels,
         notification_events: settings.notification_events || DEFAULT_SETTINGS.notification_events,
-        notification_frequency: settings.notification_frequency || DEFAULT_SETTINGS.notification_frequency
+        notification_frequency: settings.notification_frequency || DEFAULT_SETTINGS.notification_frequency,
+        notification_email: settings.notification_email || DEFAULT_SETTINGS.notification_email
     }
 }
 
@@ -142,6 +145,11 @@ export async function updateSettings(
     if (updates.notification_channels !== undefined) payload.notification_channels = updates.notification_channels
     if (updates.notification_events !== undefined) payload.notification_events = updates.notification_events
     if (updates.notification_frequency !== undefined) payload.notification_frequency = updates.notification_frequency
+    if (updates.notification_email !== undefined) payload.notification_email = updates.notification_email
+    
+    if (updates.auto_create_products !== undefined) payload.auto_create_products = updates.auto_create_products
+    if (updates.auto_update_products !== undefined) payload.auto_update_products = updates.auto_update_products
+    if (updates.auto_delete_products !== undefined) payload.auto_delete_products = updates.auto_delete_products
 
     // Upsert: insert if not exists, update if exists
     const { error } = await supabase

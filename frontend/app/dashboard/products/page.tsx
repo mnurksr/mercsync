@@ -121,7 +121,7 @@ export default function ProductsPage() {
         setIsImporting(true);
         toast.info('Starting fresh import from stores, please do not close the page...');
         try {
-            const activeUserId = user?.id;
+            const activeUserId = await getUserId();
             if (!activeUserId) throw new Error('Not authenticated');
 
             const { data: shop } = await supabase.from('shops').select('shop_domain, etsy_shop_id').eq('owner_id', activeUserId).maybeSingle();

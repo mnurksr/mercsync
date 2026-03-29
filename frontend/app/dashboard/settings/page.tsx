@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations, saveShopifyLocations, getShopLocationConfig } from '../../actions/shop';
 import {
     getSettings, updateSettings,
-    type ShopSettings, type SyncDirection,
+    type ShopSettings, type SyncDirection, type ConflictStrategy, type SyncFrequency,
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
 import { wipeAllAppData } from '../../actions/advanced';
@@ -67,7 +67,8 @@ export default function SettingsPage() {
         price_rules: [],
         notification_channels: { in_app: true, email: false, slack_webhook_url: null },
         notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, new_order: false, token_expiring: true },
-        notification_frequency: 'instant'
+        notification_frequency: 'instant',
+        notification_email: null
     });
 
     // Locations state
@@ -117,7 +118,7 @@ export default function SettingsPage() {
             });
 
             setSettings(savedSettings);
-            setNotificationEmail(user?.email || '');
+            setNotificationEmail(savedSettings.notification_email || user?.email || '');
 
             // Load locations if Shopify connected
             if (shopify.connected) {
@@ -168,7 +169,10 @@ export default function SettingsPage() {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const result = await updateSettings(settings);
+            const result = await updateSettings({
+                ...settings,
+                notification_email: notificationEmail || null
+            });
             if (result.success) {
                 toast.success('Settings saved successfully');
                 setIsDirty(false);
@@ -350,6 +354,7 @@ export default function SettingsPage() {
                             updateField={updateField}
                             notificationEmail={notificationEmail}
                             setNotificationEmail={setNotificationEmail}
+                            setIsDirty={setIsDirty}
                         />
                     )}
                     {activeTab === 'billing' && (
@@ -493,6 +498,40 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                             { value: 'bidirectional', label: 'Bidirectional (Both Ways)' },
                             { value: 'shopify_to_etsy', label: 'Shopify → Etsy Only' },
                             { value: 'etsy_to_shopify', label: 'Etsy → Shopify Only' }
+                        ]}
+                    />
+                </SettingRow>
+
+                {/* Sync Frequency */}
+                <SettingRow
+                    label="Sync Frequency"
+                    description="How often to perform a deep check of all products for inconsistencies"
+                >
+                    <SelectBox
+                        value={settings.sync_frequency}
+                        onChange={(v) => updateField('sync_frequency', v as SyncFrequency)}
+                        options={[
+                            { value: '1h', label: 'Every Hour' },
+                            { value: '6h', label: 'Every 6 Hours' },
+                            { value: '12h', label: 'Every 12 Hours' },
+                            { value: '24h', label: 'Once Daily' }
+                        ]}
+                    />
+                </SettingRow>
+
+                {/* Conflict Strategy */}
+                <SettingRow
+                    label="Conflict Strategy"
+                    description="If data changes on both platforms at the same time, which side wins?"
+                >
+                    <SelectBox
+                        value={settings.conflict_strategy}
+                        onChange={(v) => updateField('conflict_strategy', v as ConflictStrategy)}
+                        options={[
+                            { value: 'last_write_wins', label: 'Last Write Wins (Recommended)' },
+                            { value: 'shopify_wins', label: 'Shopify Always Wins' },
+                            { value: 'etsy_wins', label: 'Etsy Always Wins' },
+                            { value: 'manual_review', label: 'Manual Review (Hold Sync)' }
                         ]}
                     />
                 </SettingRow>
@@ -804,8 +843,8 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
 
 // ─── Notifications Tab (simplified) ──────────
 
-function NotificationsTab({ settings, updateField, notificationEmail, setNotificationEmail }: {
-    settings: ShopSettings; updateField: any; notificationEmail: string; setNotificationEmail: (v: string) => void;
+function NotificationsTab({ settings, updateField, notificationEmail, setNotificationEmail, setIsDirty }: {
+    settings: ShopSettings; updateField: any; notificationEmail: string; setNotificationEmail: (v: string) => void; setIsDirty: (v: boolean) => void;
 }) {
     const updateChannel = (key: keyof NotificationChannels, value: any) => {
         updateField('notification_channels', { ...settings.notification_channels, [key]: value });
@@ -833,18 +872,37 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                     </SettingRow>
                     {settings.notification_channels.email && (
                         <div className="px-6 pb-4 -mt-1">
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Notification Email</label>
                             <div className="flex items-center gap-2">
                                 <Mail className="w-4 h-4 text-gray-400" />
                                 <input
                                     type="email"
                                     value={notificationEmail}
-                                    onChange={(e) => setNotificationEmail(e.target.value)}
+                                    onChange={(e) => {
+                                        setNotificationEmail(e.target.value);
+                                        setIsDirty(true);
+                                    }}
                                     placeholder="your@email.com"
                                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Slack Webhook */}
+                <div className="px-6 py-4">
+                    <SettingRow label="Slack Webhook" description="Delivery daily summaries and critical alerts to a Slack channel">
+                        <div className="w-full max-w-xs">
+                            <input
+                                type="text"
+                                value={settings.notification_channels.slack_webhook_url || ''}
+                                onChange={(e) => updateChannel('slack_webhook_url', e.target.value || null)}
+                                placeholder="https://hooks.slack.com/services/..."
+                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                    </SettingRow>
                 </div>
             </div>
 
@@ -969,10 +1027,10 @@ function AdvancedTab() {
     const toast = useToast();
     const router = useRouter();
     const [wiping, setWiping] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
 
     const handleWipeData = async () => {
-        if (!confirm('🚨 WARNING: Are you strictly sure you want to wipe all application data? This will delete all imported products, inventory mappings, and staging data from the application (Your actual Shopify/Etsy stores will NOT be affected).')) return;
-        
+        setShowConfirm(false);
         setWiping(true);
         try {
             const res = await wipeAllAppData();
@@ -1003,14 +1061,26 @@ function AdvancedTab() {
                         <p className="text-sm text-gray-500">Completely resets your testing data. Deletes all imported staging data, inventory items, and matches from the app. Use this to start fresh.</p>
                     </div>
                     <button 
-                        onClick={handleWipeData}
+                        onClick={() => setShowConfirm(true)}
                         disabled={wiping}
-                        className="px-4 py-2 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold transition-colors disabled:opacity-50"
+                        className="px-4 py-2 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
+                        {wiping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                         {wiping ? 'Wiping Data...' : 'Wipe Data & Restart'}
                     </button>
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={showConfirm}
+                variant="danger"
+                title="Wipe All Application Data?"
+                message="Are you strictly sure you want to wipe all application data? This will delete all imported products, inventory mappings, and staging data. Your actual Shopify and Etsy stores will NOT be affected."
+                confirmLabel="Yes, Wipe Everything"
+                cancelLabel="Cancel"
+                onConfirm={handleWipeData}
+                onCancel={() => setShowConfirm(false)}
+            />
         </div>
     );
 }

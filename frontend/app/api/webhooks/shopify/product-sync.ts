@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import * as etsyApi from '../../sync/lib/etsy';
+import { calculatePrice } from '../../sync/price-sync';
 
 export async function handleProductSync(payload: any, topic: 'products/create' | 'products/update' | 'products/delete', shopDomain: string, supabase: SupabaseClient) {
     console.log(`[ProductSync] Handling ${topic} for shop ${shopDomain}`);
@@ -82,10 +83,12 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
         const variant = payload.variants?.[0]; // Simplified for MVP: take first variant
         if (!variant) return { status: 'skipped', message: 'No variants found' };
 
-        // Apply price rules if needed
+        // Apply price rules if enabled
         let finalPrice = parseFloat(variant.price);
-        // We can apply shopify->etsy rule here simply if we want, or rely on clone route logic.
-        // For now, keep the base raw price if not handled.
+        const calculatedPrice = calculatePrice(finalPrice, settings.price_rules, 'etsy');
+        if (calculatedPrice !== null) {
+            finalPrice = calculatedPrice;
+        }
 
         // Check if item is already matched
         const { data: matchedItem } = await supabase
