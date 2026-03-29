@@ -32,7 +32,7 @@ export type ShopSettings = {
     // Sync
     sync_direction: SyncDirection
     auto_sync_enabled: boolean
-    stock_buffer: number
+    low_stock_threshold: number
     
     // Auto Product Sync
     auto_create_products: boolean
@@ -55,7 +55,7 @@ export type ShopSettings = {
 const DEFAULT_SETTINGS: ShopSettings = {
     sync_direction: 'bidirectional',
     auto_sync_enabled: false,
-    stock_buffer: 0,
+    low_stock_threshold: 0,
     auto_create_products: false,
     auto_update_products: false,
     auto_delete_products: false,
@@ -95,7 +95,7 @@ export async function getSettings(): Promise<ShopSettings> {
     return {
         sync_direction: settings.sync_direction || DEFAULT_SETTINGS.sync_direction,
         auto_sync_enabled: settings.auto_sync_enabled ?? DEFAULT_SETTINGS.auto_sync_enabled,
-        stock_buffer: settings.stock_buffer ?? DEFAULT_SETTINGS.stock_buffer,
+        low_stock_threshold: settings.low_stock_threshold ?? DEFAULT_SETTINGS.low_stock_threshold,
         auto_create_products: settings.auto_create_products ?? DEFAULT_SETTINGS.auto_create_products,
         auto_update_products: settings.auto_update_products ?? DEFAULT_SETTINGS.auto_update_products,
         auto_delete_products: settings.auto_delete_products ?? DEFAULT_SETTINGS.auto_delete_products,
@@ -129,7 +129,7 @@ export async function updateSettings(
 
     if (updates.sync_direction !== undefined) payload.sync_direction = updates.sync_direction
     if (updates.auto_sync_enabled !== undefined) payload.auto_sync_enabled = updates.auto_sync_enabled
-    if (updates.stock_buffer !== undefined) payload.stock_buffer = updates.stock_buffer
+    if (updates.low_stock_threshold !== undefined) payload.low_stock_threshold = updates.low_stock_threshold
     if (updates.price_sync_enabled !== undefined) payload.price_sync_enabled = updates.price_sync_enabled
     if (updates.price_rules !== undefined) payload.price_rules = updates.price_rules
     if (updates.notification_channels !== undefined) payload.notification_channels = updates.notification_channels

@@ -57,7 +57,7 @@ export default function SettingsPage() {
     const [settings, setSettings] = useState<ShopSettings>({
         sync_direction: 'bidirectional',
         auto_sync_enabled: false,
-        stock_buffer: 0,
+        low_stock_threshold: 0,
         auto_create_products: false,
         auto_update_products: false,
         auto_delete_products: false,
@@ -501,18 +501,18 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                 </SettingRow>
 
 
-                {/* Stock Buffer */}
+                {/* Low Stock Alert Threshold */}
                 <SettingRow
-                    label="Stock Buffer"
-                    description="Safety buffer — deducts this amount from stock shown on each platform to prevent overselling"
+                    label="Low Stock Alert"
+                    description="Get notified when stock drops below this level (0 = disabled)"
                 >
                     <div className="flex items-center gap-2">
                         <input
                             type="number"
                             min={0}
-                            max={100}
-                            value={settings.stock_buffer}
-                            onChange={(e) => updateField('stock_buffer', Math.max(0, parseInt(e.target.value) || 0))}
+                            max={1000}
+                            value={settings.low_stock_threshold}
+                            onChange={(e) => updateField('low_stock_threshold', Math.max(0, parseInt(e.target.value) || 0))}
                             className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <span className="text-sm text-gray-400">units</span>

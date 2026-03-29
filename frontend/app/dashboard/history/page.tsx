@@ -270,10 +270,10 @@ export default function HistoryPage() {
                                                                     <p className="font-bold text-gray-900">{item.metadata.shopify_total}</p>
                                                                 </div>
                                                             )}
-                                                            {item.metadata.stock_buffer !== undefined && item.metadata.stock_buffer > 0 && (
+                                                            {item.metadata.low_stock_threshold !== undefined && item.metadata.low_stock_threshold > 0 && (
                                                                 <div className="bg-white rounded-lg p-2 border border-gray-100">
-                                                                    <span className="text-gray-400 font-medium">Safety Buffer</span>
-                                                                    <p className="font-bold text-amber-600">-{item.metadata.stock_buffer}</p>
+                                                                    <span className="text-gray-400 font-medium">Alert Threshold</span>
+                                                                    <p className="font-bold text-amber-600">{item.metadata.low_stock_threshold} units</p>
                                                                 </div>
                                                             )}
                                                             {item.metadata.etsy_push !== undefined && (

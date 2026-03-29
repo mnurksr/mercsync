@@ -25,7 +25,7 @@ type SyncResult = {
  * 2. Find matching inventory_item in DB
  * 3. Fetch ALL inventory levels for this item across selected locations from Shopify API
  * 4. Aggregate total stock = sum of all selected locations
- * 5. Apply stock_buffer → effective_stock = total - buffer
+ * 5. Evaluate low_stock_threshold → send notification if stock is below
  * 6. Push effective_stock to Etsy if matched
  * 7. Update DB (master_stock, snapshots, location_map)
  * 8. Log to sync_logs
@@ -63,7 +63,7 @@ export async function handleInventoryUpdate(
         // ── 2. Check shop_settings ──
         const { data: settings } = await supabase
             .from('shop_settings')
-            .select('auto_sync_enabled, sync_direction, stock_buffer')
+            .select('auto_sync_enabled, sync_direction, low_stock_threshold')
             .eq('shop_id', shop.id)
             .maybeSingle();
 
@@ -194,14 +194,13 @@ export async function handleInventoryUpdate(
             console.log(`${logPrefix} Fallback aggregation: total=${totalShopifyStock}`);
         }
 
-        // ── 6. Apply stock buffer ──
-        const stockBuffer = settings.stock_buffer || 0;
-        const effectiveStock = Math.max(0, totalShopifyStock - stockBuffer);
+        // ── 6. Calculate effective stock (1:1, no buffer) ──
+        const effectiveStock = Math.max(0, totalShopifyStock);
         const oldStock = item.master_stock || 0;
 
         // Skip if total hasn't changed
         if (effectiveStock === oldStock) {
-            console.log(`${logPrefix} Total stock unchanged after buffer (${effectiveStock}). Skipping Etsy push.`);
+            console.log(`${logPrefix} Total stock unchanged (${effectiveStock}). Skipping Etsy push.`);
             // Still update the location map in DB
             await supabase.from('inventory_items').update({
                 location_inventory_map: locationMap,
@@ -210,12 +209,14 @@ export async function handleInventoryUpdate(
                 updated_at: new Date().toISOString()
             }).eq('id', item.id);
 
-            return { status: 'skipped', message: 'Total stock unchanged after buffer' };
+            return { status: 'skipped', message: 'Total stock unchanged' };
         }
 
-        console.log(`${logPrefix} Stock change: ${oldStock} → ${effectiveStock} (shopify total: ${totalShopifyStock}, buffer: ${stockBuffer})`);
+        console.log(`${logPrefix} Stock change: ${oldStock} → ${effectiveStock} (shopify total: ${totalShopifyStock})`);
 
         // --- Notification Triggers ---
+        const lowStockThreshold = settings.low_stock_threshold || 0;
+
         if (effectiveStock === 0) {
             await createNotification(
                 supabase,
@@ -225,13 +226,13 @@ export async function handleInventoryUpdate(
                 `Product (Item ID: ${inventoryItemId}) is now out of stock on all platforms.`,
                 `/dashboard/inventory`
             );
-        } else if (totalShopifyStock <= stockBuffer && stockBuffer > 0) {
+        } else if (lowStockThreshold > 0 && effectiveStock <= lowStockThreshold && oldStock > lowStockThreshold) {
             await createNotification(
                 supabase,
                 shop.id,
                 'oversell_risk',
-                'Over-sell Risk Detected',
-                `Shopify stock (${totalShopifyStock}) is less than or equal to your buffer (${stockBuffer}). Etsy stock set to 0 to prevent overselling.`,
+                'Low Stock Alert',
+                `Product (Item ID: ${inventoryItemId}) dropped to ${effectiveStock} units — below your alert threshold of ${lowStockThreshold}.`,
                 `/dashboard/inventory`
             );
         }
@@ -322,7 +323,7 @@ export async function handleInventoryUpdate(
             error_message: etsyError,
             metadata: {
                 shopify_total: totalShopifyStock,
-                stock_buffer: stockBuffer,
+                low_stock_threshold: lowStockThreshold,
                 webhook_location_id: webhookLocationId,
                 webhook_available: webhookAvailable,
                 location_breakdown: locationMap,

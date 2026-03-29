@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
                 // 2. Check settings
                 const { data: settings } = await supabase
                     .from('shop_settings')
-                    .select('auto_sync_enabled, sync_direction, stock_buffer')
+                    .select('auto_sync_enabled, sync_direction')
                     .eq('shop_id', shop.id)
                     .maybeSingle();
 

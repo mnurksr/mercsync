@@ -75,7 +75,7 @@ export async function createNotification(
     // 1. Fetch shop settings to see if this event is enabled
     const { data: settings } = await supabase
         .from('shop_settings')
-        .select('notification_channels, notification_events')
+        .select('notification_channels, notification_events, notification_email')
         .eq('shop_id', shopId)
         .maybeSingle()
 
