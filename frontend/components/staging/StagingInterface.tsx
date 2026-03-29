@@ -776,6 +776,60 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     };
 
     const handleContinueClick = async () => {
+        if (!isSetupMode) {
+            setSavingOverlay('loading');
+            try {
+                const matchPayload: { shopify_variant_id: string, etsy_variant_id: string }[] = [];
+
+                matches.forEach(m => {
+                    // 1. Explicit Variant Matches
+                    m.variantMatches.forEach(vm => {
+                        if (vm.shopify?.shopifyVariantId && vm.etsy?.etsyVariantId) {
+                            matchPayload.push({
+                                shopify_variant_id: vm.shopify.shopifyVariantId,
+                                etsy_variant_id: vm.etsy.etsyVariantId
+                            });
+                        }
+                    });
+
+                    // 2. Implicit 1-to-1 Matches
+                    if (!m.single && m.unmatchedShopifyVariants.length === 1 && m.unmatchedEtsyVariants.length === 1) {
+                        const sVariant = m.unmatchedShopifyVariants[0];
+                        const eVariant = m.unmatchedEtsyVariants[0];
+                        if (sVariant.shopifyVariantId && eVariant.etsyVariantId) {
+                            matchPayload.push({
+                                shopify_variant_id: sVariant.shopifyVariantId,
+                                etsy_variant_id: eVariant.etsyVariantId
+                            });
+                        }
+                    }
+                });
+
+                if (matchPayload.length > 0) {
+                    await fetch('/api/sync/match', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            shop_id: currentUserId,
+                            matches: matchPayload
+                        })
+                    });
+                }
+
+                setSavingOverlay('success');
+                setTimeout(() => {
+                    setSavingOverlay(null);
+                    router.push('/dashboard/products');
+                }, 1500);
+            } catch (error) {
+                console.error('Match save error:', error);
+                toast.error('Failed to save matches.');
+                setSavingOverlay(null);
+            }
+            return;
+        }
+
+        // --- SETUP MODE FLOW (Includes Location Selection & Cloning) ---
         setShowLocationModal(true);
         setLoadingLocations(true);
         try {
@@ -1013,7 +1067,16 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         setCloneModal(prev => ({ ...prev, isOpen: false }));
     };
 
-    useEffect(() => { if (currentUserId) load(); }, [currentUserId]);
+    console.log('[StagingInterface Render] propUserId:', propUserId, 'authUser:', authUser?.id, 'currentUserId:', currentUserId, 'loading:', loading);
+
+    useEffect(() => { 
+        console.log('[StagingInterface] useEffect running. currentUserId:', currentUserId);
+        if (currentUserId) {
+            load(); 
+        } else {
+            console.log('[StagingInterface] No currentUserId, skipping load()');
+        }
+    }, [currentUserId]);
 
     const load = async () => {
         try {
