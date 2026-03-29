@@ -354,14 +354,27 @@ export async function saveShopifyLocations(
             return { success: false, message: 'Shop not found or not fully connected' }
         }
 
-        // 2. Save primary location (first in the array) to shops.main_location_id
+        // 2. Save primary location and all selected IDs to shops table
         const primaryLocationId = locationIds[0]
         await supabase
             .from('shops')
-            .update({ main_location_id: primaryLocationId })
+            .update({
+                main_location_id: primaryLocationId,
+                selected_location_ids: locationIds
+            })
             .eq('id', shop.id)
 
-        // 3. Fetch inventory levels for all selected locations from Shopify
+        // 3. Propagate selected_location_ids to ALL inventory_items for this shop (idempotent)
+        const adminSupabase = createAdminClient()
+        await adminSupabase
+            .from('inventory_items')
+            .update({
+                selected_location_ids: locationIds,
+                updated_at: new Date().toISOString()
+            })
+            .eq('shop_id', shop.id)
+
+        // 4. Fetch inventory levels for all selected locations from Shopify
         const url = `https://${shop.shop_domain}/admin/api/2024-01/inventory_levels.json?location_ids=${locationIds.join(',')}`
         const res = await fetch(url, {
             headers: {
@@ -372,14 +385,13 @@ export async function saveShopifyLocations(
 
         if (!res.ok) {
             console.error('[saveShopifyLocations] Shopify API error:', await res.text())
-            // Still return success — location was saved, just stock aggregation failed
-            return { success: true, message: 'Location saved. Stock aggregation skipped due to API error.' }
+            return { success: true, message: 'Locations saved. Stock aggregation skipped due to API error.' }
         }
 
         const levelsData = await res.json()
         const levels = levelsData.inventory_levels || []
 
-        // 4. Aggregate stock by inventory_item_id
+        // 5. Aggregate stock by inventory_item_id
         const stockMap: Record<string, number> = {}
         levels.forEach((level: any) => {
             const itemId = level.inventory_item_id.toString()
@@ -387,8 +399,7 @@ export async function saveShopifyLocations(
             stockMap[itemId] = (stockMap[itemId] || 0) + available
         })
 
-        // 5. Update staging products with aggregated stock
-        const adminSupabase = createAdminClient()
+        // 6. Update staging_shopify_products with aggregated stock and location IDs (idempotent)
         const aggregatedItems = Object.keys(stockMap)
         const chunkSize = 50
 
@@ -409,7 +420,7 @@ export async function saveShopifyLocations(
 
         return {
             success: true,
-            message: `Updated stock levels for ${aggregatedItems.length} items across ${locationIds.length} locations.`
+            message: `Updated ${aggregatedItems.length} items across ${locationIds.length} locations.`
         }
     } catch (e: any) {
         console.error('[saveShopifyLocations] Error:', e)
@@ -418,18 +429,45 @@ export async function saveShopifyLocations(
 }
 
 /**
- * Server Action: Get the saved main_location_id from the shops table.
- * Used by the Settings Locations tab to correctly show the primary location.
+ * Server Action: Get saved location configuration from the shops table.
+ * Returns both mainLocationId and selectedLocationIds.
+ * Used by the Settings Locations tab to correctly restore the user's saved state.
  */
-export async function getShopMainLocationId(): Promise<string | null> {
+export async function getShopLocationConfig(): Promise<{
+    mainLocationId: string | null;
+    selectedLocationIds: string[];
+}> {
     const { supabase, ownerId } = await getValidatedUserContext()
-    if (!ownerId) return null
+    if (!ownerId) return { mainLocationId: null, selectedLocationIds: [] }
 
     const { data: shop } = await supabase
         .from('shops')
-        .select('main_location_id')
+        .select('main_location_id, selected_location_ids')
         .eq('owner_id', ownerId)
         .maybeSingle()
 
-    return shop?.main_location_id?.toString() || null
+    if (!shop) return { mainLocationId: null, selectedLocationIds: [] }
+
+    const mainLocationId = shop.main_location_id?.toString() || null
+
+    // selected_location_ids may be in shops table or we can fall back to inventory_items
+    let selectedIds: string[] = []
+    if (shop.selected_location_ids && Array.isArray(shop.selected_location_ids) && shop.selected_location_ids.length > 0) {
+        selectedIds = shop.selected_location_ids.map((id: any) => id.toString())
+    } else {
+        // Fallback: read from first inventory_item that has selected_location_ids
+        const { data: item } = await supabase
+            .from('inventory_items')
+            .select('selected_location_ids')
+            .eq('shop_id', (await supabase.from('shops').select('id').eq('owner_id', ownerId).maybeSingle()).data?.id || '')
+            .not('selected_location_ids', 'is', null)
+            .limit(1)
+            .maybeSingle()
+
+        if (item?.selected_location_ids && Array.isArray(item.selected_location_ids)) {
+            selectedIds = item.selected_location_ids.map((id: any) => id.toString())
+        }
+    }
+
+    return { mainLocationId, selectedLocationIds: selectedIds }
 }

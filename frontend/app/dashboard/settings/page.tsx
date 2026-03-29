@@ -14,7 +14,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations, saveShopifyLocations, getShopMainLocationId } from '../../actions/shop';
+import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations, saveShopifyLocations, getShopLocationConfig } from '../../actions/shop';
 import {
     getSettings, updateSettings,
     type ShopSettings, type SyncDirection,
@@ -117,9 +117,9 @@ export default function SettingsPage() {
 
             // Load locations if Shopify connected
             if (shopify.connected) {
-                const [locResult, savedPrimaryId] = await Promise.all([
+                const [locResult, savedConfig] = await Promise.all([
                     fetchShopifyLocations(),
-                    getShopMainLocationId()
+                    getShopLocationConfig()
                 ]);
                 if (locResult.success && locResult.data) {
                     const locs = locResult.data.map((l: any) => ({
@@ -130,20 +130,27 @@ export default function SettingsPage() {
                     }));
                     setLocations(locs);
 
-                    // Use saved primary from DB if available, otherwise fall back to first active
+                    const { mainLocationId: savedPrimaryId, selectedLocationIds: savedSelectedIds } = savedConfig;
+
+                    // Restore saved primary location from DB
                     if (savedPrimaryId) {
                         setPrimaryLocationId(savedPrimaryId);
-                        // Select all active locations, ensuring the saved primary is included
-                        const activeLocs = locs.filter(l => l.active).map(l => l.id);
-                        const selected = activeLocs.includes(savedPrimaryId)
-                            ? activeLocs
-                            : [savedPrimaryId, ...activeLocs];
-                        setSelectedLocationIds(selected.length > 0 ? selected : locs.length > 0 ? [locs[0].id] : []);
                     } else {
                         // No saved primary — fall back to first active location
+                        const firstActive = locs.find(l => l.active);
+                        setPrimaryLocationId(firstActive?.id || (locs.length > 0 ? locs[0].id : null));
+                    }
+
+                    // Restore saved selected locations from DB
+                    if (savedSelectedIds.length > 0) {
+                        // Only use IDs that still exist in the Shopify locations list
+                        const validLocIds = locs.map(l => l.id);
+                        const validSavedIds = savedSelectedIds.filter(id => validLocIds.includes(id));
+                        setSelectedLocationIds(validSavedIds.length > 0 ? validSavedIds : [locs[0]?.id].filter(Boolean));
+                    } else {
+                        // No saved selection — fall back to all active locations
                         const activeLocs = locs.filter(l => l.active).map(l => l.id);
                         setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : locs.length > 0 ? [locs[0].id] : []);
-                        setPrimaryLocationId(activeLocs.length > 0 ? activeLocs[0] : locs.length > 0 ? locs[0].id : null);
                     }
                 }
             }
