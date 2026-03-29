@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
             case 'products/delete':
                 console.log(`[Shopify Webhook] Product deleted for ${shop}: ${payload.id}`);
                 // Find shop to get ID
-                const { data: theShop } = await supabase.from('shops').select('id').eq('shop_domain', shop).single();
+                const { data: theShop } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
                 if (theShop) {
                     // Remove from staging
                     await supabase

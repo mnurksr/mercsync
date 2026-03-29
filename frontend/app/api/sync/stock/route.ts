@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
                 .from('inventory_items')
                 .select('shop_id, shop:shops(owner_id)')
                 .eq('id', itemIds[0])
-                .single();
+                .maybeSingle();
                 
             if (itemData?.shop && (itemData.shop as any).owner_id) {
                 target_user_id = (itemData.shop as any).owner_id;

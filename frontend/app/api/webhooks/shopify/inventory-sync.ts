@@ -52,7 +52,7 @@ export async function handleInventoryUpdate(
             .from('shops')
             .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id, owner_id')
             .eq('shop_domain', shopDomain)
-            .single();
+            .maybeSingle();
 
         if (shopError || !shop) {
             console.error(`${logPrefix} Shop not found for domain: ${shopDomain}`);
@@ -64,7 +64,7 @@ export async function handleInventoryUpdate(
             .from('shop_settings')
             .select('auto_sync_enabled, sync_direction, stock_buffer')
             .eq('shop_id', shop.id)
-            .single();
+            .maybeSingle();
 
         if (!settings?.auto_sync_enabled) {
             console.log(`${logPrefix} Auto-sync disabled for shop ${shop.id}. Skipping.`);
