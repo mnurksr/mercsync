@@ -261,11 +261,48 @@ export default function HistoryPage() {
                                                     </div>
                                                 )}
                                                 {item.metadata && Object.keys(item.metadata).length > 0 && (
-                                                    <div className="text-gray-500 overflow-x-auto">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Technical Payload</div>
-                                                        <pre className="whitespace-pre-wrap break-all">
-                                                            {JSON.stringify(item.metadata, null, 2)}
-                                                        </pre>
+                                                    <div className="text-gray-600 space-y-2">
+                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Sync Details</div>
+                                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                                            {item.metadata.shopify_total !== undefined && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Shopify Total Stock</span>
+                                                                    <p className="font-bold text-gray-900">{item.metadata.shopify_total}</p>
+                                                                </div>
+                                                            )}
+                                                            {item.metadata.stock_buffer !== undefined && item.metadata.stock_buffer > 0 && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Safety Buffer</span>
+                                                                    <p className="font-bold text-amber-600">-{item.metadata.stock_buffer}</p>
+                                                                </div>
+                                                            )}
+                                                            {item.metadata.etsy_push !== undefined && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Etsy Sync</span>
+                                                                    <p className={`font-bold ${item.metadata.etsy_push === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                                        {item.metadata.etsy_push === 'success' ? '✓ Synced' : '✗ Failed'}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                            {item.metadata.webhook_available !== undefined && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Webhook Stock</span>
+                                                                    <p className="font-bold text-gray-900">{item.metadata.webhook_available}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {item.metadata.location_breakdown && Array.isArray(item.metadata.location_breakdown) && (
+                                                            <div className="bg-white rounded-lg p-2 border border-gray-100 mt-1">
+                                                                <span className="text-gray-400 font-medium text-[10px] uppercase">Location Breakdown</span>
+                                                                <div className="flex flex-wrap gap-2 mt-1">
+                                                                    {item.metadata.location_breakdown.map((loc: any, idx: number) => (
+                                                                        <span key={idx} className="text-xs bg-gray-50 px-2 py-1 rounded font-medium">
+                                                                            📍 {loc.location_id?.toString().slice(-4)}: <strong>{loc.stock}</strong>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>

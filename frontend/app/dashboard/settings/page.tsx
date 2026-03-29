@@ -824,22 +824,8 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                         </div>
                     )}
                 </div>
-
-                {/* Slack Webhook */}
-                <div className="px-6 py-4">
-                    <SettingRow label="Slack Webhook" description="Delivery daily summaries and critical alerts to a Slack channel">
-                        <div className="w-full max-w-xs">
-                            <input
-                                type="text"
-                                value={settings.notification_channels.slack_webhook_url || ''}
-                                onChange={(e) => updateChannel('slack_webhook_url', e.target.value || null)}
-                                placeholder="https://hooks.slack.com/services/..."
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
-                    </SettingRow>
-                </div>
             </div>
+
 
             {/* Events */}
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
