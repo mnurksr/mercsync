@@ -24,7 +24,6 @@ export type NotificationEvents = {
     stock_zero: boolean
     sync_failed: boolean
     oversell_risk: boolean
-    new_order: boolean
     token_expiring: boolean
 }
 
@@ -62,7 +61,7 @@ const DEFAULT_SETTINGS: ShopSettings = {
     price_sync_enabled: false,
     price_rules: [],
     notification_channels: { in_app: true, email: false, slack_webhook_url: null },
-    notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, new_order: false, token_expiring: true },
+    notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, token_expiring: true },
     notification_frequency: 'instant',
     notification_email: null
 }

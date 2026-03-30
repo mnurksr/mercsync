@@ -64,7 +64,7 @@ export default function SettingsPage() {
         price_sync_enabled: false,
         price_rules: [],
         notification_channels: { in_app: true, email: false, slack_webhook_url: null },
-        notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, new_order: false, token_expiring: true },
+        notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, token_expiring: true },
         notification_frequency: 'instant',
         notification_email: null
     });
@@ -843,9 +843,6 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                         )}
                         <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
                     </div>
-                </SettingRow>
-                <SettingRow label="New order" description="When a new order comes in from any platform">
-                    <ToggleSwitch enabled={settings.notification_events.new_order} onChange={(v) => updateEvent('new_order', v)} />
                 </SettingRow>
                 <SettingRow label="Token expiring" description="When a platform connection is about to expire">
                     <ToggleSwitch enabled={settings.notification_events.token_expiring} onChange={(v) => updateEvent('token_expiring', v)} />

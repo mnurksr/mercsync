@@ -33,7 +33,7 @@ export async function sendNotificationEmail(to: string, subject: string, body: s
 }
 
 // ─── Notification Type Config ──────────────────
-type NotificationType = 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'new_order' | 'token_expiring';
+type NotificationType = 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'token_expiring';
 
 const NOTIFICATION_CONFIG: Record<NotificationType, {
     emoji: string;
@@ -66,14 +66,6 @@ const NOTIFICATION_CONFIG: Record<NotificationType, {
         iconBg: '#dbeafe',
         ctaColor: '#2563eb',
         ctaText: 'View Inventory'
-    },
-    new_order: {
-        emoji: '🎉',
-        accentColor: '#059669',
-        accentBg: '#ecfdf5',
-        iconBg: '#d1fae5',
-        ctaColor: '#059669',
-        ctaText: 'View Orders'
     },
     token_expiring: {
         emoji: '🔑',

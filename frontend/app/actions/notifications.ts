@@ -61,21 +61,15 @@ export async function markAllAsRead() {
 }
 
 /**
- * Resolve a relative path to the full Shopify embedded app URL.
- * Uses APP_URL env var or constructs from NEXT_PUBLIC_SHOPIFY_APP_URL.
+ * Build the Shopify embedded app URL from shop_domain and a relative path.
+ * Example: shop_domain='shopiauto-test.myshopify.com', path='/dashboard/inventory'
+ * → https://admin.shopify.com/store/shopiauto-test/apps/mercsync-1/dashboard/inventory
  */
-function resolveActionUrl(relativePath: string | null): string | null {
-    if (!relativePath) return null;
-    // If it's already absolute, return as-is
-    if (relativePath.startsWith('http')) return relativePath;
-
-    // Build absolute URL from env
-    const baseUrl = process.env.APP_URL
-        || process.env.NEXT_PUBLIC_APP_URL
-        || process.env.NEXT_PUBLIC_SHOPIFY_APP_URL
-        || 'https://mercsync.com';
-
-    return `${baseUrl.replace(/\/$/, '')}${relativePath}`;
+function buildEmbeddedAppUrl(shopDomain: string, relativePath: string): string {
+    // Extract store name: 'shopiauto-test.myshopify.com' → 'shopiauto-test'
+    const storeName = shopDomain.replace('.myshopify.com', '').replace(/^https?:\/\//, '');
+    const appSlug = process.env.SHOPIFY_APP_SLUG || 'mercsync-1';
+    return `https://admin.shopify.com/store/${storeName}/apps/${appSlug}${relativePath}`;
 }
 
 /**
@@ -85,7 +79,7 @@ function resolveActionUrl(relativePath: string | null): string | null {
 export async function createNotification(
     supabase: any,
     shopId: string,
-    type: 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'new_order' | 'token_expiring',
+    type: 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'token_expiring',
     title: string,
     message: string,
     actionUrl: string | null = null
@@ -115,9 +109,23 @@ export async function createNotification(
         })
     }
 
-    // 3. Email Notification (Resend) — resolve URL to absolute
+    // 3. Email Notification (Resend) — build Shopify embedded app URL
     if (channels?.email && settings.notification_email) {
-        const absoluteUrl = resolveActionUrl(actionUrl);
+        let absoluteUrl: string | null = null;
+        if (actionUrl) {
+            // Fetch shop_domain for building the embedded URL
+            const { data: shop } = await supabase
+                .from('shops')
+                .select('shop_domain')
+                .eq('id', shopId)
+                .maybeSingle();
+            
+            if (shop?.shop_domain && !actionUrl.startsWith('http')) {
+                absoluteUrl = buildEmbeddedAppUrl(shop.shop_domain, actionUrl);
+            } else {
+                absoluteUrl = actionUrl;
+            }
+        }
         const html = buildNotificationHtml(title, message, absoluteUrl, type)
         await sendNotificationEmail(settings.notification_email, `[MercSync] ${title}`, html)
     }
