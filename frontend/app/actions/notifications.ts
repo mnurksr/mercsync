@@ -61,6 +61,24 @@ export async function markAllAsRead() {
 }
 
 /**
+ * Resolve a relative path to the full Shopify embedded app URL.
+ * Uses APP_URL env var or constructs from NEXT_PUBLIC_SHOPIFY_APP_URL.
+ */
+function resolveActionUrl(relativePath: string | null): string | null {
+    if (!relativePath) return null;
+    // If it's already absolute, return as-is
+    if (relativePath.startsWith('http')) return relativePath;
+
+    // Build absolute URL from env
+    const baseUrl = process.env.APP_URL
+        || process.env.NEXT_PUBLIC_APP_URL
+        || process.env.NEXT_PUBLIC_SHOPIFY_APP_URL
+        || 'https://mercsync.com';
+
+    return `${baseUrl.replace(/\/$/, '')}${relativePath}`;
+}
+
+/**
  * Trigger a notification for a shop.
  * Handles both in-app alerts and email (via Resend if configured).
  */
@@ -97,9 +115,10 @@ export async function createNotification(
         })
     }
 
-    // 3. Email Notification (Resend)
+    // 3. Email Notification (Resend) — resolve URL to absolute
     if (channels?.email && settings.notification_email) {
-        const html = buildNotificationHtml(title, message, actionUrl)
+        const absoluteUrl = resolveActionUrl(actionUrl);
+        const html = buildNotificationHtml(title, message, absoluteUrl, type)
         await sendNotificationEmail(settings.notification_email, `[MercSync] ${title}`, html)
     }
 }

@@ -277,24 +277,36 @@ export default function CloneModal({
                                         <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded">Input</span>
                                     </p>
                                 </div>
-                                <select 
-                                    value={formData.selected_rule?.platform || ''}
-                                    onChange={e => {
-                                        const rule = pricingRules?.find(r => r.platform === e.target.value);
-                                        setFormData(prev => ({ ...prev, selected_rule: rule }));
-                                    }}
-                                    className="w-full px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                                >
-                                    <option value="">No specific rule (Use defaults)</option>
-                                    {pricingRules?.map((r, idx) => (
-                                        <option key={idx} value={r.platform}>
-                                            Rule for {r.platform === 'etsy' ? 'Etsy' : 'Shopify'} ({r.adjustment_type === 'percentage' ? r.adjustment_value + '%' : r.adjustment_value + ' fixed'})
-                                        </option>
-                                    ))}
-                                </select>
-                                <p className="text-[10px] text-indigo-600 mt-2 font-medium bg-indigo-50 p-2 rounded-lg text-center">
-                                    Final price will be calculated based on your selected rule.
-                                </p>
+                                {(() => {
+                                    const targetRules = pricingRules?.filter(r => r.platform === targetPlatform) || [];
+                                    return targetRules.length > 0 ? (
+                                        <select 
+                                            value={formData.selected_rule?.platform || ''}
+                                            onChange={e => {
+                                                const rule = targetRules.find(r => r.platform === e.target.value);
+                                                setFormData(prev => ({ ...prev, selected_rule: rule }));
+                                            }}
+                                            className="w-full px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none mt-2"
+                                        >
+                                            <option value="">No rule (Use source price)</option>
+                                            {targetRules.map((r, idx) => (
+                                                <option key={idx} value={r.platform}>
+                                                    {r.platform === 'etsy' ? 'Etsy' : 'Shopify'} — {r.type === 'percentage' ? `+${r.value}%` : `+$${r.value} fixed`}{r.rounding && r.rounding !== 'none' ? ` (${r.rounding})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <p className="text-[10px] text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg text-center">
+                                            No pricing rule defined for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}. You can add one in Settings → Price Rules.
+                                        </p>
+                                    );
+                                })()}
+                                {formData.selected_rule && (
+                                    <p className="text-[10px] text-indigo-600 mt-2 font-medium bg-indigo-50 p-2 rounded-lg text-center">
+                                        Final price = Source price {formData.selected_rule.type === 'percentage' ? `+ ${formData.selected_rule.value}%` : `+ $${formData.selected_rule.value}`}
+                                        {formData.selected_rule.rounding && formData.selected_rule.rounding !== 'none' ? ` → rounded to ${formData.selected_rule.rounding}` : ''}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </div>

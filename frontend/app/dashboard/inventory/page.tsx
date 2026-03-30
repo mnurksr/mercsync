@@ -485,7 +485,13 @@ export default function InventoryPage() {
 
     const getStockStatus = (item: InventoryItem) => {
         if (!item.shopify_variant_id || !item.etsy_variant_id) {
-            return { label: 'Marketplace Only', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
+            if (item.shopify_variant_id && !item.etsy_variant_id) {
+                return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
+            }
+            if (item.etsy_variant_id && !item.shopify_variant_id) {
+                return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
+            }
+            return { label: 'Unlinked', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
         }
         if (item.status === 'Action Required' || item.status === 'MISMATCH' || item.status === 'Mismatch') {
             return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
@@ -672,12 +678,12 @@ export default function InventoryPage() {
                                                     <div className="flex items-center justify-between w-[120px] bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 shadow-inner">
                                                         <div className="flex items-center gap-1.5 w-[40px]" title="Shopify Stock Snapshot">
                                                             <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                                            <span className="text-[11px] font-black text-gray-900">{item.shopify_stock_snapshot ?? '-'}</span>
+                                                            <span className="text-[11px] font-black text-gray-900">{item.shopify_variant_id ? (item.shopify_stock_snapshot ?? 0) : '–'}</span>
                                                         </div>
                                                         <div className="w-px h-3 bg-gray-300 rounded-full shrink-0"></div>
                                                         <div className="flex items-center gap-1.5 w-[40px] flex-row-reverse" title="Etsy Stock Snapshot">
                                                             <Store className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                                            <span className="text-[11px] font-black text-gray-900 text-right w-full">{item.etsy_stock_snapshot ?? '-'}</span>
+                                                            <span className="text-[11px] font-black text-gray-900 text-right w-full">{item.etsy_variant_id ? (item.etsy_stock_snapshot ?? 0) : '–'}</span>
                                                         </div>
                                                     </div>
                                                 </div>
