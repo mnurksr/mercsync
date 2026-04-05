@@ -335,6 +335,9 @@ export function buildProductPayload(
             row.image_url.split(',').forEach((img: string) => allImages.add(img.trim()));
         }
     });
+    if (sourceProduct.image) {
+        sourceProduct.image.split(',').forEach((img: string) => allImages.add(img.trim()));
+    }
 
     const images = Array.from(allImages)
         .filter(url => url !== '')

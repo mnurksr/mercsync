@@ -175,6 +175,9 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
 
             console.log(`[ProductSync] Auto-Creating Etsy Draft Listing for ${productId}`);
             try {
+                // Pre-fetch shipping profile for physical item
+                const shippingProfileId = await etsyApi.getOrCreateShippingProfile(shop.etsy_shop_id, shop.etsy_access_token);
+
                 // We use createListing with minimum payload
                 const draft = await etsyApi.createListing(shop.etsy_shop_id, shop.etsy_access_token, {
                     title: title.substring(0, 140),
@@ -184,6 +187,8 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                     who_made: 'i_did',
                     when_made: '2020_2026',
                     is_supply: false,
+                    type: 'physical',
+                    shipping_profile_id: shippingProfileId,
                     taxonomy_id: 1 // Default accessory/other, will need mapping for prod
                 });
 

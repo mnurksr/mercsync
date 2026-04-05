@@ -750,9 +750,10 @@ export async function cloneToShopify(shop: any, product: CloneProduct, jobId: st
         .select('*')
         .eq('etsy_listing_id', product.source_id);
 
-    if (!dbRows || dbRows.length === 0) {
+    if ((!dbRows || dbRows.length === 0) && jobId !== 'cron-job') {
         throw new Error(`Source Etsy product not found: ${product.source_id}`);
     }
+    const safeDbRows = dbRows || [];
 
     // Build selected variant data from clone payload
     const cloneVariantsSrc = product.variants?.length > 0
@@ -862,7 +863,7 @@ export async function cloneToShopify(shop: any, product: CloneProduct, jobId: st
 
     // === STANDARD CLONE: Create new product ===
     // 2. Build Shopify product payload (using clone variant data if available)
-    const { product: shopifyPayload, originalStocks } = shopifyApi.buildProductPayload(product, dbRows, cloneVariants);
+    const { product: shopifyPayload, originalStocks } = shopifyApi.buildProductPayload(product, safeDbRows, cloneVariants);
 
     // 3. Create product on Shopify
     const created = await shopifyApi.createProduct(creds, shopifyPayload);
@@ -930,11 +931,11 @@ export async function cloneToShopify(shop: any, product: CloneProduct, jobId: st
                 variant_title: variant.title,
                 description: shopifyProduct.body_html || '',
                 location_inventory_map: JSON.stringify(locMap),
-                etsy_variant_id: cv ? cv.source_variant_id : dbRows[i]?.etsy_variant_id // Link back to source
+                etsy_variant_id: cv ? cv.source_variant_id : safeDbRows[i]?.etsy_variant_id // Link back to source
             }, { onConflict: 'shopify_inventory_item_id' });
 
         // [FIX] Bidirectional Link: Update Etsy side so it also shows "Matched"
-        const sourceEtsyVarId = cv ? cv.source_variant_id : dbRows[i]?.etsy_variant_id;
+        const sourceEtsyVarId = cv ? cv.source_variant_id : safeDbRows[i]?.etsy_variant_id;
         if (sourceEtsyVarId) {
             await supabase
                 .from('staging_etsy_products')
