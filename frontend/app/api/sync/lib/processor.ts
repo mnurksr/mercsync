@@ -944,6 +944,8 @@ export async function cloneToShopify(shop: any, product: CloneProduct, jobId: st
                 .eq('etsy_variant_id', sourceEtsyVarId);
         }
     }
+
+    return shopifyProduct;
 }
 
 // ─────────────────────────────────────────────

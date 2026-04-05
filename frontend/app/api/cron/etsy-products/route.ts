@@ -169,7 +169,24 @@ export async function GET(req: NextRequest) {
                                     }],
                                     price_rule: shopifyPriceRules
                                 };
-                                await cloneToShopify(shop, cloneProduct, 'cron-job');
+                                const createdShopifyProduct = await cloneToShopify(shop, cloneProduct, 'cron-job');
+
+                                if (createdShopifyProduct && createdShopifyProduct.variants && createdShopifyProduct.variants.length > 0) {
+                                    const variant = createdShopifyProduct.variants[0];
+                                    await supabase.from('inventory_items').insert({
+                                        shop_id: shop.id,
+                                        shopify_product_id: createdShopifyProduct.id.toString(),
+                                        shopify_variant_id: variant.id.toString(),
+                                        shopify_inventory_item_id: variant.inventory_item_id.toString(),
+                                        etsy_listing_id: listingId,
+                                        sku: variant.sku || cloneProduct.sku,
+                                        name: createdShopifyProduct.title,
+                                        master_stock: variant.inventory_quantity || cloneProduct.stock,
+                                        shopify_stock_snapshot: variant.inventory_quantity || cloneProduct.stock,
+                                        etsy_stock_snapshot: cloneProduct.stock,
+                                        status: 'Matched'
+                                    });
+                                }
 
                                 await supabase.from('sync_logs').insert({
                                     shop_id: shop.id,
