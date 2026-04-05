@@ -68,8 +68,8 @@ export async function GET(req: NextRequest) {
             console.log(`[Etsy Products Cron] Processing shop ${shop.shop_domain} (${shop.etsy_shop_id})`);
 
             try {
-                // Determine timestamps: fetch last 2 hours to be safe against overlaps
-                const twoHoursAgo = Math.floor(Date.now() / 1000) - (2 * 60 * 60);
+                // Determine timestamps: fetch last 20 minutes to match 15-minute cron with safe overlap
+                const timeThreshold = Math.floor(Date.now() / 1000) - (20 * 60);
 
                 // We can't query by last_modified_tsz easily in standard getListingsByState without search params, 
                 // but for MVP we will pull the first page of active AND draft listings and filter.
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
                 const etsyData = { results: combinedResults };
 
                 if (etsyData && etsyData.results && etsyData.results.length > 0) {
-                    const recentListings = etsyData.results.filter((l: any) => l.last_modified_timestamp >= twoHoursAgo);
+                    const recentListings = etsyData.results.filter((l: any) => l.last_modified_timestamp >= timeThreshold);
                     console.log(`[Etsy Products Cron] Found ${recentListings.length} modified listings (active+draft) for ${shop.shop_domain}`);
 
                     for (const listing of recentListings) {
@@ -229,7 +229,7 @@ export async function GET(req: NextRequest) {
                     try {
                         const inactiveData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'inactive', 0, 100);
                         if (inactiveData?.results?.length > 0) {
-                            const recentInactives = inactiveData.results.filter((l: any) => l.last_modified_timestamp >= twoHoursAgo);
+                            const recentInactives = inactiveData.results.filter((l: any) => l.last_modified_timestamp >= timeThreshold);
                             console.log(`[Etsy Products Cron] Found ${recentInactives.length} recently in-activated listings for ${shop.shop_domain}`);
 
                             for (const listing of recentInactives) {
