@@ -157,6 +157,21 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                     return { status: 'success', message: 'Etsy listing updated' };
                 } catch (e: any) {
                     console.error('[ProductSync] Update failed', e);
+                    
+                    // Self-healing: if the Etsy listing was manually deleted => 404
+                    if (e.message && (e.message.includes('Resource not found') || e.message.includes('404'))) {
+                        console.log(`[ProductSync] Etsy listing ${matchedItem.etsy_listing_id} not found. Removing stale mapping for Shopify product ${productId}.`);
+                        await supabase.from('inventory_items').delete().eq('shopify_product_id', productId);
+                        
+                        await logSyncEvent(supabase, shop.id, 'product_update', 'failed', {
+                            shopify_product_id: productId,
+                            etsy_listing_id: matchedItem.etsy_listing_id,
+                            title: productTitle
+                        }, 'Etsy listing manually deleted. Mapping removed. Product will be recreated on next update.');
+                        
+                        return { status: 'skipped', message: 'Etsy mapping cleared due to 404' };
+                    }
+
                     await logSyncEvent(supabase, shop.id, 'product_update', 'failed', {
                         shopify_product_id: productId,
                         etsy_listing_id: matchedItem.etsy_listing_id,
@@ -175,8 +190,9 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
 
             console.log(`[ProductSync] Auto-Creating Etsy Draft Listing for ${productId}`);
             try {
-                // Pre-fetch shipping profile for physical item
+                // Pre-fetch shipping profile & readiness state for physical item
                 const shippingProfileId = await etsyApi.getOrCreateShippingProfile(shop.etsy_shop_id, shop.etsy_access_token);
+                const readinessStateId = await etsyApi.getOrCreateReadinessState(shop.etsy_shop_id, shop.etsy_access_token);
 
                 // We use createListing with minimum payload
                 const draft = await etsyApi.createListing(shop.etsy_shop_id, shop.etsy_access_token, {
@@ -189,6 +205,7 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                     is_supply: false,
                     type: 'physical',
                     shipping_profile_id: shippingProfileId,
+                    readiness_state_id: readinessStateId,
                     taxonomy_id: 1 // Default accessory/other, will need mapping for prod
                 });
 

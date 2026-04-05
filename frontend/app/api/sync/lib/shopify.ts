@@ -369,7 +369,7 @@ export function buildProductPayload(
 
     return {
         product: {
-            title: sourceProduct.product_title || sourceProduct.name,
+            title: sourceProduct.title || sourceProduct.product_title || sourceProduct.name,
             body_html: sourceProduct.description || '',
             status: 'draft',
             vendor: 'Etsy Klonu',
