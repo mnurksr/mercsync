@@ -2,6 +2,31 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import * as etsyApi from '../../sync/lib/etsy';
 import { calculatePrice } from '../../sync/price-sync';
 
+// ─── Sync Logger ─────────────────────────────
+async function logSyncEvent(
+    supabase: SupabaseClient,
+    shopId: string,
+    eventType: 'product_create' | 'product_update' | 'product_delete',
+    status: 'success' | 'failed' | 'skipped',
+    metadata: Record<string, any>,
+    errorMessage?: string
+) {
+    try {
+        await supabase.from('sync_logs').insert({
+            shop_id: shopId,
+            source: 'shopify',
+            direction: 'shopify_to_etsy',
+            event_type: eventType,
+            status,
+            error_message: errorMessage || null,
+            metadata,
+            created_at: new Date().toISOString()
+        });
+    } catch (e) {
+        console.error('[ProductSync] Failed to write sync log:', e);
+    }
+}
+
 export async function handleProductSync(payload: any, topic: 'products/create' | 'products/update' | 'products/delete', shopDomain: string, supabase: SupabaseClient) {
     console.log(`[ProductSync] Handling ${topic} for shop ${shopDomain}`);
 
@@ -36,29 +61,41 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
         }
 
         const productId = payload.id?.toString();
+        const productTitle = payload.title || 'Unknown Product';
         if (!productId) return { status: 'error', message: 'No product ID in payload' };
 
         // --- HANDLE DELETE ---
         if (topic === 'products/delete') {
-            if (settings.auto_delete_products) {
-                // Find matching inventory items
-                const { data: matchedItems } = await supabase
-                    .from('inventory_items')
-                    .select('etsy_listing_id')
-                    .eq('shop_id', shop.id)
-                    .eq('shopify_product_id', productId)
-                    .not('etsy_listing_id', 'is', null);
+            if (!settings.auto_delete_products) {
+                return { status: 'skipped', message: 'Auto-Delete disabled' };
+            }
 
-                if (matchedItems && matchedItems.length > 0) {
-                    for (const item of matchedItems) {
-                        try {
-                            if (item.etsy_listing_id) {
-                                console.log(`[ProductSync] Auto-Deleting Etsy Listing ${item.etsy_listing_id}`);
-                                await etsyApi.deleteListing(item.etsy_listing_id, shop.etsy_access_token);
-                            }
-                        } catch (e) {
-                            console.error(`[ProductSync] Failed to delete Etsy listing ${item.etsy_listing_id}:`, e);
+            const { data: matchedItems } = await supabase
+                .from('inventory_items')
+                .select('etsy_listing_id')
+                .eq('shop_id', shop.id)
+                .eq('shopify_product_id', productId)
+                .not('etsy_listing_id', 'is', null);
+
+            if (matchedItems && matchedItems.length > 0) {
+                for (const item of matchedItems) {
+                    try {
+                        if (item.etsy_listing_id) {
+                            console.log(`[ProductSync] Auto-Deleting Etsy Listing ${item.etsy_listing_id}`);
+                            await etsyApi.deleteListing(item.etsy_listing_id, shop.etsy_access_token);
+                            await logSyncEvent(supabase, shop.id, 'product_delete', 'success', {
+                                shopify_product_id: productId,
+                                etsy_listing_id: item.etsy_listing_id,
+                                title: productTitle
+                            });
                         }
+                    } catch (e: any) {
+                        console.error(`[ProductSync] Failed to delete Etsy listing ${item.etsy_listing_id}:`, e);
+                        await logSyncEvent(supabase, shop.id, 'product_delete', 'failed', {
+                            shopify_product_id: productId,
+                            etsy_listing_id: item.etsy_listing_id,
+                            title: productTitle
+                        }, e.message);
                     }
                 }
             }
@@ -67,11 +104,11 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
 
         // --- HANDLE CREATE / UPDATE ---
         const isUpdate = topic === 'products/update';
-        
+
         if (!isUpdate && !settings.auto_create_products) {
             return { status: 'skipped', message: 'Auto-Create disabled' };
         }
-        
+
         if (isUpdate && !settings.auto_update_products) {
             return { status: 'skipped', message: 'Auto-Update disabled' };
         }
@@ -111,9 +148,20 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                         when_made: '2020_2024',
                         is_supply: false
                     });
+                    await logSyncEvent(supabase, shop.id, 'product_update', 'success', {
+                        shopify_product_id: productId,
+                        etsy_listing_id: matchedItem.etsy_listing_id,
+                        title: productTitle,
+                        price: finalPrice
+                    });
                     return { status: 'success', message: 'Etsy listing updated' };
-                } catch (e) {
+                } catch (e: any) {
                     console.error('[ProductSync] Update failed', e);
+                    await logSyncEvent(supabase, shop.id, 'product_update', 'failed', {
+                        shopify_product_id: productId,
+                        etsy_listing_id: matchedItem.etsy_listing_id,
+                        title: productTitle
+                    }, e.message);
                     return { status: 'error', message: 'Update failed' };
                 }
             } else {
@@ -148,13 +196,28 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                         shopify_inventory_item_id: variant.inventory_item_id.toString(),
                         etsy_listing_id: draft.listing_id.toString(),
                         sku: variant.sku || `SKU-${productId}`,
-                        title: title
+                        name: title,
+                        master_stock: variant.inventory_quantity || 0,
+                        shopify_stock_snapshot: variant.inventory_quantity || 0,
+                        etsy_stock_snapshot: variant.inventory_quantity || 0,
+                        status: 'Matching'
+                    });
+                    await logSyncEvent(supabase, shop.id, 'product_create', 'success', {
+                        shopify_product_id: productId,
+                        etsy_listing_id: draft.listing_id.toString(),
+                        title: productTitle,
+                        price: finalPrice,
+                        stock: variant.inventory_quantity || 0
                     });
                     return { status: 'success', message: 'Etsy listing drafted and mapped' };
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error('[ProductSync] Create failed', e);
-                return { status: 'error', message: 'Create failed' };
+                await logSyncEvent(supabase, shop.id, 'product_create', 'failed', {
+                    shopify_product_id: productId,
+                    title: productTitle
+                }, e.message);
+                return { status: 'error', message: `Create failed: ${e.message}` };
             }
         }
 

@@ -142,7 +142,7 @@ export async function handleInventoryUpdate(
 
         try {
             // Fetch inventory levels from Shopify for all selected locations
-            const levelsData = await shopifyApi.getInventoryLevels(creds, locationIdsToQuery);
+            const levelsData = await shopifyApi.getInventoryLevels(creds, locationIdsToQuery, inventoryItemId);
             const allLevels = levelsData.inventory_levels || [];
 
             // Filter to only this inventory_item_id
@@ -260,14 +260,14 @@ export async function handleInventoryUpdate(
                     break; // Success, exit retry loop
                 } catch (err: any) {
                     const is409 = err.message?.includes('409') || err.message?.includes('being edited');
-                    
+
                     if (is409 && attempt < MAX_RETRIES) {
                         const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 2s, 4s, 8s
                         console.warn(`${logPrefix} ⚠️ Etsy 409 conflict, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
                         await new Promise(resolve => setTimeout(resolve, delay));
                         continue;
                     }
-                    
+
                     etsySyncResult = 'failed';
                     etsyError = err.message;
                     console.error(`${logPrefix} ❌ Etsy push failed after ${attempt} attempts:`, err.message);

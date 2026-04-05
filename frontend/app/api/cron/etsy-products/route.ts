@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     try {
         console.log('[Etsy Products Cron] Starting routine sync');
-        
+
         // 2. Find eligible shops
         const { data: shops } = await supabase
             .from('shops')
@@ -74,14 +74,14 @@ export async function GET(req: NextRequest) {
                 // In production we should use the Receipt or precise search endpoints, or store a high-water mark.
                 // --- HANDLE UPDATES & CREATES (ACTIVE) ---
                 const etsyData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'active', 0, 100);
-                
+
                 if (etsyData && etsyData.results) {
                     const recentListings = etsyData.results.filter((l: any) => l.last_modified_timestamp >= twoHoursAgo);
                     console.log(`[Etsy Products Cron] Found ${recentListings.length} modified active listings for ${shop.shop_domain}`);
 
                     for (const listing of recentListings) {
                         const listingId = listing.listing_id.toString();
-                        
+
                         // Match with DB
                         const { data: matched } = await supabase
                             .from('inventory_items')
@@ -111,8 +111,28 @@ export async function GET(req: NextRequest) {
                                         price: newPrice.toString()
                                     });
                                 }
-                            } catch(e: any) {
+
+                                await supabase.from('sync_logs').insert({
+                                    shop_id: shop.id,
+                                    source: 'etsy',
+                                    direction: 'etsy_to_shopify',
+                                    event_type: 'product_update',
+                                    status: 'success',
+                                    metadata: { etsy_listing_id: listingId, shopify_product_id: matched.shopify_product_id, title: listing.title },
+                                    created_at: new Date().toISOString()
+                                });
+                            } catch (e: any) {
                                 console.error(`[Etsy Products Cron] Failed to update Shopify Product ${matched.shopify_product_id}:`, e);
+                                await supabase.from('sync_logs').insert({
+                                    shop_id: shop.id,
+                                    source: 'etsy',
+                                    direction: 'etsy_to_shopify',
+                                    event_type: 'product_update',
+                                    status: 'failed',
+                                    error_message: e.message,
+                                    metadata: { etsy_listing_id: listingId, shopify_product_id: matched.shopify_product_id, title: listing.title },
+                                    created_at: new Date().toISOString()
+                                });
                                 await createNotification(
                                     supabase,
                                     shop.id,
@@ -149,8 +169,27 @@ export async function GET(req: NextRequest) {
                                 };
                                 await cloneToShopify(shop, cloneProduct, 'cron-job');
 
-                            } catch(e: any) {
+                                await supabase.from('sync_logs').insert({
+                                    shop_id: shop.id,
+                                    source: 'etsy',
+                                    direction: 'etsy_to_shopify',
+                                    event_type: 'product_create',
+                                    status: 'success',
+                                    metadata: { etsy_listing_id: listingId, title: listing.title },
+                                    created_at: new Date().toISOString()
+                                });
+                            } catch (e: any) {
                                 console.error(`[Etsy Products Cron] Failed to create Shopify Product for Etsy ${listingId}:`, e);
+                                await supabase.from('sync_logs').insert({
+                                    shop_id: shop.id,
+                                    source: 'etsy',
+                                    direction: 'etsy_to_shopify',
+                                    event_type: 'product_create',
+                                    status: 'failed',
+                                    error_message: e.message,
+                                    metadata: { etsy_listing_id: listingId, title: listing.title },
+                                    created_at: new Date().toISOString()
+                                });
                                 await createNotification(
                                     supabase,
                                     shop.id,
@@ -188,8 +227,27 @@ export async function GET(req: NextRequest) {
                                             id: matchedItem.shopify_product_id,
                                             status: 'archived'
                                         });
-                                    } catch (err) {
+                                        await supabase.from('sync_logs').insert({
+                                            shop_id: shop.id,
+                                            source: 'etsy',
+                                            direction: 'etsy_to_shopify',
+                                            event_type: 'product_delete',
+                                            status: 'success',
+                                            metadata: { etsy_listing_id: lId, shopify_product_id: matchedItem.shopify_product_id, action: 'archived' },
+                                            created_at: new Date().toISOString()
+                                        });
+                                    } catch (err: any) {
                                         console.error(`[Etsy Products Cron] Failed to archive ${matchedItem.shopify_product_id}:`, err);
+                                        await supabase.from('sync_logs').insert({
+                                            shop_id: shop.id,
+                                            source: 'etsy',
+                                            direction: 'etsy_to_shopify',
+                                            event_type: 'product_delete',
+                                            status: 'failed',
+                                            error_message: err.message,
+                                            metadata: { etsy_listing_id: lId, shopify_product_id: matchedItem.shopify_product_id },
+                                            created_at: new Date().toISOString()
+                                        });
                                     }
                                 }
                             }

@@ -290,10 +290,16 @@ export async function getProducts(
  */
 export async function getInventoryLevels(
     creds: ShopifyCredentials,
-    locationIds: string | number | (string | number)[]
+    locationIds: string | number | (string | number)[],
+    inventoryItemIds?: string | number | (string | number)[]
 ) {
     const ids = Array.isArray(locationIds) ? locationIds.join(',') : locationIds;
-    return shopifyFetch(creds, `inventory_levels.json?location_ids=${ids}`);
+    let endpoint = `inventory_levels.json?location_ids=${ids}`;
+    if (inventoryItemIds) {
+        const itemIds = Array.isArray(inventoryItemIds) ? inventoryItemIds.join(',') : inventoryItemIds;
+        endpoint += `&inventory_item_ids=${itemIds}`;
+    }
+    return shopifyFetch(creds, endpoint);
 }
 
 /**

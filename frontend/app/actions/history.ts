@@ -68,6 +68,9 @@ function mapEventToAction(eventType: string, source: string): string {
     if (eventType === 'stock_update') return 'Stock Synchronized';
     if (eventType === 'price_update') return 'Price Synchronized';
     if (eventType === 'order') return source === 'etsy' ? 'Etsy Order Detected' : 'Shopify Order Detected';
+    if (eventType === 'product_create') return 'Product Auto-Created';
+    if (eventType === 'product_update') return 'Product Auto-Updated';
+    if (eventType === 'product_delete') return 'Product Auto-Deleted';
     return eventType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 

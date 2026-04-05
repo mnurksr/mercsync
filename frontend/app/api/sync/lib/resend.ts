@@ -1,6 +1,11 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend | null {
+    if (!process.env.RESEND_API_KEY) return null;
+    if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+    return _resend;
+}
 
 /**
  * Send a notification email using Resend.
@@ -13,6 +18,11 @@ export async function sendNotificationEmail(to: string, subject: string, body: s
     }
 
     try {
+        const resend = getResend();
+        if (!resend) {
+            console.warn('[Resend] Skipping email send: RESEND_API_KEY is not defined');
+            return;
+        }
         const { data, error } = await resend.emails.send({
             from: 'MercSync <notifications@mercsync.com>', // User needs to verify domain in Resend
             to: [to],

@@ -1,0 +1,16 @@
+{
+    "crons": [
+        {
+            "path": "/api/cron/etsy-orders",
+            "schedule": "*/15 * * * *"
+        },
+        {
+            "path": "/api/cron/etsy-products",
+            "schedule": "0 */2 * * *"
+        },
+        {
+            "path": "/api/cron/token-refresh",
+            "schedule": "0 */6 * * *"
+        }
+    ]
+}
