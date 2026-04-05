@@ -10,8 +10,10 @@ export const maxDuration = 300; // Allows up to 5 mins execution
 
 export async function GET(req: NextRequest) {
     // 1. Validate Cron Secret
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const secret = req.nextUrl.searchParams.get('secret') || req.headers.get('authorization')?.replace('Bearer ', '');
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!cronSecret || secret !== cronSecret) {
         return new NextResponse('Unauthorized', { status: 401 });
     }
 
