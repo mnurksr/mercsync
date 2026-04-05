@@ -72,14 +72,17 @@ export async function GET(req: NextRequest) {
                 const twoHoursAgo = Math.floor(Date.now() / 1000) - (2 * 60 * 60);
 
                 // We can't query by last_modified_tsz easily in standard getListingsByState without search params, 
-                // but for MVP we will pull the first page of active listings and filter. 
-                // In production we should use the Receipt or precise search endpoints, or store a high-water mark.
-                // --- HANDLE UPDATES & CREATES (ACTIVE) ---
-                const etsyData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'active', 0, 100);
+                // but for MVP we will pull the first page of active AND draft listings and filter.
+                // --- HANDLE UPDATES & CREATES (ACTIVE & DRAFT) ---
+                const activeData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'active', 0, 100);
+                const draftData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'draft', 0, 100);
+                
+                const combinedResults = [...(activeData?.results || []), ...(draftData?.results || [])];
+                const etsyData = { results: combinedResults };
 
-                if (etsyData && etsyData.results) {
+                if (etsyData && etsyData.results && etsyData.results.length > 0) {
                     const recentListings = etsyData.results.filter((l: any) => l.last_modified_timestamp >= twoHoursAgo);
-                    console.log(`[Etsy Products Cron] Found ${recentListings.length} modified active listings for ${shop.shop_domain}`);
+                    console.log(`[Etsy Products Cron] Found ${recentListings.length} modified listings (active+draft) for ${shop.shop_domain}`);
 
                     for (const listing of recentListings) {
                         const listingId = listing.listing_id.toString();

@@ -210,6 +210,29 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                 });
 
                 if (draft?.listing_id) {
+                    // Upload Images
+                    const images = payload.images || [];
+                    if (images.length > 0) {
+                        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+                        for (const img of images.slice(0, 5)) {
+                            try {
+                                const imageBuffer = await etsyApi.downloadImage(img.src);
+                                if (imageBuffer) {
+                                    await etsyApi.uploadImage(
+                                        shop.etsy_shop_id,
+                                        draft.listing_id,
+                                        shop.etsy_access_token,
+                                        imageBuffer,
+                                        `image_${img.id}.jpg`
+                                    );
+                                    await delay(400); // Prevent rate limit issues
+                                }
+                            } catch (e: any) {
+                                console.warn(`[ProductSync] Failed to upload image ${img.id}:`, e.message);
+                            }
+                        }
+                    }
+
                     // Save matching record
                     await supabase.from('inventory_items').insert({
                         shop_id: shop.id,
