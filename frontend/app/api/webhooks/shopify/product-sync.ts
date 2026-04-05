@@ -157,19 +157,17 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                     return { status: 'success', message: 'Etsy listing updated' };
                 } catch (e: any) {
                     console.error('[ProductSync] Update failed', e);
-                    
-                    // Self-healing: if the Etsy listing was manually deleted => 404
+                    // Known bug: Etsy sometimes returns 404 on drafts during echo loops. 
+                    // Do NOT delete the mapping automatically. Just flag as error to preserve connection.
                     if (e.message && (e.message.includes('Resource not found') || e.message.includes('404'))) {
-                        console.log(`[ProductSync] Etsy listing ${matchedItem.etsy_listing_id} not found. Removing stale mapping for Shopify product ${productId}.`);
-                        await supabase.from('inventory_items').delete().eq('shopify_product_id', productId);
-                        
+                        console.log(`[ProductSync] Etsy listing ${matchedItem.etsy_listing_id} returned 404. It may be deleted or temporarily unreachable.`);
                         await logSyncEvent(supabase, shop.id, 'product_update', 'failed', {
                             shopify_product_id: productId,
                             etsy_listing_id: matchedItem.etsy_listing_id,
                             title: productTitle
-                        }, 'Etsy listing manually deleted. Mapping removed. Product will be recreated on next update.');
+                        }, 'Etsy API returned 404 Not Found. If the product was deleted on Etsy, please ignore this or manually unlink.');
                         
-                        return { status: 'skipped', message: 'Etsy mapping cleared due to 404' };
+                        return { status: 'skipped', message: 'Etsy 404 error masked' };
                     }
 
                     await logSyncEvent(supabase, shop.id, 'product_update', 'failed', {
