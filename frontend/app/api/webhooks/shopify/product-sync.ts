@@ -130,7 +130,7 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
         // Check if item is already matched
         const { data: matchedItem } = await supabase
             .from('inventory_items')
-            .select('etsy_listing_id')
+            .select('etsy_listing_id, name')
             .eq('shop_id', shop.id)
             .eq('shopify_product_id', productId)
             .maybeSingle();
@@ -140,7 +140,7 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
             if (matchedItem?.etsy_listing_id) {
                 console.log(`[ProductSync] Auto-Updating Etsy Listing ${matchedItem.etsy_listing_id}`);
                 try {
-                    await etsyApi.updateListing(shop.etsy_shop_id, matchedItem.etsy_listing_id.toString(), shop.etsy_access_token, {
+                    await etsyApi.updateListing(shop.etsy_shop_id, matchedItem.etsy_listing_id.toString().trim(), shop.etsy_access_token, {
                         title: title.substring(0, 140),
                         description: description.replace(/<[^>]*>?/gm, '').substring(0, 5000) || title,
                         price: finalPrice,

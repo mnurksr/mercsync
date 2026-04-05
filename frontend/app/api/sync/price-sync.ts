@@ -155,37 +155,27 @@ export async function handlePriceUpdate(
              return { status: 'skipped', message: 'No price sync rules targeting Etsy' };
         }
 
-        // 3. Find the connected product in inventory_items
+        // 3. Find ALL connected variants for this product in inventory_items
         const shopifyProductId = shopifyPayload.id.toString();
         
-        const { data: inventoryItem } = await supabase
+        const { data: variantMappings } = await supabase
             .from('inventory_items')
-            .select('*')
+            .select('id, shop_id, etsy_listing_id, etsy_variant_id, shopify_product_id, shopify_variant_id')
             .eq('shop_id', shop.id)
             .eq('shopify_product_id', shopifyProductId)
-            .maybeSingle();
+            .not('etsy_listing_id', 'is', null);
 
-        if (!inventoryItem || !inventoryItem.etsy_listing_id) {
+        if (!variantMappings || variantMappings.length === 0) {
             return { status: 'skipped', message: 'Product is not mapped to an Etsy listing' };
         }
 
-        itemRecordId = inventoryItem.id;
-        const etsyListingId = inventoryItem.etsy_listing_id;
-
-        // 4. Fetch the mapping for variants
-        const { data: variantMappings } = await supabase
-            .from('inventory_variants')
-            .select('*')
-            .eq('inventory_item_id', inventoryItem.id)
-            .not('etsy_variant_id', 'is', null);
-
-        if (!variantMappings || variantMappings.length === 0) {
-            return { status: 'skipped', message: 'No mapped variants found for this product' };
-        }
-
-        // 5. Calculate new prices for mapped variants
+        // 4. Calculate new prices for mapped variants
         const priceUpdates: { item_id: string, new_price: number }[] = [];
         const shopifyVariants = shopifyPayload.variants || [];
+        
+        // We assume all variants of a product belong to the same Etsy listing for bulk updating
+        const etsyListingId = variantMappings[0].etsy_listing_id;
+        itemRecordId = variantMappings[0].id;
 
         for (const mapping of variantMappings) {
             const shVariant = shopifyVariants.find((v: any) => v.id.toString() === mapping.shopify_variant_id);
