@@ -145,7 +145,7 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                         description: description.replace(/<[^>]*>?/gm, '').substring(0, 5000) || title,
                         price: finalPrice,
                         who_made: 'i_did',
-                        when_made: '2020_2024',
+                        when_made: '2020_2026',
                         is_supply: false
                     });
                     await logSyncEvent(supabase, shop.id, 'product_update', 'success', {
@@ -182,7 +182,7 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
                     price: finalPrice,
                     quantity: variant.inventory_quantity || 1,
                     who_made: 'i_did',
-                    when_made: '2020_2024',
+                    when_made: '2020_2026',
                     is_supply: false,
                     taxonomy_id: 1 // Default accessory/other, will need mapping for prod
                 });
