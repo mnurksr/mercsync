@@ -12,7 +12,7 @@ function normalize(str: string) {
 }
 
 /**
- * Calculates similarity score between two strings (N8N Jaccard)
+ * Calculates similarity score between two strings (Enhance E-Commerce Matcher)
  */
 function getSimilarity(s1: string, s2: string) {
     const n1 = normalize(s1);
@@ -20,13 +20,33 @@ function getSimilarity(s1: string, s2: string) {
     if (!n1 || !n2) return 0;
     if (n1 === n2) return 100;
 
-    const set1 = new Set(n1.split(' '));
-    const set2 = new Set(n2.split(' '));
+    // 1. Substring Match (handles simple appended words perfectly)
+    if (n1.includes(n2) || n2.includes(n1)) {
+        const smaller = n1.length < n2.length ? n1 : n2;
+        // If the substring is reasonably substantial, give it a very high score
+        if (smaller.length > 10) return 92;
+    }
+
+    const set1 = new Set(n1.split(' ').filter(Boolean));
+    const set2 = new Set(n2.split(' ').filter(Boolean));
 
     const intersection = new Set([...set1].filter(x => set2.has(x)));
-    const union = new Set([...set1, ...set2]);
+    
+    // 2. Word-based Dice Coefficient (more forgiving than Jaccard for suffixes)
+    // Formula: (2 * intersection) / (set1 + set2)
+    const diceCoefficient = (2.0 * intersection.size) / (set1.size + set2.size) * 100;
 
-    return (intersection.size / union.size) * 100;
+    // 3. Longest Common Prefix check (handles "Product A version 1" vs "Product A version 2")
+    let lcpLength = 0;
+    const minLen = Math.min(n1.length, n2.length);
+    for (let i = 0; i < minLen; i++) {
+        if (n1[i] === n2[i]) lcpLength++;
+        else break;
+    }
+    const prefixRatio = (lcpLength / Math.max(n1.length, n2.length)) * 100;
+
+    // We take the best meaningful score
+    return Math.max(diceCoefficient, prefixRatio > 50 ? prefixRatio : 0);
 }
 
 export async function POST(req: NextRequest) {
