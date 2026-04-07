@@ -97,25 +97,39 @@ export async function POST(req: NextRequest) {
 
             // Simple SKU check first (if any variant has SKU)
             const sSkus = new Set(sVariants.map(v => v.sku).filter(sku => sku && sku !== 'NO-SKU'));
+            const sVariantCount = sVariants.length;
 
             for (const eGid in eGroups) {
                 if (usedEtsyGids.has(eGid)) continue;
                 const eVariants = eGroups[eGid];
+                const eVariantCount = eVariants.length;
 
-                // Check SKU overlap
+                // 1. Check SKU overlap (Instant Match)
                 const eSkus = new Set(eVariants.map(v => v.sku).filter(sku => sku && sku !== 'NO-SKU'));
                 const intersection = new Set([...sSkus].filter(x => eSkus.has(x)));
 
                 if (intersection.size > 0) {
                     bestMatchEgid = eGid;
-                    bestScore = 1000; // Boost SKU match
+                    bestScore = 1000; // Force immediate match
                     break;
                 }
 
-                // Check Title similarity
+                // 2. Base Title Similarity
                 const eTitle = eVariants[0]?.product_title || eVariants[0]?.name || '';
-                const score = getSimilarity(sTitle, eTitle);
-                if (score > bestScore && score > 60) {
+                let score = getSimilarity(sTitle, eTitle);
+
+                // 3. Variant Structure Bonus
+                // If the products have the EXACT same number of variants (and >1 variant), it's a huge indicator they are the same product.
+                if (sVariantCount === eVariantCount && sVariantCount > 1) {
+                    score += 15; // 15% bonus for identical variant structures
+                } 
+                // If they have 1 variant each, it's a small structural signal.
+                else if (sVariantCount === 1 && eVariantCount === 1) {
+                    score += 5; // 5% bonus for both being single-variant
+                }
+
+                // Threshold check (55 is a safe lower bound when using bonuses)
+                if (score > bestScore && score >= 55) {
                     bestScore = score;
                     bestMatchEgid = eGid;
                 }
@@ -149,7 +163,7 @@ export async function POST(req: NextRequest) {
                         }
                     }
 
-                    // 2. Similarity Match (Exact or Jaccard)
+                    // 2. Similarity Match (Exact or Jaccard/Dice)
                     if (!bestMatch) {
                         for (const eVar of eVariants) {
                             if (matchedEVarIds.has(eVar.etsy_variant_id)) continue;
@@ -163,7 +177,8 @@ export async function POST(req: NextRequest) {
                             }
 
                             const score = getSimilarity(sFullName, eFullName);
-                            if (score > highestScore && score >= 60) {
+                            // Lower threshold to 50 because they are already within a strictly matched parent group
+                            if (score > highestScore && score >= 50) {
                                 highestScore = score;
                                 bestMatch = eVar;
                                 matchReason = "Semantic Title Match";
