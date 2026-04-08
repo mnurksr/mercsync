@@ -250,62 +250,73 @@ export default function CloneModal({
                     </div>
 
                     {/* Pricing Rule Integration */}
-                    <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
-                                    <Info className="w-4 h-4" />
-                                </span>
-                                <div>
-                                    <h5 className="text-sm font-bold text-gray-900">Pricing Adjustments</h5>
-                                    <p className="text-[10px] text-gray-500">Apply pricing rule for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}</p>
-                                </div>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input 
-                                    type="checkbox" 
-                                    checked={formData.apply_pricing_rule}
-                                    onChange={e => {
-                                        const enabled = e.target.checked;
-                                        const autoRule = pricingRules?.find(r => r.platform === targetPlatform) || null;
-                                        
-                                        if (enabled && !autoRule && !isSetupMode) {
-                                            // Not in setup mode and no rule exists → redirect to Settings
-                                            onClose();
-                                            router.push('/dashboard/settings');
-                                            return;
-                                        }
-                                        
-                                        setFormData(prev => ({ 
-                                            ...prev, 
-                                            apply_pricing_rule: enabled,
-                                            selected_rule: enabled ? autoRule : null
-                                        }));
-                                    }}
-                                    className="sr-only peer" 
-                                />
-                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                            </label>
-                        </div>
+                    {(() => {
+                        const matchingRule = pricingRules?.find(r => r.platform === targetPlatform) || null;
+                        const hasRule = !!matchingRule;
 
-                        {formData.apply_pricing_rule && (
-                            <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                {formData.selected_rule ? (
-                                    <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm space-y-1.5">
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase">Active Rule</p>
-                                        <p className="text-sm font-bold text-indigo-700">
-                                            Source price {formData.selected_rule.type === 'percentage' ? `+ ${formData.selected_rule.value}%` : `+ $${formData.selected_rule.value}`}
-                                            {formData.selected_rule.rounding && formData.selected_rule.rounding !== 'none' ? ` → ${formData.selected_rule.rounding}` : ''}
-                                        </p>
+                        return (
+                            <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                                            <Info className="w-4 h-4" />
+                                        </span>
+                                        <div>
+                                            <h5 className="text-sm font-bold text-gray-900">Pricing Adjustments</h5>
+                                            <p className="text-[10px] text-gray-500">Apply pricing rule for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}</p>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <p className="text-[10px] text-amber-600 font-medium bg-amber-50 p-2 rounded-lg text-center">
-                                        No pricing rule defined for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}. Add one via the Pricing Rules section above or in Settings.
-                                    </p>
+                                    {/* Toggle: disabled on Products page when no rule exists */}
+                                    <label className={`relative inline-flex items-center ${!isSetupMode && !hasRule ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={formData.apply_pricing_rule}
+                                            disabled={!isSetupMode && !hasRule}
+                                            onChange={e => {
+                                                const enabled = e.target.checked;
+                                                setFormData(prev => ({ 
+                                                    ...prev, 
+                                                    apply_pricing_rule: enabled,
+                                                    selected_rule: enabled ? matchingRule : null
+                                                }));
+                                            }}
+                                            className="sr-only peer" 
+                                        />
+                                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                    </label>
+                                </div>
+
+                                {/* Products page: no rule → show Settings link */}
+                                {!isSetupMode && !hasRule && (
+                                    <button 
+                                        onClick={() => { onClose(); router.push('/dashboard/settings'); }}
+                                        className="w-full flex items-center justify-center gap-2 p-2.5 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-semibold hover:bg-amber-100 transition-colors"
+                                    >
+                                        <Settings className="w-3.5 h-3.5" />
+                                        Go to Settings to add a pricing rule
+                                    </button>
+                                )}
+
+                                {formData.apply_pricing_rule && (
+                                    <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        {formData.selected_rule ? (
+                                            <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm space-y-1.5">
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase">Active Rule</p>
+                                                <p className="text-sm font-bold text-indigo-700">
+                                                    Source price {formData.selected_rule.type === 'percentage' ? `+ ${formData.selected_rule.value}%` : `+ $${formData.selected_rule.value}`}
+                                                    {formData.selected_rule.rounding && formData.selected_rule.rounding !== 'none' ? ` → ${formData.selected_rule.rounding}` : ''}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-[10px] text-amber-600 font-medium bg-amber-50 p-2 rounded-lg text-center">
+                                                No pricing rule defined for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}. Add one via the Pricing Rules section above or in Settings.
+                                            </p>
+                                        )}
+                                    </div>
                                 )}
                             </div>
-                        )}
-                    </div>
+                        );
+                    })()}
 
                     {/* Description */}
                     <div>
