@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getStagingProducts, clearStagingTables, type StagingProduct } from '@/app/actions/staging';
 import { getShopifyLocations, getConnectedShop, syncShopCurrencies } from '@/app/actions/shop';
-import { getSettings, updateSettings, type PriceRule } from '@/app/actions/settings';
+import { getSettings, type PriceRule } from '@/app/actions/settings';
 import {
     ArrowLeft, ShoppingBag, Store, RefreshCw, Search,
     Check, X, Loader2, Link2, Sparkles, Wand2, ArrowRight, RotateCcw, Copy,
@@ -728,8 +728,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [shopifyProducts, setShopifyProducts] = useState<StagingProduct[]>(cache?.shopify || []);
     const [etsyProducts, setEtsyProducts] = useState<StagingProduct[]>(cache?.etsy || []);
     const [pricingRules, setPricingRules] = useState<any[]>([]);
-    const [globalRuleId, setGlobalRuleId] = useState<string | null>(null);
-    const [applyRuleToAll, setApplyRuleToAll] = useState(false);
+    const [applyRuleToEtsy, setApplyRuleToEtsy] = useState(false);
+    const [applyRuleToShopify, setApplyRuleToShopify] = useState(false);
     const [showAddRuleModal, setShowAddRuleModal] = useState(false);
     const [isSavingRule, setIsSavingRule] = useState(false);
 
@@ -1277,13 +1277,25 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         try {
             const ruleWithId = { ...newRule, id: `rule-${Date.now()}` } as any;
             const updatedRules = [...pricingRules, ruleWithId];
-            const res = await updateSettings({ price_rules: updatedRules });
-            if (res.success) {
+
+            // Use direct API endpoint instead of server action to avoid 
+            // session/cookie issues during setup mode (login redirect bug fix)
+            const res = await fetch('/api/sync/save-price-rule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    owner_id: currentUserId,
+                    price_rules: updatedRules
+                })
+            });
+
+            if (res.ok) {
                 setPricingRules(updatedRules);
                 setShowAddRuleModal(false);
                 toast.success('New pricing rule added!');
             } else {
-                toast.error(res.message);
+                const err = await res.json();
+                toast.error(err.error || 'Failed to save pricing rule');
             }
         } catch (e: any) {
             toast.error(e.message);
@@ -1727,7 +1739,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     targetId = group.etsy.variants.find(v => !!v.etsyListingId)?.etsyListingId || (group.etsy.id && !group.etsy.id.includes('-') ? group.etsy.id : undefined);
                 }
 
-                const selectedRule = applyRuleToAll ? pricingRules.find(r => r.id === globalRuleId) : null;
+                // Select the correct rule based on clone direction
+                const isToEtsy = target === 'to_etsy';
+                const shouldApplyRule = isToEtsy ? applyRuleToEtsy : applyRuleToShopify;
+                const targetPlatformForRule = isToEtsy ? 'etsy' : 'shopify';
+                const selectedRule = shouldApplyRule ? pricingRules.find(r => r.platform === targetPlatformForRule) : null;
 
                 setCrossListing(prev => ({
                     ...prev,
@@ -1895,56 +1911,117 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                             </div>
                                             <div>
                                                 <h3 className="font-bold text-gray-900">Pricing Rules</h3>
-                                                <p className="text-xs text-gray-500">Apply profit margins during cloning</p>
+                                                <p className="text-xs text-gray-500">Apply profit margins when cloning to each platform</p>
                                             </div>
                                         </div>
+                                        <button 
+                                            onClick={() => setShowAddRuleModal(true)}
+                                            className="h-8 px-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors text-xs font-semibold flex items-center gap-1.5"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" /> Add Rule
+                                        </button>
                                     </div>
 
-                                    <div className="flex items-center justify-between gap-4">
-                                        <div className="flex-1 space-y-1">
-                                            <p className="text-sm font-semibold text-gray-800">Apply a pricing rule for for all clones?</p>
-                                            <p className="text-xs text-gray-500">This will automatically apply your profit margin to every product added to the cloning queue.</p>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={applyRuleToAll}
-                                                    onChange={e => setApplyRuleToAll(e.target.checked)}
-                                                    className="sr-only peer" 
-                                                />
-                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                            </label>
-                                            
-                                            {applyRuleToAll && (
-                                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
-                                                    <select 
-                                                        value={globalRuleId || ''}
-                                                        onChange={e => setGlobalRuleId(e.target.value)}
-                                                        className="min-w-[180px] px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                                                    >
-                                                        <option value="">Select a rule...</option>
-                                                        {pricingRules.map((r, idx) => (
-                                                            <option key={r.id || idx} value={r.id}>
-                                                                {r.platform === 'etsy' ? 'Etsy Rule' : 'Shopify Rule'} ({r.type === 'percentage' ? r.value + '%' : r.value + ' fixed'})
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    
-                                                    <button 
-                                                        onClick={() => setShowAddRuleModal(true)}
-                                                        className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
-                                                        title="Add New Rule"
-                                                    >
-                                                        <Plus className="w-4 h-4" />
-                                                    </button>
+                                    {/* Two directional slots */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* Slot 1: Shopify → Etsy */}
+                                        {(() => {
+                                            const etsyRule = pricingRules.find(r => r.platform === 'etsy');
+                                            return (
+                                                <div className={`p-4 rounded-2xl border-2 transition-all ${applyRuleToEtsy && etsyRule ? 'border-orange-200 bg-orange-50/30' : 'border-gray-100 bg-gray-50/50'}`}>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <ShoppingBag className="w-3.5 h-3.5 text-[#95BF47]" />
+                                                            <ArrowRight className="w-3 h-3 text-gray-400" />
+                                                            <Store className="w-3.5 h-3.5 text-[#F56400]" />
+                                                        </div>
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={applyRuleToEtsy}
+                                                                onChange={e => {
+                                                                    const enabled = e.target.checked;
+                                                                    setApplyRuleToEtsy(enabled);
+                                                                    if (!enabled) {
+                                                                        // Clear price_rule from queued to_etsy items
+                                                                        setCrossListing(prev => ({
+                                                                            ...prev,
+                                                                            to_etsy: prev.to_etsy.map(c => ({ ...c, price_rule: null }))
+                                                                        }));
+                                                                    } else if (etsyRule) {
+                                                                        // Apply rule to already-queued to_etsy items
+                                                                        setCrossListing(prev => ({
+                                                                            ...prev,
+                                                                            to_etsy: prev.to_etsy.map(c => ({ ...c, price_rule: etsyRule }))
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                                className="sr-only peer" 
+                                                            />
+                                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                                                        </label>
+                                                    </div>
+                                                    <p className="text-xs font-semibold text-gray-700 mb-1">Clone to Etsy</p>
+                                                    {etsyRule ? (
+                                                        <p className="text-[10px] text-gray-500">
+                                                            {etsyRule.type === 'percentage' ? `+${etsyRule.value}%` : `+$${etsyRule.value}`}
+                                                            {etsyRule.rounding && etsyRule.rounding !== 'none' ? ` (${etsyRule.rounding})` : ''}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-[10px] text-amber-600">No Etsy rule yet</p>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
+                                            );
+                                        })()}
+
+                                        {/* Slot 2: Etsy → Shopify */}
+                                        {(() => {
+                                            const shopifyRule = pricingRules.find(r => r.platform === 'shopify');
+                                            return (
+                                                <div className={`p-4 rounded-2xl border-2 transition-all ${applyRuleToShopify && shopifyRule ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100 bg-gray-50/50'}`}>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Store className="w-3.5 h-3.5 text-[#F56400]" />
+                                                            <ArrowRight className="w-3 h-3 text-gray-400" />
+                                                            <ShoppingBag className="w-3.5 h-3.5 text-[#95BF47]" />
+                                                        </div>
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={applyRuleToShopify}
+                                                                onChange={e => {
+                                                                    const enabled = e.target.checked;
+                                                                    setApplyRuleToShopify(enabled);
+                                                                    if (!enabled) {
+                                                                        setCrossListing(prev => ({
+                                                                            ...prev,
+                                                                            to_shopify: prev.to_shopify.map(c => ({ ...c, price_rule: null }))
+                                                                        }));
+                                                                    } else if (shopifyRule) {
+                                                                        setCrossListing(prev => ({
+                                                                            ...prev,
+                                                                            to_shopify: prev.to_shopify.map(c => ({ ...c, price_rule: shopifyRule }))
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                                className="sr-only peer" 
+                                                            />
+                                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                                        </label>
+                                                    </div>
+                                                    <p className="text-xs font-semibold text-gray-700 mb-1">Clone to Shopify</p>
+                                                    {shopifyRule ? (
+                                                        <p className="text-[10px] text-gray-500">
+                                                            {shopifyRule.type === 'percentage' ? `+${shopifyRule.value}%` : `+$${shopifyRule.value}`}
+                                                            {shopifyRule.rounding && shopifyRule.rounding !== 'none' ? ` (${shopifyRule.rounding})` : ''}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-[10px] text-amber-600">No Shopify rule yet</p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
-                                    {applyRuleToAll && !globalRuleId && (
-                                        <p className="text-[10px] text-red-500 font-medium animate-pulse">Please select a pricing rule to proceed with automatic application.</p>
-                                    )}
                                 </div>
 
                                 {catalogGroups.length === 0 ? (
@@ -1973,7 +2050,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                 {!catalogGroups.every(g => isGroupQueued(g)) && (
                                                     <button
                                                         onClick={queueAllMissing}
-                                                        disabled={applyRuleToAll && !globalRuleId}
+                                                        disabled={false}
                                                         className="h-9 px-4 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 flex items-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-indigo-200/50"
                                                     >
                                                         <Copy className="w-4 h-4" /> Clone All Missing
@@ -2460,15 +2537,28 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 animate-in fade-in zoom-in duration-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-gray-900">Primary Shopify Location</h3>
+                            <h3 className="text-lg font-bold text-gray-900">Shopify Locations</h3>
                             <button onClick={() => setShowLocationModal(false)} className="text-gray-400 hover:text-gray-600">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <p className="text-sm text-gray-500 mb-6">
-                            Which Shopify locations should supply your Etsy stock? (You can select multiple)
+                        <p className="text-sm text-gray-500 mb-4">
+                            Select which Shopify locations MercSync should track for inventory sync with Etsy.
                         </p>
+
+                        <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 mb-5 space-y-1.5">
+                            <div className="flex items-start gap-2">
+                                <Info className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
+                                <div className="text-xs text-indigo-700 leading-relaxed">
+                                    <p className="font-semibold mb-1">How locations work:</p>
+                                    <ul className="space-y-0.5 list-disc list-inside text-indigo-600">
+                                        <li><strong>Selected Locations</strong> — Their stock quantities are summed up to determine total Etsy stock.</li>
+                                        <li><strong>Primary Location</strong> — Where MercSync applies stock increases and routes Etsy order deductions.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
 
                         {loadingLocations ? (
                             <div className="flex justify-center py-6">

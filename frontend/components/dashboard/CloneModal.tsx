@@ -254,14 +254,22 @@ export default function CloneModal({
                                 </span>
                                 <div>
                                     <h5 className="text-sm font-bold text-gray-900">Pricing Adjustments</h5>
-                                    <p className="text-[10px] text-gray-500">Apply pricing rules to this clone</p>
+                                    <p className="text-[10px] text-gray-500">Apply pricing rule for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}</p>
                                 </div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input 
                                     type="checkbox" 
                                     checked={formData.apply_pricing_rule}
-                                    onChange={e => setFormData(prev => ({ ...prev, apply_pricing_rule: e.target.checked }))}
+                                    onChange={e => {
+                                        const enabled = e.target.checked;
+                                        const autoRule = pricingRules?.find(r => r.platform === targetPlatform) || null;
+                                        setFormData(prev => ({ 
+                                            ...prev, 
+                                            apply_pricing_rule: enabled,
+                                            selected_rule: enabled ? autoRule : null
+                                        }));
+                                    }}
                                     className="sr-only peer" 
                                 />
                                 <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
@@ -270,41 +278,17 @@ export default function CloneModal({
 
                         {formData.apply_pricing_rule && (
                             <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm">
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Pricing Rule Basis</p>
-                                    <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
-                                        Source Price
-                                        <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded">Input</span>
-                                    </p>
-                                </div>
-                                {(() => {
-                                    const targetRules = pricingRules?.filter(r => r.platform === targetPlatform) || [];
-                                    return targetRules.length > 0 ? (
-                                        <select 
-                                            value={formData.selected_rule?.platform || ''}
-                                            onChange={e => {
-                                                const rule = targetRules.find(r => r.platform === e.target.value);
-                                                setFormData(prev => ({ ...prev, selected_rule: rule }));
-                                            }}
-                                            className="w-full px-3 py-2 bg-white border border-indigo-200 text-gray-900 rounded-xl text-xs focus:ring-1 focus:ring-indigo-500 outline-none mt-2"
-                                        >
-                                            <option value="">No rule (Use source price)</option>
-                                            {targetRules.map((r, idx) => (
-                                                <option key={idx} value={r.platform}>
-                                                    {r.platform === 'etsy' ? 'Etsy' : 'Shopify'} — {r.type === 'percentage' ? `+${r.value}%` : `+$${r.value} fixed`}{r.rounding && r.rounding !== 'none' ? ` (${r.rounding})` : ''}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <p className="text-[10px] text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg text-center">
-                                            No pricing rule defined for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}. You can add one in Settings → Price Rules.
+                                {formData.selected_rule ? (
+                                    <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm space-y-1.5">
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase">Active Rule</p>
+                                        <p className="text-sm font-bold text-indigo-700">
+                                            Source price {formData.selected_rule.type === 'percentage' ? `+ ${formData.selected_rule.value}%` : `+ $${formData.selected_rule.value}`}
+                                            {formData.selected_rule.rounding && formData.selected_rule.rounding !== 'none' ? ` → ${formData.selected_rule.rounding}` : ''}
                                         </p>
-                                    );
-                                })()}
-                                {formData.selected_rule && (
-                                    <p className="text-[10px] text-indigo-600 mt-2 font-medium bg-indigo-50 p-2 rounded-lg text-center">
-                                        Final price = Source price {formData.selected_rule.type === 'percentage' ? `+ ${formData.selected_rule.value}%` : `+ $${formData.selected_rule.value}`}
-                                        {formData.selected_rule.rounding && formData.selected_rule.rounding !== 'none' ? ` → rounded to ${formData.selected_rule.rounding}` : ''}
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-amber-600 font-medium bg-amber-50 p-2 rounded-lg text-center">
+                                        No pricing rule defined for {targetPlatform === 'etsy' ? 'Etsy' : 'Shopify'}. Add one via the Pricing Rules section above or in Settings.
                                     </p>
                                 )}
                             </div>

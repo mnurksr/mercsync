@@ -109,8 +109,11 @@ export async function handleProductSync(payload: any, topic: 'products/create' |
             return { status: 'skipped', message: 'Auto-Create disabled' };
         }
 
-        if (isUpdate && !settings.auto_update_products) {
-            return { status: 'skipped', message: 'Auto-Update disabled' };
+        // Auto-Update only tracks price changes, which are handled by the dedicated
+        // handlePriceUpdate() module called separately from the webhook route.
+        // Product-level updates (title, description) are NOT auto-synced.
+        if (isUpdate) {
+            return { status: 'skipped', message: 'Product updates handled by price-sync module' };
         }
 
         // For Create/Update, we need the product details to push

@@ -34,13 +34,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Shop not found' }, { status: 404 });
         }
 
-        // Only save the PRIMARY location to main_location_id
+        // Save PRIMARY location + all selected locations to shops table
         const primaryLocationId = locationIds[0];
         
         await supabase
             .from('shops')
-            .update({ main_location_id: primaryLocationId })
+            .update({ 
+                main_location_id: primaryLocationId,
+                selected_location_ids: locationIds
+            })
             .eq('id', shop.id);
+
+        // Also propagate to inventory_items if any exist (for DB consistency)
+        await supabase
+            .from('inventory_items')
+            .update({ selected_location_ids: locationIds })
+            .eq('shop_id', shop.id);
 
         const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 

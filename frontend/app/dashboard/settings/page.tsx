@@ -465,8 +465,8 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                 </SettingRow>
 
                 <SettingRow
-                    label="Auto-Update Products"
-                    description="When a product's title, price, or description changes safely replicate changes to the matched platform."
+                    label="Auto-Update Prices"
+                    description="When a product's price changes on one platform, automatically push the updated price to the matched platform (applying Price Rules if configured)."
                 >
                     <ToggleSwitch
                         enabled={settings.auto_update_products}

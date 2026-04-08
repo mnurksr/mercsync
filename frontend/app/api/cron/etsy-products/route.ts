@@ -96,55 +96,51 @@ export async function GET(req: NextRequest) {
                             .maybeSingle();
 
                         if (matched && auto_update_products) {
-                            try {
-                                console.log(`[Etsy Products Cron] Auto-Updating Shopify Product ${matched.shopify_product_id} from Etsy ${listingId}`);
-                                const priceNode = listing.price;
-                                const basePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
-                                const newPrice = basePrice ? calculatePrice(basePrice, shopifyPriceRules, 'shopify') || basePrice : null;
+                            // Auto-Update only handles price changes (per spec).
+                            // Title and description changes are NOT auto-synced.
+                            const priceNode = listing.price;
+                            const basePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
+                            const newPrice = basePrice ? calculatePrice(basePrice, shopifyPriceRules, 'shopify') || basePrice : null;
 
-                                const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+                            if (newPrice) {
+                                try {
+                                    console.log(`[Etsy Products Cron] Auto-Updating price on Shopify variant ${matched.shopify_variant_id} from Etsy ${listingId} (${basePrice} → ${newPrice})`);
+                                    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
-                                await shopifyApi.updateProduct(creds, matched.shopify_product_id, {
-                                    id: matched.shopify_product_id,
-                                    title: listing.title,
-                                    body_html: listing.description
-                                });
-
-                                if (newPrice) {
                                     await shopifyApi.updateVariant(creds, matched.shopify_variant_id, {
                                         id: matched.shopify_variant_id,
                                         price: newPrice.toString()
                                     });
-                                }
 
-                                await supabase.from('sync_logs').insert({
-                                    shop_id: shop.id,
-                                    source: 'etsy',
-                                    direction: 'etsy_to_shopify',
-                                    event_type: 'product_update',
-                                    status: 'success',
-                                    metadata: { etsy_listing_id: listingId, shopify_product_id: matched.shopify_product_id, title: listing.title },
-                                    created_at: new Date().toISOString()
-                                });
-                            } catch (e: any) {
-                                console.error(`[Etsy Products Cron] Failed to update Shopify Product ${matched.shopify_product_id}:`, e);
-                                await supabase.from('sync_logs').insert({
-                                    shop_id: shop.id,
-                                    source: 'etsy',
-                                    direction: 'etsy_to_shopify',
-                                    event_type: 'product_update',
-                                    status: 'failed',
-                                    error_message: e.message,
-                                    metadata: { etsy_listing_id: listingId, shopify_product_id: matched.shopify_product_id, title: listing.title },
-                                    created_at: new Date().toISOString()
-                                });
-                                await createNotification(
-                                    supabase,
-                                    shop.id,
-                                    'sync_failed',
-                                    'Auto-Update Failed',
-                                    `Failed to update Shopify product ${matched.shopify_product_id} from Etsy listing ${listingId}. Error: ${e.message}`
-                                );
+                                    await supabase.from('sync_logs').insert({
+                                        shop_id: shop.id,
+                                        source: 'etsy',
+                                        direction: 'etsy_to_shopify',
+                                        event_type: 'price_update',
+                                        status: 'success',
+                                        metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id, old_price: basePrice, new_price: newPrice },
+                                        created_at: new Date().toISOString()
+                                    });
+                                } catch (e: any) {
+                                    console.error(`[Etsy Products Cron] Failed to update Shopify variant price ${matched.shopify_variant_id}:`, e);
+                                    await supabase.from('sync_logs').insert({
+                                        shop_id: shop.id,
+                                        source: 'etsy',
+                                        direction: 'etsy_to_shopify',
+                                        event_type: 'price_update',
+                                        status: 'failed',
+                                        error_message: e.message,
+                                        metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id },
+                                        created_at: new Date().toISOString()
+                                    });
+                                    await createNotification(
+                                        supabase,
+                                        shop.id,
+                                        'sync_failed',
+                                        'Price Sync Failed',
+                                        `Failed to update Shopify variant ${matched.shopify_variant_id} price from Etsy listing ${listingId}. Error: ${e.message}`
+                                    );
+                                }
                             }
                         } else if (!matched && auto_create_products) {
                             console.log(`[Etsy Products Cron] Auto-Creating Shopify Product from Etsy ${listingId}`);
