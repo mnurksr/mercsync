@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPlatformListings, getInventoryStats, getUserId, type ListingItem } from '../../actions/inventory';
 import { getConnectedShop } from '../../actions/shop';
+import { getSettings } from '../../actions/settings';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
@@ -90,40 +91,14 @@ export default function ProductsPage() {
             setItems(itemList);
             setStats(statsData);
 
-            // Fetch Shop Details for Pricing Engine - Safely
-            const { data: shops, error: shopError } = await supabase
-                .from('shops')
-                .select('id, shopify_currency, etsy_currency')
-                .limit(1)
-                .maybeSingle();
-
-            if (shopError) {
-                console.warn('ProductsPage: Failed to fetch currency columns, falling back to USD', shopError);
-                // Try again with just ID to get shop ID for settings
-                const { data: baseShop } = await supabase.from('shops').select('id').limit(1).maybeSingle();
-                if (baseShop) {
-                    const { data: settings } = await supabase
-                        .from('shop_settings')
-                        .select('price_rules')
-                        .eq('shop_id', baseShop.id)
-                        .maybeSingle();
-                    if (settings?.price_rules) setPricingRules(settings.price_rules);
+            // Fetch price rules via server action (handles auth properly in Shopify embed)
+            try {
+                const savedSettings = await getSettings();
+                if (savedSettings.price_rules && savedSettings.price_rules.length > 0) {
+                    setPricingRules(savedSettings.price_rules);
                 }
-            } else if (shops) {
-                setShopCurrencies({
-                    shopify: shops.shopify_currency || 'USD',
-                    etsy: shops.etsy_currency || 'USD'
-                });
-
-                const { data: settings } = await supabase
-                    .from('shop_settings')
-                    .select('price_rules')
-                    .eq('shop_id', shops.id)
-                    .maybeSingle();
-                
-                if (settings?.price_rules) {
-                    setPricingRules(settings.price_rules);
-                }
+            } catch (settingsErr) {
+                console.warn('ProductsPage: Failed to load price rules from settings', settingsErr);
             }
         } catch (error) {
             console.error('Failed to load listings:', error);
