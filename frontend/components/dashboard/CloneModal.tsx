@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-    X, ShoppingBag, Store, ArrowRight, Package, Info, Check
+    X, ShoppingBag, Store, ArrowRight, Package, Info, Check, Settings
 } from 'lucide-react';
 
 export type CrossListingVariant = {
@@ -56,6 +57,7 @@ type CloneModalProps = {
     targetId?: string;
     pricingRules?: any[];
     shopCurrencies?: { shopify: string, etsy: string };
+    isSetupMode?: boolean;
 };
 
 export default function CloneModal({
@@ -66,8 +68,10 @@ export default function CloneModal({
     targetPlatform,
     initialData,
     targetId,
-    pricingRules
+    pricingRules,
+    isSetupMode = false
 }: CloneModalProps) {
+    const router = useRouter();
     const [formData, setFormData] = useState({
         title: '',
         sku: '',
@@ -264,6 +268,14 @@ export default function CloneModal({
                                     onChange={e => {
                                         const enabled = e.target.checked;
                                         const autoRule = pricingRules?.find(r => r.platform === targetPlatform) || null;
+                                        
+                                        if (enabled && !autoRule && !isSetupMode) {
+                                            // Not in setup mode and no rule exists → redirect to Settings
+                                            onClose();
+                                            router.push('/dashboard/settings');
+                                            return;
+                                        }
+                                        
                                         setFormData(prev => ({ 
                                             ...prev, 
                                             apply_pricing_rule: enabled,

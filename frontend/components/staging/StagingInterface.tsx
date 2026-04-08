@@ -1963,10 +1963,25 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                     </div>
                                                     <p className="text-xs font-semibold text-gray-700 mb-1">Clone to Etsy</p>
                                                     {etsyRule ? (
-                                                        <p className="text-[10px] text-gray-500">
-                                                            {etsyRule.type === 'percentage' ? `+${etsyRule.value}%` : `+$${etsyRule.value}`}
-                                                            {etsyRule.rounding && etsyRule.rounding !== 'none' ? ` (${etsyRule.rounding})` : ''}
-                                                        </p>
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-[10px] text-gray-500">
+                                                                {etsyRule.type === 'percentage' ? `+${etsyRule.value}%` : `+$${etsyRule.value}`}
+                                                                {etsyRule.rounding && etsyRule.rounding !== 'none' ? ` (${etsyRule.rounding})` : ''}
+                                                            </p>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const updated = pricingRules.filter(r => r.platform !== 'etsy');
+                                                                    setPricingRules(updated);
+                                                                    setApplyRuleToEtsy(false);
+                                                                    await fetch('/api/sync/save-price-rule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: currentUserId, price_rules: updated }) });
+                                                                    toast.success('Etsy pricing rule deleted.');
+                                                                }}
+                                                                className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50"
+                                                                title="Delete rule"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
                                                     ) : (
                                                         <p className="text-[10px] text-amber-600">No Etsy rule yet</p>
                                                     )}
@@ -2011,10 +2026,25 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                     </div>
                                                     <p className="text-xs font-semibold text-gray-700 mb-1">Clone to Shopify</p>
                                                     {shopifyRule ? (
-                                                        <p className="text-[10px] text-gray-500">
-                                                            {shopifyRule.type === 'percentage' ? `+${shopifyRule.value}%` : `+$${shopifyRule.value}`}
-                                                            {shopifyRule.rounding && shopifyRule.rounding !== 'none' ? ` (${shopifyRule.rounding})` : ''}
-                                                        </p>
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-[10px] text-gray-500">
+                                                                {shopifyRule.type === 'percentage' ? `+${shopifyRule.value}%` : `+$${shopifyRule.value}`}
+                                                                {shopifyRule.rounding && shopifyRule.rounding !== 'none' ? ` (${shopifyRule.rounding})` : ''}
+                                                            </p>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const updated = pricingRules.filter(r => r.platform !== 'shopify');
+                                                                    setPricingRules(updated);
+                                                                    setApplyRuleToShopify(false);
+                                                                    await fetch('/api/sync/save-price-rule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: currentUserId, price_rules: updated }) });
+                                                                    toast.success('Shopify pricing rule deleted.');
+                                                                }}
+                                                                className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50"
+                                                                title="Delete rule"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
                                                     ) : (
                                                         <p className="text-[10px] text-amber-600">No Shopify rule yet</p>
                                                     )}
@@ -2261,6 +2291,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     initialData={cloneModal.initialData}
                     targetId={cloneModal.targetId}
                     pricingRules={pricingRules}
+                    isSetupMode={true}
                 />
 
                 <AddRuleModal 

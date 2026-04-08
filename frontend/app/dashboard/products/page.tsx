@@ -21,7 +21,8 @@ export default function ProductsPage() {
     const { user, supabase } = useAuth();
     const [activePlatform, setActivePlatform] = useState<'shopify' | 'etsy'>('shopify');
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterStatus, setFilterStatus] = useState('all');
+    const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+    const [showFilterPanel, setShowFilterPanel] = useState(false);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -219,11 +220,24 @@ export default function ProductsPage() {
         }
     };
 
+    const toggleFilterChip = (key: string) => {
+        setActiveFilters(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
     const filteredItems = items.filter(item => {
-        if (filterStatus === 'all') return true;
-        if (filterStatus === 'unmatched') return item.matchStatus === 'unmatched' || item.matchStatus === 'partially_matched';
-        if (filterStatus === 'out') return item.totalStock <= 0;
-        return item.platformStatus === filterStatus;
+        if (activeFilters.size === 0) return true;
+        const checks: boolean[] = [];
+        if (activeFilters.has('unmatched')) checks.push(item.matchStatus === 'unmatched' || item.matchStatus === 'partially_matched');
+        if (activeFilters.has('synced')) checks.push(item.matchStatus === 'synced');
+        // Platform status filters
+        const statusFilters = Array.from(activeFilters).filter(f => !['unmatched', 'synced'].includes(f));
+        if (statusFilters.length > 0) checks.push(statusFilters.includes(item.platformStatus.toLowerCase()));
+        return checks.some(Boolean);
     });
 
     const isItemQueued = (sourceId: string) => {
@@ -454,7 +468,7 @@ export default function ProductsPage() {
             </div>
 
             {/* KPI Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
                     <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
                         <Package className="w-6 h-6" />
@@ -474,16 +488,6 @@ export default function ProductsPage() {
                         <p className="text-2xl font-bold text-gray-900">{isLoading ? <span className="animate-pulse">...</span> : stats.unmatched}</p>
                     </div>
                 </div>
-
-                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-                    <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
-                        <Box className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium text-gray-500">Out of Stock</p>
-                        <p className="text-2xl font-bold text-gray-900">{isLoading ? <span className="animate-pulse">...</span> : stats.outOfStock}</p>
-                    </div>
-                </div>
             </div>
 
             {/* Filters & Search */}
@@ -498,23 +502,53 @@ export default function ProductsPage() {
                         className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-200 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium"
                     />
                 </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className="relative bg-gray-50 border border-gray-200 rounded-xl flex items-center overflow-hidden">
-                        <div className="pl-3 py-2 border-r border-gray-200 text-gray-400">
-                            <Filter className="w-4 h-4" />
+                <div className="relative">
+                    <button
+                        onClick={() => setShowFilterPanel(!showFilterPanel)}
+                        className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl text-sm font-semibold transition-all ${activeFilters.size > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-white'}`}
+                    >
+                        <Filter className="w-4 h-4" />
+                        {activeFilters.size > 0 ? `${activeFilters.size} Filter${activeFilters.size > 1 ? 's' : ''}` : 'Filters'}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showFilterPanel ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showFilterPanel && (
+                        <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-xl z-20 p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Match Status</span>
+                                {activeFilters.size > 0 && <button onClick={() => setActiveFilters(new Set())} className="text-[10px] font-medium text-indigo-600 hover:underline">Clear all</button>}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {[{ key: 'unmatched', label: 'Unmatched' }, { key: 'synced', label: 'Synced' }].map(f => (
+                                    <button
+                                        key={f.key}
+                                        onClick={() => toggleFilterChip(f.key)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${activeFilters.has(f.key) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'}`}
+                                    >
+                                        {activeFilters.has(f.key) && <Check className="w-3 h-3 inline mr-1" />}{f.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-gray-100 pt-3">
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Platform Status</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(activePlatform === 'shopify'
+                                    ? [{ key: 'active', label: 'Active' }, { key: 'draft', label: 'Draft' }, { key: 'archived', label: 'Archived' }]
+                                    : [{ key: 'active', label: 'Active' }, { key: 'draft', label: 'Draft' }, { key: 'expired', label: 'Expired' }, { key: 'inactive', label: 'Inactive' }]
+                                ).map(f => (
+                                    <button
+                                        key={f.key}
+                                        onClick={() => toggleFilterChip(f.key)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${activeFilters.has(f.key) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-gray-50 border-gray-100 text-gray-600 hover:bg-gray-100'}`}
+                                    >
+                                        {activeFilters.has(f.key) && <Check className="w-3 h-3 inline mr-1" />}{f.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <select
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                            className="bg-transparent pl-3 pr-8 py-2.5 text-sm font-semibold text-gray-700 focus:outline-none cursor-pointer appearance-none"
-                        >
-                            <option value="all">All Items</option>
-                            <option value="unmatched">Needs Matching (Unmatched)</option>
-                            <option value="out">Out of Stock</option>
-                            <option value="active">Active on Platform</option>
-                            <option value="draft">Draft on Platform</option>
-                        </select>
-                    </div>
+                    )}
                 </div>
             </div>
 
@@ -536,7 +570,7 @@ export default function ProductsPage() {
                                 <th className="px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Product</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Platform Status</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Match Status</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Stock (SH / ET)</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">SKU</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
@@ -621,10 +655,6 @@ export default function ProductsPage() {
                                                                 {isQueued ? queuedItem.title : item.title}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-1">
-                                                                <span className="text-[11px] font-medium text-gray-500 tracking-wide uppercase">
-                                                                    ID: {item.id}
-                                                                </span>
-                                                                <span className="text-[11px] font-medium text-gray-400">•</span>
                                                                 <span className="text-[11px] font-semibold text-gray-500">{item.variantsCount} VARIANTS</span>
                                                             </div>
                                                         </div>
@@ -637,16 +667,9 @@ export default function ProductsPage() {
                                                     {getMatchStatusBadge(item.matchStatus)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex flex-col">
-                                                            <span className={`text-sm font-bold ${activePlatform === 'shopify' ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                                {activePlatform === 'shopify' ? item.totalStock : (item.otherTotalStock ?? '-')} <span className="text-[10px] font-medium ml-0.5">SH</span>
-                                                            </span>
-                                                            <span className={`text-sm font-bold ${activePlatform === 'etsy' ? 'text-orange-600' : 'text-gray-400'}`}>
-                                                                {activePlatform === 'etsy' ? item.totalStock : (item.otherTotalStock ?? '-')} <span className="text-[10px] font-medium ml-0.5">ET</span>
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                                    <span className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
+                                                        {item.variants?.[0]?.sku || 'NO-SKU'}
+                                                    </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
