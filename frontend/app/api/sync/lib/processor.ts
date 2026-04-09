@@ -533,7 +533,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 shopify_stock_snapshot: sp.stock_quantity,
                 shopify_updated_at: sp.shopify_updated_at,
                 location_inventory_map: sp.location_inventory_map || {},
-                selected_location_ids: sp.selected_location_ids || [],
+                selected_location_ids: shop.selected_location_ids || [],
             };
 
             // Look for Etsy match in staging (BIDIRECTIONAL CHECK)
@@ -607,6 +607,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 status: 'Matching',
                 etsy_stock_snapshot: ep.stock_quantity,
                 etsy_updated_at: ep.etsy_updated_at,
+                selected_location_ids: shop.selected_location_ids || [],
             };
 
             // If this Etsy product has a shopify_variant_id but it wasn't matched above, 
