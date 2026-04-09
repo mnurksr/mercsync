@@ -487,7 +487,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 shopify_updated_at: metadata?.shopify_updated_at || existingItem?.shopify_updated_at,
                 etsy_updated_at: metadata?.etsy_updated_at || existingItem?.etsy_updated_at,
                 location_inventory_map: metadata?.location_inventory_map || existingItem?.location_inventory_map || {},
-                selected_location_ids: metadata?.selected_location_ids || existingItem?.selected_location_ids || [],
+                selected_location_ids: (existingItem && existingItem.selected_location_ids?.length > 0) ? existingItem.selected_location_ids : (metadata?.selected_location_ids || []),
                 updated_at: new Date().toISOString()
             };
 
