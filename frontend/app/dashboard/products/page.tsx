@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { getPlatformListings, getInventoryStats, getUserId, type ListingItem } from '../../actions/inventory';
 import { getConnectedShop } from '../../actions/shop';
 import { getSettings } from '../../actions/settings';
-import { deleteProduct } from '../../actions/matching';
+import { deleteProduct, unmatchProduct } from '../../actions/matching';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
     ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy, Pencil, RefreshCw,
-    Archive, FileText, AlertCircle, Link2, Unlink, Trash2
+    Archive, FileText, AlertCircle, Link2, Unlink, Trash2, ExternalLink
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
 import { useAuth } from '@/components/AuthProvider';
@@ -375,6 +375,51 @@ export default function ProductsPage() {
         setSelectedItems(new Set());
     };
 
+    // Bulk Unmatch: Only works when ALL selected are synced
+    const handleBulkUnmatch = async () => {
+        const selectedList = filteredItems.filter(i => selectedItems.has(i.id));
+        if (selectedList.some(i => i.matchStatus !== 'synced')) return;
+        
+        const confirmed = window.confirm(`Are you sure you want to unmatch ${selectedList.length} products? This will break their cross-platform links.`);
+        if (!confirmed) return;
+
+        let successCount = 0;
+        for (const item of selectedList) {
+            try {
+                const res = await unmatchProduct(activePlatform, item.id);
+                if (res.success) successCount++;
+            } catch { /* skip */ }
+        }
+        toast.success(`Unmatched ${successCount} of ${selectedList.length} products.`);
+        setSelectedItems(new Set());
+        loadData();
+    };
+
+    // Bulk Delete: Works for any selection
+    const handleBulkDelete = async () => {
+        const selectedList = filteredItems.filter(i => selectedItems.has(i.id));
+        if (selectedList.length === 0) return;
+
+        const confirmed = window.confirm(`Are you sure you want to remove ${selectedList.length} products from MercSync? This only removes tracking, not the original listings.`);
+        if (!confirmed) return;
+
+        let successCount = 0;
+        for (const item of selectedList) {
+            try {
+                const res = await deleteProduct(activePlatform, item.id);
+                if (res.success) successCount++;
+            } catch { /* skip */ }
+        }
+        toast.success(`Removed ${successCount} of ${selectedList.length} products.`);
+        setSelectedItems(new Set());
+        loadData();
+    };
+
+    // Selection Analysis: compute what bulk actions are available
+    const selectedList = filteredItems.filter(i => selectedItems.has(i.id));
+    const allSelectedSynced = selectedList.length > 0 && selectedList.every(i => i.matchStatus === 'synced');
+    const allSelectedUnmatched = selectedList.length > 0 && selectedList.every(i => i.matchStatus !== 'synced');
+
     const getMatchStatusBadge = (status: string) => {
         switch (status) {
             case 'synced':
@@ -420,13 +465,51 @@ export default function ProductsPage() {
                     </button>
 
                     {selectedItems.size > 0 && (
-                        <button
-                            onClick={handleBulkClone}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all animate-in zoom-in-95"
-                        >
-                            <Copy className="w-4 h-4" />
-                            Add {selectedItems.size} to Queue
-                        </button>
+                        <div className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl shadow-lg animate-in zoom-in-95">
+                            <span className="text-sm font-medium mr-1">
+                                {selectedItems.size} selected
+                            </span>
+                            <div className="w-px h-5 bg-gray-600"></div>
+
+                            {/* Bulk Clone — only if ALL selected are unmatched */}
+                            {allSelectedUnmatched && (
+                                <button
+                                    onClick={handleBulkClone}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    Clone All
+                                </button>
+                            )}
+
+                            {/* Bulk Unmatch — only if ALL selected are synced */}
+                            {allSelectedSynced && (
+                                <button
+                                    onClick={handleBulkUnmatch}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 rounded-lg text-xs font-semibold transition-colors"
+                                >
+                                    <Unlink className="w-3.5 h-3.5" />
+                                    Unmatch All
+                                </button>
+                            )}
+
+                            {/* Bulk Delete — always available */}
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/80 hover:bg-red-500 rounded-lg text-xs font-semibold transition-colors"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete All
+                            </button>
+
+                            <div className="w-px h-5 bg-gray-600"></div>
+                            <button
+                                onClick={() => setSelectedItems(new Set())}
+                                className="p-1 hover:bg-gray-700 rounded transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
                     )}
 
                     <div className="bg-gray-100 p-1.5 rounded-xl flex items-center shadow-inner">
@@ -659,89 +742,82 @@ export default function ProductsPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <div className="flex flex-col items-end gap-1.5">
-                                                        {/* Row 1: Platform links + Match/Unmatch */}
-                                                        <div className="flex items-center gap-1.5">
-                                                            {item.variants[0]?.shopifyProductId && (
-                                                                <a
-                                                                    href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="inline-flex items-center gap-1 h-7 px-2 border border-gray-200 bg-white hover:bg-blue-50 rounded-md text-blue-600 transition-all text-[11px] font-medium"
-                                                                    title="Edit on Shopify"
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                >
-                                                                    <ShoppingBag className="w-3 h-3 shrink-0" />
-                                                                    Shopify
-                                                                </a>
-                                                            )}
-                                                            {item.variants[0]?.etsyListingId && (
-                                                                <a
-                                                                    href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="inline-flex items-center gap-1 h-7 px-2 border border-gray-200 bg-white hover:bg-orange-50 rounded-md text-orange-600 transition-all text-[11px] font-medium"
-                                                                    title="Edit on Etsy"
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                >
-                                                                    <Store className="w-3 h-3 shrink-0" />
-                                                                    Etsy
-                                                                </a>
-                                                            )}
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setMatchModal({ isOpen: true, product: item }); }}
-                                                                className={`inline-flex items-center gap-1 h-7 px-2.5 border rounded-md transition-all text-[11px] font-semibold ${item.matchStatus === 'synced'
-                                                                    ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                                    }`}
-                                                                title={item.matchStatus === 'synced' ? 'Break match' : 'Match with another product'}
+                                                    <div className="grid grid-cols-2 gap-1 w-[220px] ml-auto" onClick={(e) => e.stopPropagation()}>
+                                                        {/* Row 1, Col 1: View in Shopify */}
+                                                        {item.variants[0]?.shopifyProductId ? (
+                                                            <a
+                                                                href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 rounded-md text-blue-600 transition-all text-[10px] font-medium"
                                                             >
-                                                                {item.matchStatus === 'synced' ? (
-                                                                    <><Unlink className="w-3 h-3 shrink-0" /> Unmatch</>
-                                                                ) : (
-                                                                    <><Link2 className="w-3 h-3 shrink-0" /> Match</>
-                                                                )}
-                                                            </button>
-                                                        </div>
-                                                        {/* Row 2: Delete + Clone */}
-                                                        <div className="flex items-center gap-1.5">
+                                                                <ExternalLink className="w-3 h-3 shrink-0" />
+                                                                View in Shopify
+                                                            </a>
+                                                        ) : (
+                                                            <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                                                                <span className="text-[10px] text-gray-300">No Shopify</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Row 1, Col 2: View in Etsy */}
+                                                        {item.variants[0]?.etsyListingId ? (
+                                                            <a
+                                                                href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-orange-50 hover:border-orange-200 rounded-md text-orange-600 transition-all text-[10px] font-medium"
+                                                            >
+                                                                <ExternalLink className="w-3 h-3 shrink-0" />
+                                                                View in Etsy
+                                                            </a>
+                                                        ) : (
+                                                            <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                                                                <span className="text-[10px] text-gray-300">No Etsy</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Row 2, Col 1: Match / Unmatch */}
+                                                        <button
+                                                            onClick={() => setMatchModal({ isOpen: true, product: item })}
+                                                            className={`inline-flex items-center justify-center gap-1 h-7 border rounded-md transition-all text-[10px] font-semibold ${item.matchStatus === 'synced'
+                                                                ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                                                : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                }`}
+                                                        >
+                                                            {item.matchStatus === 'synced' ? (
+                                                                <><Unlink className="w-3 h-3 shrink-0" /> Unmatch</>
+                                                            ) : (
+                                                                <><Link2 className="w-3 h-3 shrink-0" /> Match</>
+                                                            )}
+                                                        </button>
+
+                                                        {/* Row 2, Col 2: Clone or Queued or Delete */}
+                                                        {isQueued ? (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ isOpen: true, product: item, isDeleting: false }); }}
-                                                                className="inline-flex items-center gap-1 h-7 px-2.5 border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-500 transition-all text-[11px] font-medium"
-                                                                title="Remove from MercSync"
+                                                                onClick={() => handleCloneClick(item, { stopPropagation: () => {} } as any)}
+                                                                className="inline-flex items-center justify-center gap-1 h-7 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md transition-all text-[10px] font-semibold"
+                                                            >
+                                                                <Pencil className="w-3 h-3 shrink-0" />
+                                                                Edit Queue
+                                                            </button>
+                                                        ) : item.matchStatus === 'synced' ? (
+                                                            <button
+                                                                onClick={() => setDeleteConfirm({ isOpen: true, product: item, isDeleting: false })}
+                                                                className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-500 transition-all text-[10px] font-medium"
                                                             >
                                                                 <Trash2 className="w-3 h-3 shrink-0" />
                                                                 Delete
                                                             </button>
-                                                            {isQueued ? (
-                                                                <>
-                                                                    <span className="inline-flex items-center gap-1 h-7 px-2 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 rounded-md text-[11px] font-bold">
-                                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></div>
-                                                                        Queued
-                                                                    </span>
-                                                                    <button
-                                                                        onClick={(e) => handleCloneClick(item, e)}
-                                                                        className="inline-flex items-center gap-1 h-7 px-2.5 border border-gray-200 bg-white hover:bg-gray-50 hover:text-indigo-600 rounded-md text-gray-500 transition-all text-[11px] font-medium"
-                                                                        title="Edit queue details"
-                                                                    >
-                                                                        <Pencil className="w-3 h-3 shrink-0" />
-                                                                        Edit
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={(e) => handleCloneClick(item, e)}
-                                                                    disabled={item.matchStatus === 'synced'}
-                                                                    className={`inline-flex items-center gap-1 h-7 px-2.5 border text-[11px] font-semibold rounded-md transition-all ${item.matchStatus === 'synced'
-                                                                        ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                                        : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                                                                        }`}
-                                                                >
-                                                                    <Copy className="w-3 h-3 shrink-0" />
-                                                                    Clone
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleCloneClick(item, { stopPropagation: () => {} } as any)}
+                                                                className="inline-flex items-center justify-center gap-1 h-7 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md transition-all text-[10px] font-semibold"
+                                                            >
+                                                                <Copy className="w-3 h-3 shrink-0" />
+                                                                Clone
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
