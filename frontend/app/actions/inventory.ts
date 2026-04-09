@@ -177,13 +177,6 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         });
     }
 
-    // DEBUG: Log cross-platform maps
-    console.log('[DEBUG] Platform:', platform);
-    console.log('[DEBUG] reversePointerMap:', JSON.stringify(reversePointerMap));
-    console.log('[DEBUG] crossEtsyListingMap:', JSON.stringify(crossEtsyListingMap));
-    console.log('[DEBUG] crossShopifyProductMap:', JSON.stringify(crossShopifyProductMap));
-    console.log('[DEBUG] otherItems sample:', JSON.stringify(otherItems?.slice(0, 3)));
-
     // 3. FALLBACK: Also look up cross-platform IDs from inventory_items table
     // This is the source of truth — inventory_items always stores both etsy_listing_id and shopify_product_id for matched items
     if (myVariantIds.length > 0) {
@@ -208,8 +201,6 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
                 }
             });
         }
-        console.log('[DEBUG] After inventory_items fallback - crossEtsyListingMap:', JSON.stringify(crossEtsyListingMap));
-        console.log('[DEBUG] After inventory_items fallback - crossShopifyProductMap:', JSON.stringify(crossShopifyProductMap));
     }
 
     // Group variants into Listings

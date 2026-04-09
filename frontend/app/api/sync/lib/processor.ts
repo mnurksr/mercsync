@@ -865,6 +865,18 @@ export async function cloneToShopify(shop: any, product: CloneProduct, jobId: st
     // 2. Build Shopify product payload (using clone variant data if available)
     const { product: shopifyPayload, originalStocks } = shopifyApi.buildProductPayload(product, safeDbRows, cloneVariants);
 
+    // 2.5 Fetch ALL listing images from Etsy API (staging only stores 1 image_url per variant)
+    try {
+        const etsyImages = await etsyApi.getListingImages(product.source_id, shop.etsy_access_token);
+        if (etsyImages.length > 0) {
+            // Replace the single-image payload with all Etsy listing images (sorted by rank)
+            shopifyPayload.images = etsyImages.map(img => ({ src: img.url_fullxfull }));
+            console.log(`[Sync] Fetched ${etsyImages.length} images from Etsy listing ${product.source_id}`);
+        }
+    } catch (imgErr: any) {
+        console.warn(`[Sync] Could not fetch Etsy listing images, falling back to staging images: ${imgErr.message}`);
+    }
+
     // 3. Create product on Shopify
     const created = await shopifyApi.createProduct(creds, shopifyPayload);
     const shopifyProduct = created.product;

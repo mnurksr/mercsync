@@ -390,6 +390,31 @@ export async function getOrCreateReadinessState(
 }
 
 /**
+ * Get all images for an Etsy listing
+ * Endpoint: GET /v3/application/listings/{listing_id}/images
+ * Returns full-resolution image URLs sorted by rank (display order)
+ */
+export async function getListingImages(
+    listingId: string | number,
+    accessToken: string
+): Promise<{ listing_image_id: number; url_fullxfull: string; rank: number }[]> {
+    try {
+        const data = await etsyFetch(`/listings/${listingId}/images`, accessToken);
+        const results = (data.results || []).map((img: any) => ({
+            listing_image_id: img.listing_image_id,
+            url_fullxfull: img.url_fullxfull,
+            rank: img.rank || 0
+        }));
+        // Sort by rank to preserve display order
+        results.sort((a: any, b: any) => a.rank - b.rank);
+        return results;
+    } catch (e: any) {
+        console.warn(`[Etsy] Failed to fetch listing images for ${listingId}:`, e.message);
+        return [];
+    }
+}
+
+/**
  * Download an image from a URL and return as Buffer
  */
 export async function downloadImage(imageUrl: string): Promise<Buffer | null> {
