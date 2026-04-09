@@ -177,6 +177,13 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         });
     }
 
+    // DEBUG: Log cross-platform maps
+    console.log('[DEBUG] Platform:', platform);
+    console.log('[DEBUG] reversePointerMap:', JSON.stringify(reversePointerMap));
+    console.log('[DEBUG] crossEtsyListingMap:', JSON.stringify(crossEtsyListingMap));
+    console.log('[DEBUG] crossShopifyProductMap:', JSON.stringify(crossShopifyProductMap));
+    console.log('[DEBUG] otherItems sample:', JSON.stringify(otherItems?.slice(0, 3)));
+
     // Group variants into Listings
     const groups: { [key: string]: ListingItem } = {};
 
