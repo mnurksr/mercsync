@@ -781,10 +781,10 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="grid grid-cols-2 gap-1 w-[220px] ml-auto" onClick={(e) => e.stopPropagation()}>
-                                                        {/* Row 1, Col 1: View in Shopify */}
-                                                        {item.variants[0]?.shopifyProductId ? (
+                                                        {/* Row 1, Col 1: Current platform link (always exists) */}
+                                                        {activePlatform === 'shopify' ? (
                                                             <a
-                                                                href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
+                                                                href={`https://${item.shopDomain}/admin/products/${item.variants[0]?.shopifyProductId}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 rounded-md text-blue-600 transition-all text-[10px] font-medium"
@@ -792,12 +792,9 @@ export default function ProductsPage() {
                                                                 <ExternalLink className="w-3 h-3 shrink-0" />
                                                                 View in Shopify
                                                             </a>
-                                                        ) : <div />}
-
-                                                        {/* Row 1, Col 2: View in Etsy */}
-                                                        {item.variants[0]?.etsyListingId ? (
+                                                        ) : (
                                                             <a
-                                                                href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
+                                                                href={`https://www.etsy.com/your/listings/${item.variants[0]?.etsyListingId}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-orange-50 hover:border-orange-200 rounded-md text-orange-600 transition-all text-[10px] font-medium"
@@ -805,7 +802,42 @@ export default function ProductsPage() {
                                                                 <ExternalLink className="w-3 h-3 shrink-0" />
                                                                 View in Etsy
                                                             </a>
-                                                        ) : <div />}
+                                                        )}
+
+                                                        {/* Row 1, Col 2: Other platform link (or placeholder if unmatched) */}
+                                                        {activePlatform === 'shopify' ? (
+                                                            item.variants[0]?.etsyListingId ? (
+                                                                <a
+                                                                    href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-orange-50 hover:border-orange-200 rounded-md text-orange-600 transition-all text-[10px] font-medium"
+                                                                >
+                                                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                                                    View in Etsy
+                                                                </a>
+                                                            ) : (
+                                                                <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                                                                    <span className="text-[10px] text-gray-300">No Etsy</span>
+                                                                </div>
+                                                            )
+                                                        ) : (
+                                                            item.variants[0]?.shopifyProductId ? (
+                                                                <a
+                                                                    href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 rounded-md text-blue-600 transition-all text-[10px] font-medium"
+                                                                >
+                                                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                                                    View in Shopify
+                                                                </a>
+                                                            ) : (
+                                                                <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                                                                    <span className="text-[10px] text-gray-300">No Shopify</span>
+                                                                </div>
+                                                            )
+                                                        )}
 
                                                         {/* Row 2, Col 1: Match / Unmatch */}
                                                         <button
