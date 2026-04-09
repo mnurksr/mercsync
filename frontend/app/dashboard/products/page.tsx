@@ -666,11 +666,12 @@ export default function ProductsPage() {
                                                                 href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="p-1.5 border border-gray-100 bg-white hover:bg-gray-50 rounded-md text-blue-500 shadow-sm transition-all"
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 bg-white hover:bg-gray-50 rounded-lg text-blue-500 shadow-sm transition-all text-xs font-semibold"
                                                                 title="Edit on Shopify"
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
                                                                 <ShoppingBag className="w-3.5 h-3.5" />
+                                                                <span className="hidden xl:inline">Shopify</span>
                                                             </a>
                                                         )}
                                                         {item.variants[0]?.etsyListingId && (
@@ -678,11 +679,12 @@ export default function ProductsPage() {
                                                                 href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="p-1.5 border border-gray-100 bg-white hover:bg-gray-50 rounded-md text-orange-500 shadow-sm transition-all"
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 bg-white hover:bg-gray-50 rounded-lg text-orange-500 shadow-sm transition-all text-xs font-semibold"
                                                                 title="Edit on Etsy"
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
                                                                 <Store className="w-3.5 h-3.5" />
+                                                                <span className="hidden xl:inline">Etsy</span>
                                                             </a>
                                                         )}
 
@@ -691,22 +693,27 @@ export default function ProductsPage() {
                                                         {/* Match Management */}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setMatchModal({ isOpen: true, product: item }); }}
-                                                            className={`p-1.5 border shadow-sm rounded-md transition-all ${item.matchStatus === 'synced'
-                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                                                                : 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm rounded-lg transition-all text-xs font-semibold ${item.matchStatus === 'synced'
+                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
                                                                 }`}
                                                             title={item.matchStatus === 'synced' ? 'Manage match' : 'Match with another product'}
                                                         >
-                                                            {item.matchStatus === 'synced' ? <Link2 className="w-3.5 h-3.5" /> : <Unlink className="w-3.5 h-3.5" />}
+                                                            {item.matchStatus === 'synced' ? (
+                                                                <><Unlink className="w-3.5 h-3.5" /> Unmatch</>
+                                                            ) : (
+                                                                <><Link2 className="w-3.5 h-3.5" /> Match</>
+                                                            )}
                                                         </button>
 
                                                         {/* Delete */}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ isOpen: true, product: item, isDeleting: false }); }}
-                                                            className="p-1.5 border border-gray-100 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-400 shadow-sm transition-all"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-100 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-lg text-gray-400 shadow-sm transition-all text-xs font-semibold"
                                                             title="Remove from MercSync"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
+                                                            Delete
                                                         </button>
 
                                                         <div className="w-px h-6 bg-gray-100 mx-0.5"></div>
@@ -720,10 +727,11 @@ export default function ProductsPage() {
                                                                 </span>
                                                                 <button
                                                                     onClick={(e) => handleCloneClick(item, e)}
-                                                                    className="p-2 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors shadow-sm"
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors shadow-sm text-xs font-semibold"
                                                                     title="Edit queue details"
                                                                 >
                                                                     <Pencil className="w-3.5 h-3.5" />
+                                                                    Edit
                                                                 </button>
                                                             </div>
                                                         ) : (
@@ -732,10 +740,10 @@ export default function ProductsPage() {
                                                                 disabled={item.matchStatus === 'synced'}
                                                                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
                                                                     ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed grayscale'
-                                                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                                                                    : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
                                                                     }`}
                                                             >
-                                                                <Copy className="w-3.5 h-3.5 text-gray-400" />
+                                                                <Copy className="w-3.5 h-3.5 text-current" />
                                                                 Clone
                                                             </button>
                                                         )}

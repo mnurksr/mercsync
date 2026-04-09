@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getStagingProducts, clearStagingTables, type StagingProduct } from '@/app/actions/staging';
+import { getStagingProducts, clearStagingTables, getInventoryReferences, type StagingProduct } from '@/app/actions/staging';
 import { getShopifyLocations, getConnectedShop, syncShopCurrencies } from '@/app/actions/shop';
 import { getSettings, type PriceRule } from '@/app/actions/settings';
 import {
@@ -1085,18 +1085,123 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
             // 1. Fetch live products
             // 2. Fetch live shop currencies (force sync from API)
             // 3. Fetch pricing settings
-            const [s, e, currencies, settings] = await Promise.all([
+            const [s, e, _, settings, invRefs] = await Promise.all([
                 getStagingProducts('shopify', currentUserId),
                 getStagingProducts('etsy', currentUserId),
                 syncShopCurrencies(),
-                getSettings()
+                getSettings(),
+                getInventoryReferences(currentUserId)
             ]);
             
-            console.log('[StagingInterface] loaded products:', { shopify: s.length, etsy: e.length });
+            console.log('[StagingInterface] loaded products:', { shopify: s.length, etsy: e.length, invRefs: invRefs.length });
             setShopifyProducts(s);
             setEtsyProducts(e);
             
-            // No longer using shopCurrencies state
+            // Build groups locally for initial matching computation
+            const sGroups = groupProducts(s, 'shopify');
+            const eGroups = groupProducts(e, 'etsy');
+
+            // --- INITIAL MATCH BUILDING ---
+            const newMatches: MatchedGroup[] = [];
+            const matchedProducts = new Map<string, string>(); // shopify_product_id -> etsy_listing_id (or single)
+            
+            // 1. Check existing inventory matches
+            invRefs.forEach((ref: any) => {
+                if (ref.shopify_product_id && ref.etsy_listing_id) {
+                    matchedProducts.set(ref.shopify_product_id, ref.etsy_listing_id);
+                } else if (ref.shopify_product_id && !ref.etsy_listing_id) {
+                    matchedProducts.set(ref.shopify_product_id, 'single-shopify');
+                } else if (!ref.shopify_product_id && ref.etsy_listing_id) {
+                    matchedProducts.set(ref.etsy_listing_id, 'single-etsy');
+                }
+            });
+
+            // 2. Also check if staging lists themselves have variant bindings (e.g. from Auto Match not fully saved)
+            s.forEach(p => {
+                if (p.shopifyProductId && p.etsyVariantId) {
+                    // Try to find the etsy listing ID for this etsyVariantId
+                    const targetE = e.find(ep => ep.etsyVariantId === p.etsyVariantId);
+                    if (targetE && targetE.etsyListingId) {
+                        matchedProducts.set(p.shopifyProductId, targetE.etsyListingId);
+                    }
+                }
+            });
+
+            const processedShopifyIds = new Set<string>();
+            const processedEtsyIds = new Set<string>();
+            
+            matchedProducts.forEach((eId, sIdOrEId) => {
+                if (eId === 'single-shopify') {
+                    const sGroup = sGroups.find(g => g.id === sIdOrEId);
+                    if (sGroup && !processedShopifyIds.has(sGroup.id)) {
+                        newMatches.push({
+                            id: `single-s-${sGroup.id}`,
+                            shopify: sGroup,
+                            etsy: null,
+                            variantMatches: [],
+                            unmatchedShopifyVariants: [...sGroup.variants],
+                            unmatchedEtsyVariants: [],
+                            single: 'shopify'
+                        });
+                        processedShopifyIds.add(sGroup.id);
+                    }
+                } else if (eId === 'single-etsy') {
+                    const eGroup = eGroups.find(g => g.id === sIdOrEId);
+                    if (eGroup && !processedEtsyIds.has(eGroup.id)) {
+                        newMatches.push({
+                            id: `single-e-${eGroup.id}`,
+                            shopify: null,
+                            etsy: eGroup,
+                            variantMatches: [],
+                            unmatchedShopifyVariants: [],
+                            unmatchedEtsyVariants: [...eGroup.variants],
+                            single: 'etsy'
+                        });
+                        processedEtsyIds.add(eGroup.id);
+                    }
+                } else {
+                    // Linked
+                    const sGroup = sGroups.find(g => g.id === sIdOrEId);
+                    const eGroup = eGroups.find(g => g.id === eId);
+                    
+                    if (sGroup && eGroup && !processedShopifyIds.has(sGroup.id) && !processedEtsyIds.has(eGroup.id)) {
+                        const variantMatches: VariantMatch[] = [];
+                        const usedSvars = new Set<string>();
+                        const usedEvars = new Set<string>();
+                        
+                        // Find matching variants from invRefs or staging variant matches
+                        sGroup.variants.forEach(sVar => {
+                            // Check if this variant is explicitly matched via invRefs or staging table
+                            const refMatch = invRefs.find((r: any) => r.shopify_variant_id === sVar.shopifyVariantId);
+                            let targetEtsyVariantId = refMatch ? refMatch.etsy_variant_id : sVar.etsyVariantId;
+
+                            if (targetEtsyVariantId) {
+                                const eVar = eGroup.variants.find(v => v.etsyVariantId === targetEtsyVariantId);
+                                if (eVar && !usedEvars.has(eVar.platformId!)) {
+                                    variantMatches.push({ shopify: sVar, etsy: eVar });
+                                    usedSvars.add(sVar.platformId!);
+                                    usedEvars.add(eVar.platformId!);
+                                }
+                            }
+                        });
+                        
+                        newMatches.push({
+                            id: `linked-${sGroup.id}-${eGroup.id}`,
+                            shopify: sGroup,
+                            etsy: eGroup,
+                            variantMatches,
+                            unmatchedShopifyVariants: sGroup.variants.filter(v => !usedSvars.has(v.platformId!)),
+                            unmatchedEtsyVariants: eGroup.variants.filter(v => !usedEvars.has(v.platformId!)),
+                            type: 'MATCHED'
+                        });
+                        processedShopifyIds.add(sGroup.id);
+                        processedEtsyIds.add(eGroup.id);
+                    }
+                }
+            });
+            
+            setMatches(newMatches);
+            // -----------------------------
             
             if (settings?.price_rules) {
                 setPricingRules(settings.price_rules);

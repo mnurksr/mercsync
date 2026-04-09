@@ -358,3 +358,35 @@ export async function clearStagingTables(ownerId?: string): Promise<{ success: b
 
     return { success: true, message: 'Staging data cleared successfully' }
 }
+
+/**
+ * Fetch existing inventory items to restore matches in staging UI
+ */
+export async function getInventoryReferences(ownerId?: string) {
+    let supabase;
+    let resolvedOwnerId = ownerId;
+
+    if (ownerId) {
+        supabase = createAdminClient();
+    } else {
+        const context = await getValidatedUserContext();
+        supabase = context.supabase;
+        resolvedOwnerId = context.ownerId;
+        if (!resolvedOwnerId) return [];
+    }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id')
+        .eq('owner_id', resolvedOwnerId)
+        .maybeSingle();
+
+    if (!shop) return [];
+
+    const { data } = await supabase
+        .from('inventory_items')
+        .select('shopify_product_id, shopify_variant_id, etsy_listing_id, etsy_variant_id')
+        .eq('shop_id', shop.id);
+
+    return data || [];
+}
