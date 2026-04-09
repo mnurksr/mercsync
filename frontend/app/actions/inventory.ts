@@ -120,6 +120,17 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     const myVariantIds = (items || []).map(i => platform === 'shopify' ? i.shopify_variant_id : i.etsy_variant_id).filter(Boolean);
     const pointedToIds = (items || []).map(i => platform === 'shopify' ? i.etsy_variant_id : i.shopify_variant_id).filter(Boolean);
 
+    // Build reverse map: other variant ID -> my variant ID (for lookup when processing other table)
+    const reversePointerMap: { [otherVarId: string]: string[] } = {};
+    (items || []).forEach(item => {
+        const myVarId = platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id;
+        const otherVarId = platform === 'shopify' ? item.etsy_variant_id : item.shopify_variant_id;
+        if (myVarId && otherVarId) {
+            if (!reversePointerMap[otherVarId]) reversePointerMap[otherVarId] = [];
+            reversePointerMap[otherVarId].push(myVarId);
+        }
+    });
+
     let otherStocksMap: { [key: string]: number } = {};
     let matchedBackMap: { [key: string]: string } = {}; // Map our ID -> their ID if they point to us
 
@@ -133,7 +144,7 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
         .select(`shopify_variant_id, etsy_variant_id, stock_quantity, etsy_listing_id, shopify_product_id`)
         .or(`${otherIdField}.in.(${pointedToIds.join(',')}),${myIdFieldInOtherTable}.in.(${myVariantIds.join(',')})`);
 
-    // Maps: variant ID -> cross-platform listing/product IDs
+    // Maps: my variant ID -> cross-platform listing/product IDs
     let crossEtsyListingMap: { [key: string]: string } = {};
     let crossShopifyProductMap: { [key: string]: string } = {};
 
@@ -150,13 +161,18 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
                 matchedBackMap[pointsToMeId] = theirId;
             }
 
-            // Build cross-platform ID maps
-            // When viewing Shopify tab: we need the etsy_listing_id from the other (Etsy) table
-            // When viewing Etsy tab: we need the shopify_product_id from the other (Shopify) table
-            const myVariantId = pointsToMeId || (platform === 'shopify' ? oi.shopify_variant_id : oi.etsy_variant_id);
-            if (myVariantId) {
-                if (oi.etsy_listing_id) crossEtsyListingMap[myVariantId] = oi.etsy_listing_id;
-                if (oi.shopify_product_id) crossShopifyProductMap[myVariantId] = oi.shopify_product_id;
+            // Build cross-platform ID maps using reverse pointer
+            // Case 1: We point to them — use reversePointerMap to find our variant IDs
+            if (theirId && reversePointerMap[theirId]) {
+                reversePointerMap[theirId].forEach(myVarId => {
+                    if (oi.etsy_listing_id) crossEtsyListingMap[myVarId] = oi.etsy_listing_id;
+                    if (oi.shopify_product_id) crossShopifyProductMap[myVarId] = oi.shopify_product_id;
+                });
+            }
+            // Case 2: They point to us — pointsToMeId IS our variant ID
+            if (pointsToMeId) {
+                if (oi.etsy_listing_id) crossEtsyListingMap[pointsToMeId] = oi.etsy_listing_id;
+                if (oi.shopify_product_id) crossShopifyProductMap[pointsToMeId] = oi.shopify_product_id;
             }
         });
     }

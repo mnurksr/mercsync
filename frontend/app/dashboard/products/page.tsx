@@ -815,7 +815,7 @@ export default function ProductsPage() {
                                                             </a>
                                                         )}
 
-                                                        {/* Row 1, Col 2: Other platform link (or placeholder if unmatched) */}
+                                                        {/* Row 1, Col 2: Other platform link (or Delete if unmatched) */}
                                                         {activePlatform === 'shopify' ? (
                                                             item.variants[0]?.etsyListingId ? (
                                                                 <a
@@ -827,6 +827,10 @@ export default function ProductsPage() {
                                                                     <ExternalLink className="w-3 h-3 shrink-0" />
                                                                     View in Etsy
                                                                 </a>
+                                                            ) : item.matchStatus === 'synced' ? (
+                                                                <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                                                                    <span className="text-[10px] text-gray-300">View in Etsy</span>
+                                                                </div>
                                                             ) : (
                                                                 <button
                                                                     onClick={() => setDeleteConfirm({ isOpen: true, product: item, isDeleting: false })}
@@ -847,6 +851,10 @@ export default function ProductsPage() {
                                                                     <ExternalLink className="w-3 h-3 shrink-0" />
                                                                     View in Shopify
                                                                 </a>
+                                                            ) : item.matchStatus === 'synced' ? (
+                                                                <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                                                                    <span className="text-[10px] text-gray-300">View in Shopify</span>
+                                                                </div>
                                                             ) : (
                                                                 <button
                                                                     onClick={() => setDeleteConfirm({ isOpen: true, product: item, isDeleting: false })}
