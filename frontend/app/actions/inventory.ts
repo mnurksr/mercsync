@@ -184,6 +184,34 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     console.log('[DEBUG] crossShopifyProductMap:', JSON.stringify(crossShopifyProductMap));
     console.log('[DEBUG] otherItems sample:', JSON.stringify(otherItems?.slice(0, 3)));
 
+    // 3. FALLBACK: Also look up cross-platform IDs from inventory_items table
+    // This is the source of truth — inventory_items always stores both etsy_listing_id and shopify_product_id for matched items
+    if (myVariantIds.length > 0) {
+        const myField = platform === 'shopify' ? 'shopify_variant_id' : 'etsy_variant_id';
+        const { data: invItems } = await supabase
+            .from('inventory_items')
+            .select('shopify_variant_id, etsy_variant_id, etsy_listing_id, shopify_product_id')
+            .eq('shop_id', shop.id)
+            .in(myField, myVariantIds);
+
+        if (invItems) {
+            invItems.forEach((inv: any) => {
+                const myVarId = platform === 'shopify' ? inv.shopify_variant_id : inv.etsy_variant_id;
+                if (!myVarId) return;
+
+                // Fill cross maps from inventory_items (most reliable source)
+                if (inv.etsy_listing_id && !crossEtsyListingMap[myVarId]) {
+                    crossEtsyListingMap[myVarId] = inv.etsy_listing_id;
+                }
+                if (inv.shopify_product_id && !crossShopifyProductMap[myVarId]) {
+                    crossShopifyProductMap[myVarId] = inv.shopify_product_id;
+                }
+            });
+        }
+        console.log('[DEBUG] After inventory_items fallback - crossEtsyListingMap:', JSON.stringify(crossEtsyListingMap));
+        console.log('[DEBUG] After inventory_items fallback - crossShopifyProductMap:', JSON.stringify(crossShopifyProductMap));
+    }
+
     // Group variants into Listings
     const groups: { [key: string]: ListingItem } = {};
 
