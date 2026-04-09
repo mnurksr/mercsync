@@ -1215,6 +1215,7 @@ async function cloneToEtsy(
     );
 
     // 4. Create listing on Etsy
+    console.log(`[Sync] Creating Etsy listing for "${product.title}" with payload:`, JSON.stringify(listingPayload, null, 2));
     const etsyListing = await etsyApi.createListing(
         shop.etsy_shop_id,
         shop.etsy_access_token,

@@ -16,13 +16,22 @@ async function etsyFetch(endpoint: string, accessToken: string, options: Request
     const url = `${ETSY_BASE}${endpoint}`;
 
     const isGet = !options.method || options.method.toUpperCase() === 'GET';
+    
+    // Determine Content-Type: allow overrides from options.headers
+    const headers: Record<string, string> = {
+        'x-api-key': getApiKey(),
+        'Authorization': `Bearer ${accessToken}`,
+    };
+    if (!isGet) {
+        // Default to application/json for non-GET, but allow override
+        headers['Content-Type'] = 'application/json';
+    }
+
     const res = await fetch(url, {
         ...options,
         headers: {
-            'x-api-key': getApiKey(),
-            'Authorization': `Bearer ${accessToken}`,
-            ...(isGet ? {} : { 'Content-Type': 'application/json' }),
-            ...options.headers,
+            ...headers,
+            ...(options.headers as Record<string, string> || {}),
         },
     });
 
@@ -199,15 +208,27 @@ export async function updateInventory(
 /**
  * Create a new Etsy listing
  * Replaces: POST /shops/{id}/listings
+ * NOTE: Etsy's createDraftListing requires application/x-www-form-urlencoded
  */
 export async function createListing(
     shopId: string | number,
     accessToken: string,
     listingPayload: any
 ) {
+    // Etsy's createDraftListing endpoint requires form-urlencoded, not JSON
+    const formBody = new URLSearchParams();
+    for (const [key, value] of Object.entries(listingPayload)) {
+        if (value !== null && value !== undefined) {
+            formBody.append(key, String(value));
+        }
+    }
+
     return etsyFetch(`/shops/${shopId}/listings`, accessToken, {
         method: 'POST',
-        body: JSON.stringify(listingPayload)
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formBody.toString()
     });
 }
 
@@ -442,7 +463,7 @@ export function buildListingPayload(
         totalStock += actualStock;
 
         const offering: any = {
-            price: parseFloat(variant.price),
+            price: Math.max(0.20, parseFloat(variant.price) || 0.20),
             quantity: actualStock,
             is_enabled: true
         };
@@ -462,13 +483,28 @@ export function buildListingPayload(
     });
 
     // Build listing payload
+    // Etsy minimum price is 0.20, enforce it
+    const rawPrice = useCloneVariants ? parseFloat(variants[0].price) : parseFloat(shopifyProduct.variants[0]?.price || '0');
+    const safePrice = Math.max(0.20, isNaN(rawPrice) ? 0.20 : rawPrice);
+    
+    // Sanitize description: remove HTML, ensure non-empty
+    let rawDesc = overrides?.description || shopifyProduct.body_html || '';
+    let cleanDesc = rawDesc.replace(/(<([^>]+)>)/gi, '').trim();
+    if (!cleanDesc || cleanDesc.length < 1) {
+        cleanDesc = `${overrides?.title || shopifyProduct.title || 'Product'} - Listed via MercSync`;
+    }
+
+    // Sanitize title: remove HTML entities, ensure valid length
+    let cleanTitle = (overrides?.title || shopifyProduct.title || 'Default Title')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+        .trim();
+    if (cleanTitle.length < 1) cleanTitle = 'Product Listing';
+
     const listingPayload: any = {
         quantity: Math.min(999, Math.max(1, totalStock)),
-        title: (overrides?.title || shopifyProduct.title || 'Default Title').substring(0, 140),
-        description: (overrides?.description || shopifyProduct.body_html || 'No description')
-            .replace(/(<([^>]+)>)/gi, '')
-            .substring(0, 500),
-        price: useCloneVariants ? variants[0].price : parseFloat(shopifyProduct.variants[0].price),
+        title: cleanTitle.substring(0, 140),
+        description: cleanDesc.substring(0, 500),
+        price: safePrice,
         who_made: 'i_did',
         when_made: '2020_2026',
         taxonomy_id: 1,

@@ -658,95 +658,90 @@ export default function ProductsPage() {
                                                         {item.variants?.[0]?.sku || 'NO-SKU'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5">
-                                                        {/* Platform Links */}
-                                                        {item.variants[0]?.shopifyProductId && (
-                                                            <a
-                                                                href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-blue-600 shadow-sm transition-all text-xs font-medium"
-                                                                title="Edit on Shopify"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
-                                                            </a>
-                                                        )}
-                                                        {item.variants[0]?.etsyListingId && (
-                                                            <a
-                                                                href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-1.5 h-8 px-2.5 border border-gray-200 bg-white hover:bg-gray-50 rounded-lg text-orange-600 shadow-sm transition-all text-xs font-medium"
-                                                                title="Edit on Etsy"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <Store className="w-3.5 h-3.5 shrink-0" />
-                                                            </a>
-                                                        )}
-
-                                                        <div className="w-px h-5 bg-gray-200 mx-0.5 shrink-0"></div>
-
-                                                        {/* Match / Unmatch */}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setMatchModal({ isOpen: true, product: item }); }}
-                                                            className={`inline-flex items-center gap-1.5 h-8 px-3 border shadow-sm rounded-lg transition-all text-xs font-semibold ${item.matchStatus === 'synced'
-                                                                ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                                                                : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                                }`}
-                                                            title={item.matchStatus === 'synced' ? 'Break match' : 'Match with another product'}
-                                                        >
-                                                            {item.matchStatus === 'synced' ? (
-                                                                <><Unlink className="w-3.5 h-3.5 shrink-0" /> Unmatch</>
-                                                            ) : (
-                                                                <><Link2 className="w-3.5 h-3.5 shrink-0" /> Match</>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex flex-col items-end gap-1.5">
+                                                        {/* Row 1: Platform links + Match/Unmatch */}
+                                                        <div className="flex items-center gap-1.5">
+                                                            {item.variants[0]?.shopifyProductId && (
+                                                                <a
+                                                                    href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 h-7 px-2 border border-gray-200 bg-white hover:bg-blue-50 rounded-md text-blue-600 transition-all text-[11px] font-medium"
+                                                                    title="Edit on Shopify"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <ShoppingBag className="w-3 h-3 shrink-0" />
+                                                                    Shopify
+                                                                </a>
                                                             )}
-                                                        </button>
-
-                                                        <div className="w-px h-5 bg-gray-200 mx-0.5 shrink-0"></div>
-
-                                                        {/* Delete */}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ isOpen: true, product: item, isDeleting: false }); }}
-                                                            className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-lg text-gray-500 shadow-sm transition-all text-xs font-semibold"
-                                                            title="Remove from MercSync"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                                                            Delete
-                                                        </button>
-
-                                                        <div className="w-px h-5 bg-gray-200 mx-0.5 shrink-0"></div>
-
-                                                        {/* Clone */}
-                                                        {isQueued ? (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="inline-flex items-center gap-1.5 h-8 px-3 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 rounded-lg text-xs font-bold">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></div>
-                                                                    Queued
-                                                                </span>
+                                                            {item.variants[0]?.etsyListingId && (
+                                                                <a
+                                                                    href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 h-7 px-2 border border-gray-200 bg-white hover:bg-orange-50 rounded-md text-orange-600 transition-all text-[11px] font-medium"
+                                                                    title="Edit on Etsy"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <Store className="w-3 h-3 shrink-0" />
+                                                                    Etsy
+                                                                </a>
+                                                            )}
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setMatchModal({ isOpen: true, product: item }); }}
+                                                                className={`inline-flex items-center gap-1 h-7 px-2.5 border rounded-md transition-all text-[11px] font-semibold ${item.matchStatus === 'synced'
+                                                                    ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                    }`}
+                                                                title={item.matchStatus === 'synced' ? 'Break match' : 'Match with another product'}
+                                                            >
+                                                                {item.matchStatus === 'synced' ? (
+                                                                    <><Unlink className="w-3 h-3 shrink-0" /> Unmatch</>
+                                                                ) : (
+                                                                    <><Link2 className="w-3 h-3 shrink-0" /> Match</>
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                        {/* Row 2: Delete + Clone */}
+                                                        <div className="flex items-center gap-1.5">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ isOpen: true, product: item, isDeleting: false }); }}
+                                                                className="inline-flex items-center gap-1 h-7 px-2.5 border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-500 transition-all text-[11px] font-medium"
+                                                                title="Remove from MercSync"
+                                                            >
+                                                                <Trash2 className="w-3 h-3 shrink-0" />
+                                                                Delete
+                                                            </button>
+                                                            {isQueued ? (
+                                                                <>
+                                                                    <span className="inline-flex items-center gap-1 h-7 px-2 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 rounded-md text-[11px] font-bold">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shrink-0"></div>
+                                                                        Queued
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={(e) => handleCloneClick(item, e)}
+                                                                        className="inline-flex items-center gap-1 h-7 px-2.5 border border-gray-200 bg-white hover:bg-gray-50 hover:text-indigo-600 rounded-md text-gray-500 transition-all text-[11px] font-medium"
+                                                                        title="Edit queue details"
+                                                                    >
+                                                                        <Pencil className="w-3 h-3 shrink-0" />
+                                                                        Edit
+                                                                    </button>
+                                                                </>
+                                                            ) : (
                                                                 <button
                                                                     onClick={(e) => handleCloneClick(item, e)}
-                                                                    className="inline-flex items-center gap-1.5 h-8 px-3 border border-gray-200 bg-white hover:bg-gray-50 hover:text-indigo-600 rounded-lg text-gray-500 shadow-sm transition-all text-xs font-semibold"
-                                                                    title="Edit queue details"
+                                                                    disabled={item.matchStatus === 'synced'}
+                                                                    className={`inline-flex items-center gap-1 h-7 px-2.5 border text-[11px] font-semibold rounded-md transition-all ${item.matchStatus === 'synced'
+                                                                        ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
+                                                                        : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                                                        }`}
                                                                 >
-                                                                    <Pencil className="w-3.5 h-3.5 shrink-0" />
-                                                                    Edit
+                                                                    <Copy className="w-3 h-3 shrink-0" />
+                                                                    Clone
                                                                 </button>
-                                                            </div>
-                                                        ) : (
-                                                            <button
-                                                                onClick={(e) => handleCloneClick(item, e)}
-                                                                disabled={item.matchStatus === 'synced'}
-                                                                className={`inline-flex items-center gap-1.5 h-8 px-3 border shadow-sm text-xs font-semibold rounded-lg transition-all ${item.matchStatus === 'synced'
-                                                                    ? 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed'
-                                                                    : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                                                                    }`}
-                                                            >
-                                                                <Copy className="w-3.5 h-3.5 shrink-0" />
-                                                                Clone
-                                                            </button>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
