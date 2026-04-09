@@ -130,8 +130,12 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     // We look for items that WE point to OR items that point TO US
     const { data: otherItems } = await supabase
         .from(otherTableName)
-        .select(`shopify_variant_id, etsy_variant_id, stock_quantity`)
+        .select(`shopify_variant_id, etsy_variant_id, stock_quantity, etsy_listing_id, shopify_product_id`)
         .or(`${otherIdField}.in.(${pointedToIds.join(',')}),${myIdFieldInOtherTable}.in.(${myVariantIds.join(',')})`);
+
+    // Maps: variant ID -> cross-platform listing/product IDs
+    let crossEtsyListingMap: { [key: string]: string } = {};
+    let crossShopifyProductMap: { [key: string]: string } = {};
 
     if (otherItems) {
         otherItems.forEach((oi: any) => {
@@ -144,6 +148,15 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             // If they point to us, we should know about it!
             if (pointsToMeId) {
                 matchedBackMap[pointsToMeId] = theirId;
+            }
+
+            // Build cross-platform ID maps
+            // When viewing Shopify tab: we need the etsy_listing_id from the other (Etsy) table
+            // When viewing Etsy tab: we need the shopify_product_id from the other (Shopify) table
+            const myVariantId = pointsToMeId || (platform === 'shopify' ? oi.shopify_variant_id : oi.etsy_variant_id);
+            if (myVariantId) {
+                if (oi.etsy_listing_id) crossEtsyListingMap[myVariantId] = oi.etsy_listing_id;
+                if (oi.shopify_product_id) crossShopifyProductMap[myVariantId] = oi.shopify_product_id;
             }
         });
     }
@@ -179,6 +192,8 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             };
         }
 
+        const myVariantIdForCross = platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id;
+
         groups[groupId].variants.push({
             id: platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id,
             dbId: item.id,
@@ -189,10 +204,10 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             otherStock,
             imageUrl: item.image_url,
             isMatched,
-            shopifyProductId: item.shopify_product_id,
+            shopifyProductId: item.shopify_product_id || crossShopifyProductMap[myVariantIdForCross],
             shopifyVariantId: item.shopify_variant_id, // Explicit 47...
             shopifyInventoryItemId: item.shopify_inventory_item_id, // Explicit 49...
-            etsyListingId: item.etsy_listing_id,
+            etsyListingId: item.etsy_listing_id || crossEtsyListingMap[myVariantIdForCross],
             etsyVariantId: item.etsy_variant_id
         });
 
