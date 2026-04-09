@@ -960,11 +960,41 @@ async function cloneToEtsy(
 ) {
     console.log(`[Sync] cloneToEtsy called for product: ${product.title}, target_id: ${product.target_id}`);
 
-    // 1. GET live Shopify product data
+    // 1. GET live Shopify product data (with Gift Card / deleted product fallback)
     const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
-    const liveData = await shopifyApi.getProduct(creds, product.source_id);
-    const shopifyProduct = liveData.product;
-    const mainImageUrl = shopifyProduct.images?.[0]?.src || '';
+    let shopifyProduct: any;
+    let mainImageUrl: string = product.image || '';
+    let isDigitalProduct = false;
+
+    try {
+        const liveData = await shopifyApi.getProduct(creds, product.source_id);
+        shopifyProduct = liveData.product;
+        mainImageUrl = shopifyProduct.images?.[0]?.src || product.image || '';
+
+        // Detect digital products: Gift Cards, non-shipping products
+        const productType = (shopifyProduct.product_type || '').toLowerCase();
+        const noShipping = shopifyProduct.variants?.every((v: any) => v.requires_shipping === false);
+        isDigitalProduct = productType === 'gift_card' || noShipping;
+    } catch (fetchErr: any) {
+        console.warn(`[Sync] Could not fetch Shopify product ${product.source_id} (likely a Gift Card or deleted product): ${fetchErr.message}`);
+        // Fallback: Build a synthetic shopifyProduct from staging/clone data
+        shopifyProduct = {
+            id: product.source_id,
+            title: product.title,
+            body_html: product.description || '',
+            images: product.image ? [{ src: product.image }] : [],
+            options: [{ name: 'Title' }],
+            variants: product.variants.filter(v => v.selected !== false).map((v, i) => ({
+                id: v.source_variant_id || `fallback-${i}`,
+                title: v.title || 'Default Title',
+                sku: v.sku || '',
+                price: v.price?.toString() || '0.00',
+                requires_shipping: false
+            })),
+            product_type: 'digital'
+        };
+        isDigitalProduct = true;
+    }
 
     // 2. Get stock quantities from staging DB
     const { data: dbStocks } = await supabase
@@ -1180,7 +1210,8 @@ async function cloneToEtsy(
         {
             title: product.title,
             description: product.description
-        }
+        },
+        isDigitalProduct
     );
 
     // 4. Create listing on Etsy

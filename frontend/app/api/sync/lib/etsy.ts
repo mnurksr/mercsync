@@ -393,7 +393,8 @@ export function buildListingPayload(
     shippingProfileId: number | null,
     readinessStateId: number | null,
     cloneVariants?: { title: string; sku: string; price: number; stock: number }[],
-    overrides?: { title?: string; description?: string }
+    overrides?: { title?: string; description?: string },
+    isDigitalProduct?: boolean
 ): { listingPayload: any; inventoryPayload: any } {
     // Build stock map from DB
     const stockMap: Record<string, number> = {};
@@ -403,9 +404,18 @@ export function buildListingPayload(
         }
     });
 
-    // Detect product type — always clone as physical on Etsy
-    // Etsy 'download' type requires file uploads which our flow doesn't support.
-    // Gift cards, non-shipping items from Shopify are treated as physical products on Etsy.
+    // Detect product type
+    // If explicitly digital, or if all Shopify variants have requires_shipping=false
+    const isDigital = isDigitalProduct ||
+        (shopifyProduct.product_type || '').toLowerCase() === 'gift_card' ||
+        shopifyProduct.variants?.every((v: any) => v.requires_shipping === false);
+
+    // Etsy listing type: physical or download
+    // NOTE: Etsy 'download' listings technically require file uploads,
+    // but we create as draft so we can list without files initially.
+    // For Gift Cards and other non-physical products, we still use 'physical'
+    // because 'download' requires actual file attachments.
+    // The key difference is we handle shipping_profile differently.
     const etsyType = 'physical';
 
     // Use clone variants if provided, otherwise use Shopify product variants
@@ -467,10 +477,10 @@ export function buildListingPayload(
         state: 'draft'
     };
 
-    if (etsyType === 'physical') {
-        if (shippingProfileId) listingPayload.shipping_profile_id = shippingProfileId;
-        if (readinessStateId) listingPayload.readiness_state_id = readinessStateId;
-    }
+    // Shipping profile is always required for physical type on Etsy,
+    // even for "digital-like" products (Gift Cards, etc.)
+    if (shippingProfileId) listingPayload.shipping_profile_id = shippingProfileId;
+    if (readinessStateId) listingPayload.readiness_state_id = readinessStateId;
 
     const inventoryPayload = {
         products: etsyProducts,
