@@ -242,7 +242,7 @@ export default function ProductsPage() {
             sku: item.variants?.[0]?.sku || '',
             price: item.variants?.[0]?.price || 0,
             stock: item.totalStock,
-            description: '', // Initial fetch might not have description, backend will use it if provided
+            description: item.description || '', // Now populated from staging table
             variants: item.variants.map(v => ({
                 platformId: v.shopifyVariantId || v.id, // Ensure we use 47... if available
                 variantTitle: v.title,
@@ -737,16 +737,6 @@ export default function ProductsPage() {
                                                                             <td className="px-4 py-3">
                                                                                 <span className="text-sm font-medium text-gray-900">{variant.price}</span>
                                                                                 <span className="text-[10px] text-gray-500 ml-0.5">TL</span>
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                <div className="flex flex-col">
-                                                                                    <span className={`text-sm font-bold ${activePlatform === 'shopify' ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                                                        {activePlatform === 'shopify' ? variant.stock : (variant.otherStock ?? '-')} <span className="text-[10px] font-medium ml-0.5 whitespace-nowrap">SH</span>
-                                                                                    </span>
-                                                                                    <span className={`text-sm font-bold ${activePlatform === 'etsy' ? 'text-orange-600' : 'text-gray-400'}`}>
-                                                                                        {activePlatform === 'etsy' ? variant.stock : (variant.otherStock ?? '-')} <span className="text-[10px] font-medium ml-0.5 whitespace-nowrap">ET</span>
-                                                                                    </span>
-                                                                                </div>
                                                                             </td>
                                                                             <td className="px-4 py-3 text-right">
                                                                                 {variant.isMatched ? (

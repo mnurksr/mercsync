@@ -23,6 +23,7 @@ export type PlatformVariant = {
 export type ListingItem = {
     id: string
     title: string
+    description: string
     imageUrl: string | null
     totalStock: number
     otherTotalStock?: number
@@ -164,6 +165,7 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             groups[groupId] = {
                 id: groupId,
                 title: item.product_title || item.name || 'Unnamed Product',
+                description: item.description || '',
                 imageUrl: item.image_url,
                 totalStock: 0,
                 otherTotalStock: 0,

@@ -403,10 +403,10 @@ export function buildListingPayload(
         }
     });
 
-    // Detect product type
-    const isDigital = shopifyProduct.product_type === 'giftcard' ||
-        shopifyProduct.variants?.some((v: any) => v.requires_shipping === false);
-    const etsyType = isDigital ? 'download' : 'physical';
+    // Detect product type — always clone as physical on Etsy
+    // Etsy 'download' type requires file uploads which our flow doesn't support.
+    // Gift cards, non-shipping items from Shopify are treated as physical products on Etsy.
+    const etsyType = 'physical';
 
     // Use clone variants if provided, otherwise use Shopify product variants
     const useCloneVariants = cloneVariants && cloneVariants.length > 0;
@@ -425,11 +425,9 @@ export function buildListingPayload(
     const etsyProducts = variants.map((variant: any) => {
         let actualStock: number;
         if (useCloneVariants) {
-            // Use stock directly from clone payload
-            actualStock = isDigital ? 999 : Math.max(1, variant.stock || 1);
+            actualStock = Math.max(1, variant.stock || 1);
         } else {
-            // Use stock from DB map
-            actualStock = isDigital ? 999 : Math.max(1, stockMap[variant.id?.toString()] || 1);
+            actualStock = Math.max(1, stockMap[variant.id?.toString()] || 1);
         }
         totalStock += actualStock;
 

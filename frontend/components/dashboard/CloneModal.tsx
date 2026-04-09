@@ -215,7 +215,8 @@ export default function CloneModal({
                         </p>
                     </div>
 
-                    {/* Grid: Price, Stock, SKU */}
+                    {/* Grid: Price, Stock, SKU — only for single-variant products */}
+                    {formData.variants.length <= 1 && (
                     <div className="grid grid-cols-3 gap-3">
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Base Price</label>
@@ -248,6 +249,7 @@ export default function CloneModal({
                             />
                         </div>
                     </div>
+                    )}
 
                     {/* Pricing Rule Integration */}
                     {(() => {
@@ -339,7 +341,7 @@ export default function CloneModal({
                             <div className="space-y-3">
                                 {formData.variants.map((v, i) => (
                                     <div key={i} className={`grid grid-cols-12 gap-3 items-center p-3 rounded-xl border transition-all ${v.selected === false ? 'bg-gray-50/50 border-gray-100 opacity-60' : 'bg-gray-50 border-gray-200'}`}>
-                                        <div className="col-span-12 md:col-span-3">
+                                        <div className="col-span-12 md:col-span-4">
                                             <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Variant Name</label>
                                             <input
                                                 type="text"
@@ -359,23 +361,13 @@ export default function CloneModal({
                                                 className="w-full px-3 py-2 bg-white border border-gray-200 text-gray-900 rounded-lg focus:ring-1 focus:ring-indigo-500 outline-none text-xs disabled:bg-gray-100 disabled:text-gray-500"
                                             />
                                         </div>
-                                        <div className="col-span-4 md:col-span-3">
+                                        <div className="col-span-4 md:col-span-4">
                                             <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Price</label>
                                             <input
                                                 type="number"
                                                 value={v.price}
                                                 disabled={v.selected === false}
                                                 onChange={e => handleVariantChange(i, 'price', parseFloat(e.target.value) || 0)}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 text-gray-900 rounded-lg focus:ring-1 focus:ring-indigo-500 outline-none text-xs disabled:bg-gray-100 disabled:text-gray-500"
-                                            />
-                                        </div>
-                                        <div className="col-span-4 md:col-span-2">
-                                            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">Stock</label>
-                                            <input
-                                                type="number"
-                                                value={v.stock}
-                                                disabled={v.selected === false}
-                                                onChange={e => handleVariantChange(i, 'stock', parseInt(e.target.value) || 0)}
                                                 className="w-full px-3 py-2 bg-white border border-gray-200 text-gray-900 rounded-lg focus:ring-1 focus:ring-indigo-500 outline-none text-xs disabled:bg-gray-100 disabled:text-gray-500"
                                             />
                                         </div>
