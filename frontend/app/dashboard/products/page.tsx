@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { getPlatformListings, getInventoryStats, getUserId, type ListingItem } from '../../actions/inventory';
 import { getConnectedShop } from '../../actions/shop';
 import { getSettings } from '../../actions/settings';
+import { deleteProduct } from '../../actions/matching';
 import {
     Search, Package, Box, Filter,
     Loader2, ShoppingBag, Store, AlertTriangle,
     ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy, Pencil, RefreshCw,
-    Archive, FileText, AlertCircle
+    Archive, FileText, AlertCircle, Link2, Unlink, Trash2
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
 import { useAuth } from '@/components/AuthProvider';
 import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/components/dashboard/CloneModal';
 import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
+import MatchModal from '@/components/dashboard/MatchModal';
 
 export default function ProductsPage() {
     const toast = useToast();
@@ -59,6 +61,16 @@ export default function ProductsPage() {
     const [showImportModal, setShowImportModal] = useState(false);
     const [shopifyFilters, setShopifyFilters] = useState<string[]>(['active']);
     const [etsyFilters, setEtsyFilters] = useState<string[]>(['active']);
+
+    // Match Modal
+    const [matchModal, setMatchModal] = useState<{ isOpen: boolean; product: ListingItem | null }>({
+        isOpen: false, product: null
+    });
+
+    // Delete Confirmation
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; product: ListingItem | null; isDeleting: boolean }>({
+        isOpen: false, product: null, isDeleting: false
+    });
 
     const toggleFilter = (platform: 'shopify' | 'etsy', filter: string) => {
         if (platform === 'shopify') {
@@ -401,10 +413,10 @@ export default function ProductsPage() {
                         onClick={() => setShowImportModal(true)}
                         disabled={isImporting || isLoading}
                         className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 hover:bg-white hover:border-gray-300 rounded-xl text-sm font-semibold shadow-sm transition-all animate-in fade-in"
-                        title="Fetch latest updates from active stores"
+                        title="Re-sync products from your stores"
                     >
                         {isImporting ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <RefreshCw className="w-4 h-4" />}
-                        Sync Products
+                        Re-Sync
                     </button>
 
                     {selectedItems.size > 0 && (
@@ -648,7 +660,7 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        {/* Edit Links */}
+                                                        {/* Platform Links */}
                                                         {item.variants[0]?.shopifyProductId && (
                                                             <a
                                                                 href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
@@ -674,8 +686,32 @@ export default function ProductsPage() {
                                                             </a>
                                                         )}
 
-                                                        <div className="w-px h-6 bg-gray-100 mx-1"></div>
+                                                        <div className="w-px h-6 bg-gray-100 mx-0.5"></div>
 
+                                                        {/* Match Management */}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setMatchModal({ isOpen: true, product: item }); }}
+                                                            className={`p-1.5 border shadow-sm rounded-md transition-all ${item.matchStatus === 'synced'
+                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                                                : 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100'
+                                                                }`}
+                                                            title={item.matchStatus === 'synced' ? 'Manage match' : 'Match with another product'}
+                                                        >
+                                                            {item.matchStatus === 'synced' ? <Link2 className="w-3.5 h-3.5" /> : <Unlink className="w-3.5 h-3.5" />}
+                                                        </button>
+
+                                                        {/* Delete */}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ isOpen: true, product: item, isDeleting: false }); }}
+                                                            className="p-1.5 border border-gray-100 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-400 shadow-sm transition-all"
+                                                            title="Remove from MercSync"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+
+                                                        <div className="w-px h-6 bg-gray-100 mx-0.5"></div>
+
+                                                        {/* Clone */}
                                                         {isQueued ? (
                                                             <div className="flex items-center gap-2">
                                                                 <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
@@ -907,6 +943,92 @@ export default function ProductsPage() {
                     setCrossListing({ to_shopify: [], to_etsy: [] }); // Clear queue
                 }}
             />
+
+            {/* Match Management Modal */}
+            <MatchModal
+                isOpen={matchModal.isOpen}
+                onClose={() => setMatchModal({ isOpen: false, product: null })}
+                product={matchModal.product}
+                platform={activePlatform}
+                onMatchUpdated={() => loadData()}
+            />
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm.isOpen && deleteConfirm.product && (
+                <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setDeleteConfirm({ isOpen: false, product: null, isDeleting: false })}>
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 bg-gradient-to-r from-red-600 to-rose-600 text-white">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                                    <Trash2 className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg">Remove Product</h3>
+                                    <p className="text-sm opacity-75">from MercSync tracking</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                <div className="w-10 h-10 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
+                                    {deleteConfirm.product.imageUrl ? (
+                                        <img src={deleteConfirm.product.imageUrl} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center"><Package className="w-5 h-5 text-gray-300" /></div>
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-bold text-gray-900 truncate">{deleteConfirm.product.title}</p>
+                                    <p className="text-xs text-gray-500">{deleteConfirm.product.variantsCount} variant(s)</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-2.5 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                                <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                                <div className="text-xs text-amber-800 leading-relaxed">
+                                    <p className="font-semibold mb-1">This only removes the product from MercSync.</p>
+                                    <p>Your actual listing on {activePlatform === 'shopify' ? 'Shopify' : 'Etsy'} will <span className="font-bold">not</span> be affected. The product will remain on your store.</p>
+                                    {deleteConfirm.product.matchStatus === 'synced' && (
+                                        <p className="mt-1.5 font-semibold text-amber-900">⚠ The matched product on the other platform will become unmatched.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 bg-gray-50/60 border-t border-gray-100 flex justify-end gap-3">
+                            <button
+                                onClick={() => setDeleteConfirm({ isOpen: false, product: null, isDeleting: false })}
+                                disabled={deleteConfirm.isDeleting}
+                                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (!deleteConfirm.product) return;
+                                    setDeleteConfirm(prev => ({ ...prev, isDeleting: true }));
+                                    try {
+                                        const res = await deleteProduct(activePlatform, deleteConfirm.product.id);
+                                        if (res.success) {
+                                            toast.success('Product removed from MercSync tracking.');
+                                            loadData();
+                                        } else {
+                                            toast.error(res.message);
+                                        }
+                                    } catch {
+                                        toast.error('Failed to delete product.');
+                                    }
+                                    setDeleteConfirm({ isOpen: false, product: null, isDeleting: false });
+                                }}
+                                disabled={deleteConfirm.isDeleting}
+                                className="px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {deleteConfirm.isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                {deleteConfirm.isDeleting ? 'Removing...' : 'Remove'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
