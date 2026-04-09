@@ -75,6 +75,14 @@ export default function ProductsPage() {
     // Bulk Actions Dropdown
     const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
 
+    // Bulk Operation State
+    const [bulkOp, setBulkOp] = useState<{
+        pending: 'unmatch' | 'delete' | null;
+        running: boolean;
+        progress: number;
+        total: number;
+    }>({ pending: null, running: false, progress: 0, total: 0 });
+
     const toggleFilter = (platform: 'shopify' | 'etsy', filter: string) => {
         if (platform === 'shopify') {
             setShopifyFilters(prev => prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter]);
@@ -378,42 +386,45 @@ export default function ProductsPage() {
         setSelectedItems(new Set());
     };
 
-    // Bulk Unmatch: Only works when ALL selected are synced
-    const handleBulkUnmatch = async () => {
-        const selectedList = filteredItems.filter(i => selectedItems.has(i.id));
-        if (selectedList.some(i => i.matchStatus !== 'synced')) return;
-        
-        const confirmed = window.confirm(`Are you sure you want to unmatch ${selectedList.length} products? This will break their cross-platform links.`);
-        if (!confirmed) return;
-
-        let successCount = 0;
-        for (const item of selectedList) {
-            try {
-                const res = await unmatchProduct(activePlatform, item.id);
-                if (res.success) successCount++;
-            } catch { /* skip */ }
-        }
-        toast.success(`Unmatched ${successCount} of ${selectedList.length} products.`);
-        setSelectedItems(new Set());
-        loadData();
+    // Bulk Unmatch: Stage for confirmation (no window.confirm)
+    const handleBulkUnmatch = () => {
+        const selected = filteredItems.filter(i => selectedItems.has(i.id));
+        if (selected.some(i => i.matchStatus !== 'synced')) return;
+        setBulkOp({ pending: 'unmatch', running: false, progress: 0, total: selected.length });
     };
 
-    // Bulk Delete: Works for any selection
-    const handleBulkDelete = async () => {
-        const selectedList = filteredItems.filter(i => selectedItems.has(i.id));
-        if (selectedList.length === 0) return;
+    // Bulk Delete: Stage for confirmation (no window.confirm)
+    const handleBulkDelete = () => {
+        const selected = filteredItems.filter(i => selectedItems.has(i.id));
+        if (selected.length === 0) return;
+        setBulkOp({ pending: 'delete', running: false, progress: 0, total: selected.length });
+    };
 
-        const confirmed = window.confirm(`Are you sure you want to remove ${selectedList.length} products from MercSync? This only removes tracking, not the original listings.`);
-        if (!confirmed) return;
+    // Execute confirmed bulk operation
+    const executeBulkOp = async () => {
+        const selected = filteredItems.filter(i => selectedItems.has(i.id));
+        if (!bulkOp.pending || selected.length === 0) return;
 
+        setBulkOp(prev => ({ ...prev, running: true, progress: 0, total: selected.length }));
         let successCount = 0;
-        for (const item of selectedList) {
+
+        for (let i = 0; i < selected.length; i++) {
+            const item = selected[i];
             try {
-                const res = await deleteProduct(activePlatform, item.id);
-                if (res.success) successCount++;
+                if (bulkOp.pending === 'unmatch') {
+                    const res = await unmatchProduct(activePlatform, item.id);
+                    if (res.success) successCount++;
+                } else if (bulkOp.pending === 'delete') {
+                    const res = await deleteProduct(activePlatform, item.id);
+                    if (res.success) successCount++;
+                }
             } catch { /* skip */ }
+            setBulkOp(prev => ({ ...prev, progress: i + 1 }));
         }
-        toast.success(`Removed ${successCount} of ${selectedList.length} products.`);
+
+        const label = bulkOp.pending === 'unmatch' ? 'Unmatched' : 'Removed';
+        toast.success(`${label} ${successCount} of ${selected.length} products.`);
+        setBulkOp({ pending: null, running: false, progress: 0, total: 0 });
         setSelectedItems(new Set());
         loadData();
     };
@@ -817,9 +828,13 @@ export default function ProductsPage() {
                                                                     View in Etsy
                                                                 </a>
                                                             ) : (
-                                                                <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
-                                                                    <span className="text-[10px] text-gray-300">No Etsy</span>
-                                                                </div>
+                                                                <button
+                                                                    onClick={() => setDeleteConfirm({ isOpen: true, product: item, isDeleting: false })}
+                                                                    className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-400 transition-all text-[10px] font-medium"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3 shrink-0" />
+                                                                    Delete
+                                                                </button>
                                                             )
                                                         ) : (
                                                             item.variants[0]?.shopifyProductId ? (
@@ -833,9 +848,13 @@ export default function ProductsPage() {
                                                                     View in Shopify
                                                                 </a>
                                                             ) : (
-                                                                <div className="h-7 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
-                                                                    <span className="text-[10px] text-gray-300">No Shopify</span>
-                                                                </div>
+                                                                <button
+                                                                    onClick={() => setDeleteConfirm({ isOpen: true, product: item, isDeleting: false })}
+                                                                    className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 hover:text-red-600 rounded-md text-gray-400 transition-all text-[10px] font-medium"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3 shrink-0" />
+                                                                    Delete
+                                                                </button>
                                                             )
                                                         )}
 
@@ -975,6 +994,102 @@ export default function ProductsPage() {
                                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                     Confirm & Sync Clones
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Bulk Operation Confirmation Bar */}
+                {bulkOp.pending && !bulkOp.running && (
+                    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-5">
+                        <div className={`backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-12 ring-1 ring-white/20 ${
+                            bulkOp.pending === 'delete' ? 'bg-red-900/95' : 'bg-amber-900/95'
+                        }`}>
+                            <div className="flex items-center gap-4">
+                                <div className="relative">
+                                    <div className={`w-10 h-10 rounded-full font-bold text-sm flex items-center justify-center shadow-lg ${
+                                        bulkOp.pending === 'delete' ? 'bg-red-500 shadow-red-500/20' : 'bg-amber-500 shadow-amber-500/20'
+                                    }`}>
+                                        {bulkOp.total}
+                                    </div>
+                                    <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full animate-ping ${
+                                        bulkOp.pending === 'delete' ? 'bg-red-400' : 'bg-amber-400'
+                                    }`}></div>
+                                </div>
+                                <div>
+                                    <p className="font-bold text-sm tracking-tight text-white/90">
+                                        {bulkOp.pending === 'delete' ? 'Delete Products' : 'Unmatch Products'}
+                                    </p>
+                                    <p className="text-white/50 text-[11px] font-medium uppercase tracking-wider">
+                                        {bulkOp.pending === 'delete'
+                                            ? 'Remove from MercSync tracking only'
+                                            : 'Break cross-platform links'
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => setBulkOp({ pending: null, running: false, progress: 0, total: 0 })}
+                                    className="px-4 py-2.5 text-xs font-bold text-white/50 hover:text-white transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={executeBulkOp}
+                                    className={`px-8 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-lg active:scale-95 whitespace-nowrap ${
+                                        bulkOp.pending === 'delete'
+                                            ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
+                                            : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'
+                                    }`}
+                                >
+                                    {bulkOp.pending === 'delete' ? <Trash2 className="w-4 h-4" /> : <Unlink className="w-4 h-4" />}
+                                    {bulkOp.pending === 'delete' ? `Delete ${bulkOp.total} Products` : `Unmatch ${bulkOp.total} Products`}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Bulk Operation Progress Modal */}
+                {bulkOp.running && (
+                    <div className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-900">
+                                            {bulkOp.pending === 'delete' ? 'Deleting Products' : 'Unmatching Products'}
+                                        </h3>
+                                        <p className="text-sm text-gray-500 uppercase tracking-wider">Please wait for completion</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-6">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-semibold text-gray-700">
+                                        Processing {bulkOp.progress} of {bulkOp.total}
+                                    </span>
+                                    <span className="text-sm font-bold text-indigo-600">
+                                        {bulkOp.total > 0 ? Math.round((bulkOp.progress / bulkOp.total) * 100) : 0}%
+                                    </span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-300 ${
+                                            bulkOp.pending === 'delete' ? 'bg-red-500' : 'bg-amber-500'
+                                        }`}
+                                        style={{ width: `${bulkOp.total > 0 ? (bulkOp.progress / bulkOp.total) * 100 : 0}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-3 text-center">
+                                    {bulkOp.pending === 'delete'
+                                        ? 'Removing products from MercSync tracking...'
+                                        : 'Breaking cross-platform links...'
+                                    }
+                                </p>
                             </div>
                         </div>
                     </div>
