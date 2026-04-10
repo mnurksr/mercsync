@@ -455,7 +455,12 @@ export async function forceSyncStock(inventoryItemId?: string): Promise<{ succes
 /**
  * Update stock for an inventory item and propagate to all platforms
  */
-export async function updateInventoryStock(inventoryItemId: string, newStock: number): Promise<{ success: boolean; message: string }> {
+export async function updateInventoryStock(
+    inventoryItemId: string,
+    newStock: number,
+    platformsToSync: Array<'shopify' | 'etsy'> = ['shopify', 'etsy'],
+    locationBreakdown?: { locationId: string; allocation: number }[]
+): Promise<{ success: boolean; message: string }> {
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return { success: false, message: 'Not authenticated' }
 
@@ -476,7 +481,7 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
         if (!shop) return { success: false, message: 'Shop not found' };
 
         // 3. Update Shopify API
-        if (item.shopify_inventory_item_id) {
+        if (item.shopify_inventory_item_id && platformsToSync.includes('shopify')) {
             try {
                 const { setInventoryLevel } = await import('@/app/api/sync/lib/shopify');
                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
@@ -495,8 +500,22 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                     
                     // Parse current location inventory map
                     const locationMap: any[] = Array.isArray(item.location_inventory_map) ? item.location_inventory_map : [];
-                    
-                    // Filter map to selected locations only
+
+                    if (locationBreakdown && locationBreakdown.length > 0) {
+                        for (const loc of locationBreakdown) {
+                            await setInventoryLevel(creds, loc.locationId, item.shopify_inventory_item_id, loc.allocation);
+                            
+                            // Optimistically update local map
+                            const mainLocEntry = locationMap.find(l => l.location_id.toString() === loc.locationId);
+                            if (mainLocEntry) {
+                                mainLocEntry.stock = loc.allocation;
+                                mainLocEntry.updated_at = new Date().toISOString();
+                            } else {
+                                locationMap.push({ location_id: loc.locationId, stock: loc.allocation, updated_at: new Date().toISOString() });
+                            }
+                        }
+                    } else {
+                        // Filter map to selected locations only
                     const activeLocs = locationMap.filter(l => l.location_id.toString() === targetLocationId || selectedLocationIds.includes(l.location_id.toString()));
                     
                     let currentTotal = 0;
@@ -569,8 +588,9 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
                                  mainLocEntry.updated_at = new Date().toISOString();
                              }
                         }
+                    } // end of else (cascade)
                     }
-                }
+                } // End of if (targetLocationId)
             } catch (err: any) {
                 console.error('Failed to push stock to Shopify:', err.message);
                 return { success: false, message: `Shopify Sync Error: ${err.message}` };
@@ -578,7 +598,7 @@ export async function updateInventoryStock(inventoryItemId: string, newStock: nu
         }
 
         // 4. Update Etsy API
-        if (item.etsy_listing_id && item.etsy_variant_id) {
+        if (item.etsy_listing_id && item.etsy_variant_id && platformsToSync.includes('etsy')) {
             try {
                 const { getInventory, mergeStockUpdate, updateInventory } = await import('@/app/api/sync/lib/etsy');
                 const accessToken = shop.etsy_access_token;
