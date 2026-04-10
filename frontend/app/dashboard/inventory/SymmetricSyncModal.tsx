@@ -87,6 +87,35 @@ export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onCon
             setDistribution(newDist);
         }
     }, [showDistribution, finalStockToApply, selectedLocations]);
+    const handleDistributionChange = (locId: string, val: number) => {
+        setDistribution(prev => {
+            const newDist = { ...prev, [locId]: val };
+            if (selectedLocations.length === 2) {
+                const otherLocId = selectedLocations.find(id => id !== locId)!;
+                newDist[otherLocId] = Math.max(0, finalStockToApply - val);
+            } else if (selectedLocations.length > 2) {
+                // Determine total of ALL other locations
+                const otherLocs = selectedLocations.filter(id => id !== locId);
+                let currentOtherTotal = otherLocs.reduce((sum, id) => sum + (prev[id] || 0), 0);
+                let diffToFix = (val + currentOtherTotal) - finalStockToApply;
+
+                // Auto-reduce others proportionally or sequentially if total exceeds
+                // To keep it simple: just reduce from the next available location(s)
+                if (diffToFix > 0) {
+                    for (const other of otherLocs) {
+                        if (diffToFix <= 0) break;
+                        const currentVal = newDist[other] || 0;
+                        if (currentVal > 0) {
+                            const reduction = Math.min(currentVal, diffToFix);
+                            newDist[other] = currentVal - reduction;
+                            diffToFix -= reduction;
+                        }
+                    }
+                }
+            }
+            return newDist;
+        });
+    };
 
     const handleConfirm = async () => {
         if (!syncSource) return;
@@ -177,17 +206,17 @@ export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onCon
                                                 value={distribution[locId] || 0}
                                                 onChange={(e) => {
                                                     const val = parseInt(e.target.value) || 0;
-                                                    setDistribution(prev => ({ ...prev, [locId]: val }));
+                                                    handleDistributionChange(locId, val);
                                                 }}
                                                 className="flex-1 accent-indigo-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                                             />
                                             <input
                                                 type="number"
                                                 min="0"
-                                                value={distribution[locId] || ''}
+                                                value={distribution[locId] === undefined ? '' : distribution[locId]}
                                                 onChange={(e) => {
                                                     const val = e.target.value === '' ? 0 : parseInt(e.target.value);
-                                                    setDistribution(prev => ({ ...prev, [locId]: val }));
+                                                    handleDistributionChange(locId, val);
                                                 }}
                                                 className="w-16 p-2 rounded-xl border border-gray-200 text-center text-sm font-black text-gray-900 bg-gray-50 outline-none focus:border-indigo-500 transition-colors"
                                             />

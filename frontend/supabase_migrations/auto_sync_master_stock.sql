@@ -34,6 +34,11 @@ BEGIN
     NEW.status := 'Matching';
   END IF;
 
+  -- Master stock 0 check (global override)
+  IF NEW.master_stock = 0 THEN
+    NEW.status := 'Action Required';
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

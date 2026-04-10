@@ -91,21 +91,17 @@ export default function InventoryPage() {
             );
         }
 
-        // Sort: Matched first, then Marketplace Only (single sided)
+        // Sort: Keep variants together by sorting by product link and then name
         return [...result].sort((a, b) => {
-            const aIsMatched = a.shopify_variant_id && a.etsy_variant_id;
-            const bIsMatched = b.shopify_variant_id && b.etsy_variant_id;
-
-            if (aIsMatched && !bIsMatched) return -1;
-            if (!aIsMatched && bIsMatched) return 1;
-
-            // Secondary: Sort by status priority
-            const statusOrder: Record<string, number> = { 'Action Required': 0, 'Mismatch': 1, 'Synced': 2 };
-            const aOrder = statusOrder[a.status as string] ?? 3;
-            const bOrder = statusOrder[b.status as string] ?? 3;
-            if (aOrder !== bOrder) return aOrder - bOrder;
-
-            // Last: Alphabetical by name
+            const productA = a.shopify_product_id || a.etsy_listing_id || '';
+            const productB = b.shopify_product_id || b.etsy_listing_id || '';
+            
+            if (productA !== productB) {
+                // If they belong to different products, sort by product alphabetically (or group them)
+                return (a.name || '').localeCompare(b.name || '');
+            }
+            
+            // If same product, sort alphabetically by name
             return (a.name || '').localeCompare(b.name || '');
         });
     }, [items, platformFilter, searchQuery]);
