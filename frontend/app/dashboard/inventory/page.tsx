@@ -6,6 +6,7 @@ import {
     forceSyncStock,
     updateInventoryStock,
     getShopifyLocations,
+    getShopSelectedLocationIds,
     bulkUpdateStock,
     updateInventoryConfig,
     fetchLatestCounts,
@@ -35,12 +36,12 @@ export default function InventoryPage() {
     const [platformFilter, setPlatformFilter] = useState<'all' | 'shopify' | 'etsy'>('all');
     const [isSyncing, setIsSyncing] = useState(false);
     const [shopLocations, setShopLocations] = useState<{ id: string, name: string, active: boolean }[]>([]);
+    const [shopSelectedLocIds, setShopSelectedLocIds] = useState<string[]>([]);
 
     // Selection State
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-    // Status Filter State
-    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    // Status dropdown
     const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
     // Sync Modal State
@@ -86,17 +87,14 @@ export default function InventoryPage() {
         }
     };
 
-    // --- Status categories for filtering ---
-    const statusCategories = useMemo(() => {
-        const categories = [
-            { key: 'in_sync', label: 'In Sync', color: 'bg-emerald-100 text-emerald-700' },
-            { key: 'mismatch', label: 'Mismatch', color: 'bg-amber-100 text-amber-700' },
-            { key: 'action_required', label: 'Action Required', color: 'bg-red-100 text-red-700' },
-            { key: 'shopify_only', label: 'Shopify Only', color: 'bg-blue-100 text-blue-700' },
-            { key: 'etsy_only', label: 'Etsy Only', color: 'bg-orange-100 text-orange-700' },
-        ];
-        return categories;
-    }, []);
+    // --- Status categories ---
+    const statusCategories = useMemo(() => [
+        { key: 'in_sync', label: 'In Sync', color: 'bg-emerald-100 text-emerald-700' },
+        { key: 'mismatch', label: 'Mismatch', color: 'bg-amber-100 text-amber-700' },
+        { key: 'action_required', label: 'Action Required', color: 'bg-red-100 text-red-700' },
+        { key: 'shopify_only', label: 'Shopify Only', color: 'bg-blue-100 text-blue-700' },
+        { key: 'etsy_only', label: 'Etsy Only', color: 'bg-orange-100 text-orange-700' },
+    ], []);
 
     const getItemStatusKey = useCallback((item: InventoryItem): string => {
         if (!item.shopify_variant_id || !item.etsy_variant_id) {
@@ -114,50 +112,41 @@ export default function InventoryPage() {
     const filteredAndSortedItems = useMemo(() => {
         let result = items;
 
-        // Platform Filter
         if (platformFilter === 'shopify') {
             result = result.filter(i => i.shopify_variant_id && !i.etsy_variant_id);
         } else if (platformFilter === 'etsy') {
             result = result.filter(i => i.etsy_variant_id && !i.shopify_variant_id);
         }
 
-        // Status Filter
-        if (statusFilter.length > 0) {
-            result = result.filter(i => statusFilter.includes(getItemStatusKey(i)));
-        }
-
-        // Search Filter
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(i => 
-                i.sku?.toLowerCase().includes(q) || 
+            result = result.filter(i =>
+                i.sku?.toLowerCase().includes(q) ||
                 i.name?.toLowerCase().includes(q)
             );
         }
 
-        // Sort: Keep variants together by sorting by product link and then name
         return [...result].sort((a, b) => {
             const productA = a.shopify_product_id || a.etsy_listing_id || '';
             const productB = b.shopify_product_id || b.etsy_listing_id || '';
-            
             if (productA !== productB) {
                 return (a.name || '').localeCompare(b.name || '');
             }
-            
             return (a.name || '').localeCompare(b.name || '');
         });
-    }, [items, platformFilter, searchQuery, statusFilter, getItemStatusKey]);
+    }, [items, platformFilter, searchQuery]);
 
     const loadLocations = async () => {
         const locs = await getShopifyLocations();
         setShopLocations(locs);
+        const selIds = await getShopSelectedLocationIds();
+        setShopSelectedLocIds(selIds);
     };
 
     const handleUpdateStock = async (newStock: number, platformsToSync: Array<'shopify' | 'etsy'> = ['shopify', 'etsy'], breakdown?: { locationId: string; allocation: number }[]) => {
         if (!targetItem) return;
 
         const previousItems = [...items];
-
         const updatedItem = {
             ...targetItem,
             master_stock: newStock,
@@ -188,7 +177,6 @@ export default function InventoryPage() {
 
     const handleSaveConfig = async (selectedLocationIds: string[]) => {
         if (!targetItem) return;
-
         try {
             const res = await updateInventoryConfig(targetItem.id, selectedLocationIds);
             if (res.success) {
@@ -202,61 +190,35 @@ export default function InventoryPage() {
         }
     };
 
-    // --- Fetch Latest Counts ---
     const handleFetchLatest = async () => {
         setIsFetchingLatest(true);
         try {
             const res = await fetchLatestCounts();
-            if (res.success) {
-                toast.success(res.message);
-                loadData();
-            } else {
-                toast.error(res.message);
-            }
-        } catch (err) {
-            toast.error('Failed to fetch latest counts');
-        } finally {
-            setIsFetchingLatest(false);
-        }
+            if (res.success) { toast.success(res.message); loadData(); }
+            else { toast.error(res.message); }
+        } catch { toast.error('Failed to fetch latest counts'); }
+        finally { setIsFetchingLatest(false); }
     };
 
-    // --- Push Mismatch ---
     const handlePushMismatch = async () => {
         setIsPushingMismatch(true);
         try {
             const res = await pushMismatchStock();
-            if (res.success) {
-                toast.success(res.message);
-                loadData();
-            } else {
-                toast.error(res.message);
-            }
-        } catch (err) {
-            toast.error('Failed to push mismatch stock');
-        } finally {
-            setIsPushingMismatch(false);
-        }
+            if (res.success) { toast.success(res.message); loadData(); }
+            else { toast.error(res.message); }
+        } catch { toast.error('Failed to push mismatch stock'); }
+        finally { setIsPushingMismatch(false); }
     };
 
     const getStockStatus = (item: InventoryItem) => {
         if (!item.shopify_variant_id || !item.etsy_variant_id) {
-            if (item.shopify_variant_id && !item.etsy_variant_id) {
-                return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
-            }
-            if (item.etsy_variant_id && !item.shopify_variant_id) {
-                return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
-            }
+            if (item.shopify_variant_id && !item.etsy_variant_id) return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
+            if (item.etsy_variant_id && !item.shopify_variant_id) return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
             return { label: 'Unlinked', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
         }
-        if (item.status === 'Action Required') {
-            return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-        }
-        if (item.status === 'MISMATCH' || item.status === 'Mismatch') {
-            return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
-        }
-        if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
-            return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
-        }
+        if (item.status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
+        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
         return { label: 'In Sync', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
     };
 
@@ -269,9 +231,24 @@ export default function InventoryPage() {
         else setSelectedIds(filteredAndSortedItems.map(i => i.id));
     };
 
-    const toggleStatusFilter = (key: string) => {
-        setStatusFilter(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+    // Status dropdown: toggle-select all items of a given status
+    const toggleSelectByStatus = (statusKey: string) => {
+        const matchingIds = items.filter(i => getItemStatusKey(i) === statusKey).map(i => i.id);
+        const allAlreadySelected = matchingIds.every(id => selectedIds.includes(id));
+        if (allAlreadySelected) {
+            // Deselect all of this status
+            setSelectedIds(prev => prev.filter(id => !matchingIds.includes(id)));
+        } else {
+            // Select all of this status
+            setSelectedIds(prev => [...new Set([...prev, ...matchingIds])]);
+        }
     };
+
+    // --- Bulk edit: active locations from shops table ---
+    const bulkActiveLocations = useMemo(() => {
+        if (shopSelectedLocIds.length === 0) return [];
+        return shopLocations.filter(loc => shopSelectedLocIds.includes(loc.id));
+    }, [shopLocations, shopSelectedLocIds]);
 
     // --- Bulk Edit Helpers ---
     const openBulkEdit = () => {
@@ -287,15 +264,17 @@ export default function InventoryPage() {
             manualValue: item.master_stock || 0,
         })));
 
-        // Initialize location percents evenly
-        if (shopLocations.length > 0) {
-            const even = Math.floor(100 / shopLocations.length);
-            const remainder = 100 - (even * shopLocations.length);
+        // Initialize location percents evenly across active (selected) locations
+        if (bulkActiveLocations.length > 1) {
+            const even = Math.floor(100 / bulkActiveLocations.length);
+            const remainder = 100 - (even * bulkActiveLocations.length);
             const percents: Record<string, number> = {};
-            shopLocations.forEach((loc, i) => {
+            bulkActiveLocations.forEach((loc, i) => {
                 percents[loc.id] = even + (i === 0 ? remainder : 0);
             });
             setBulkLocationPercents(percents);
+        } else if (bulkActiveLocations.length === 1) {
+            setBulkLocationPercents({ [bulkActiveLocations[0].id]: 100 });
         }
 
         setShowBulkEdit(true);
@@ -307,6 +286,45 @@ export default function InventoryPage() {
         return entry.manualValue;
     };
 
+    // Location percent auto-balance handler
+    const handleBulkPercentChange = (locId: string, newVal: number) => {
+        setBulkLocationPercents(prev => {
+            const clamped = Math.max(0, Math.min(100, newVal));
+            const newDist = { ...prev, [locId]: clamped };
+
+            if (bulkActiveLocations.length === 2) {
+                const otherLocId = bulkActiveLocations.find(l => l.id !== locId)!.id;
+                newDist[otherLocId] = 100 - clamped;
+            } else if (bulkActiveLocations.length > 2) {
+                const otherLocs = bulkActiveLocations.filter(l => l.id !== locId);
+                const currentOtherTotal = otherLocs.reduce((sum, l) => sum + (prev[l.id] || 0), 0);
+                const targetOtherTotal = 100 - clamped;
+                
+                if (currentOtherTotal === 0) {
+                    // Distribute evenly
+                    const each = Math.floor(targetOtherTotal / otherLocs.length);
+                    const rem = targetOtherTotal - (each * otherLocs.length);
+                    otherLocs.forEach((l, i) => { newDist[l.id] = each + (i === 0 ? rem : 0); });
+                } else {
+                    // Scale proportionally
+                    const scale = targetOtherTotal / currentOtherTotal;
+                    let assigned = 0;
+                    otherLocs.forEach((l, i) => {
+                        if (i === otherLocs.length - 1) {
+                            newDist[l.id] = Math.max(0, targetOtherTotal - assigned);
+                        } else {
+                            const v = Math.max(0, Math.round((prev[l.id] || 0) * scale));
+                            newDist[l.id] = v;
+                            assigned += v;
+                        }
+                    });
+                }
+            }
+
+            return newDist;
+        });
+    };
+
     const handleBulkSubmit = async () => {
         setIsBulkSubmitting(true);
         try {
@@ -316,25 +334,19 @@ export default function InventoryPage() {
             for (const entry of bulkEditItems) {
                 const newStock = getBulkItemStock(entry);
                 const platformsToSync: Array<'shopify' | 'etsy'> = [];
-                
-                // If shopify is source, only push to etsy (no shopify API call)
+
                 if (entry.source === 'shopify') {
                     platformsToSync.push('etsy');
                 } else {
-                    // Etsy or manual source: push to both
                     platformsToSync.push('shopify', 'etsy');
                 }
 
-                // Build location breakdown from percentages if pushing to shopify
                 let breakdown: { locationId: string; allocation: number }[] | undefined;
-                if (platformsToSync.includes('shopify')) {
-                    const selectedLocs = entry.item.selected_location_ids || shopLocations.map(l => l.id);
-                    breakdown = selectedLocs.map(locId => ({
-                        locationId: locId,
-                        allocation: Math.round(newStock * ((bulkLocationPercents[locId] || 0) / 100))
+                if (platformsToSync.includes('shopify') && bulkActiveLocations.length > 0) {
+                    breakdown = bulkActiveLocations.map(loc => ({
+                        locationId: loc.id,
+                        allocation: Math.round(newStock * ((bulkLocationPercents[loc.id] || 0) / 100))
                     }));
-
-                    // Adjust rounding error to first location
                     const totalAllocated = breakdown.reduce((s, b) => s + b.allocation, 0);
                     if (totalAllocated !== newStock && breakdown.length > 0) {
                         breakdown[0].allocation += (newStock - totalAllocated);
@@ -350,26 +362,20 @@ export default function InventoryPage() {
                 }
             }
 
-            if (errorCount === 0) {
-                toast.success(`Successfully updated ${successCount} items.`);
-            } else {
-                toast.error(`Updated ${successCount} items, ${errorCount} failed.`);
-            }
+            if (errorCount === 0) toast.success(`Successfully updated ${successCount} items.`);
+            else toast.error(`Updated ${successCount} items, ${errorCount} failed.`);
 
             setShowBulkEdit(false);
             setSelectedIds([]);
             loadData();
-        } catch (err) {
-            toast.error('Bulk update failed');
-        } finally {
-            setIsBulkSubmitting(false);
-        }
+        } catch { toast.error('Bulk update failed'); }
+        finally { setIsBulkSubmitting(false); }
     };
 
-    // --- Bulk Edit Modal ---
+    // --- Bulk Edit View ---
     if (showBulkEdit) {
-        const totalLocPercent = Object.values(bulkLocationPercents).reduce((s, v) => s + v, 0);
         const needsShopifyPush = bulkEditItems.some(e => e.source !== 'shopify');
+        const allSelected = bulkEditItems.length > 0;
 
         return (
             <div className="w-full pb-32">
@@ -378,9 +384,24 @@ export default function InventoryPage() {
                         <h1 className="text-3xl font-black tracking-tight text-gray-900 mb-1">Bulk Stock Editor</h1>
                         <p className="text-gray-400 font-medium text-sm">{bulkEditItems.length} items selected for bulk update</p>
                     </div>
-                    <button onClick={() => setShowBulkEdit(false)} className="flex items-center gap-2 px-5 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all active:scale-95">
-                        <X className="w-4 h-4" /> Cancel
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {/* Bulk source buttons */}
+                        <button
+                            onClick={() => setBulkEditItems(prev => prev.map(e => ({ ...e, source: 'shopify' })))}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all active:scale-95"
+                        >
+                            <ShoppingBag className="w-3.5 h-3.5" /> All → Shopify
+                        </button>
+                        <button
+                            onClick={() => setBulkEditItems(prev => prev.map(e => ({ ...e, source: 'etsy' })))}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 transition-all active:scale-95"
+                        >
+                            <Store className="w-3.5 h-3.5" /> All → Etsy
+                        </button>
+                        <button onClick={() => setShowBulkEdit(false)} className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all active:scale-95">
+                            <X className="w-4 h-4" /> Cancel
+                        </button>
+                    </div>
                 </div>
 
                 {/* Bulk Table */}
@@ -415,9 +436,7 @@ export default function InventoryPage() {
                                             </td>
                                             <td className="px-4 py-4 text-center">
                                                 <div className="flex items-center justify-center gap-1">
-                                                    {entry.source === 'shopify' && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
-                                                    {entry.source === 'etsy' && <div className="w-2 h-2 rounded-full bg-orange-500"></div>}
-                                                    {entry.source === 'manual' && <div className="w-2 h-2 rounded-full bg-emerald-500"></div>}
+                                                    <div className={`w-2 h-2 rounded-full ${entry.source === 'shopify' ? 'bg-blue-500' : entry.source === 'etsy' ? 'bg-orange-500' : 'bg-emerald-500'}`}></div>
                                                     <span className="text-[10px] font-black uppercase text-gray-500">{entry.source}</span>
                                                 </div>
                                             </td>
@@ -441,12 +460,12 @@ export default function InventoryPage() {
                                                 <input
                                                     type="number"
                                                     min={0}
-                                                    value={entry.source === 'manual' ? entry.manualValue : ''}
+                                                    value={entry.source === 'manual' ? (entry.manualValue === 0 ? '' : entry.manualValue) : ''}
                                                     placeholder="–"
-                                                    onClick={() => setBulkEditItems(prev => prev.map((e, i) => i === idx ? { ...e, source: 'manual' } : e))}
+                                                    onFocus={() => setBulkEditItems(prev => prev.map((e, i) => i === idx ? { ...e, source: 'manual' } : e))}
                                                     onChange={(e) => {
                                                         const val = e.target.value === '' ? 0 : parseInt(e.target.value);
-                                                        setBulkEditItems(prev => prev.map((en, i) => i === idx ? { ...en, source: 'manual', manualValue: val } : en));
+                                                        setBulkEditItems(prev => prev.map((en, i) => i === idx ? { ...en, source: 'manual', manualValue: isNaN(val) ? 0 : val } : en));
                                                     }}
                                                     className={`w-16 p-1.5 rounded-lg border text-center text-xs font-black outline-none transition-all ${entry.source === 'manual' ? 'border-emerald-400 bg-emerald-50 text-emerald-700 shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-400'}`}
                                                 />
@@ -462,8 +481,8 @@ export default function InventoryPage() {
                     </div>
                 </div>
 
-                {/* Location Distribution (percentage) - Only show if any item pushes to Shopify */}
-                {needsShopifyPush && shopLocations.length > 1 && (
+                {/* Location Distribution - only when >1 selected locations in shop AND pushing to shopify */}
+                {needsShopifyPush && bulkActiveLocations.length > 1 && (
                     <div className="bg-white rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden mb-8 p-8">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600">
@@ -471,15 +490,12 @@ export default function InventoryPage() {
                             </div>
                             <div>
                                 <h3 className="text-lg font-black text-gray-900">Location Distribution</h3>
-                                <p className="text-xs font-medium text-gray-400">Set percentage allocation for Shopify locations</p>
-                            </div>
-                            <div className={`ml-auto px-4 py-1.5 rounded-full text-xs font-black ${totalLocPercent === 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                {totalLocPercent === 100 ? 'Perfect 100%' : `${totalLocPercent}% / 100%`}
+                                <p className="text-xs font-medium text-gray-400">Set percentage allocation for Shopify locations (always sums to 100%)</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {shopLocations.map(loc => (
+                            {bulkActiveLocations.map(loc => (
                                 <div key={loc.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs font-black text-gray-700 truncate">{loc.name}</p>
@@ -490,10 +506,7 @@ export default function InventoryPage() {
                                             min={0}
                                             max={100}
                                             value={bulkLocationPercents[loc.id] || 0}
-                                            onChange={(e) => {
-                                                const val = parseInt(e.target.value) || 0;
-                                                setBulkLocationPercents(prev => ({ ...prev, [loc.id]: val }));
-                                            }}
+                                            onChange={(e) => handleBulkPercentChange(loc.id, parseInt(e.target.value) || 0)}
                                             className="w-24 accent-indigo-600 h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer"
                                         />
                                         <div className="flex items-center gap-1">
@@ -502,10 +515,7 @@ export default function InventoryPage() {
                                                 min={0}
                                                 max={100}
                                                 value={bulkLocationPercents[loc.id] || 0}
-                                                onChange={(e) => {
-                                                    const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-                                                    setBulkLocationPercents(prev => ({ ...prev, [loc.id]: val }));
-                                                }}
+                                                onChange={(e) => handleBulkPercentChange(loc.id, parseInt(e.target.value) || 0)}
                                                 className="w-12 p-1 rounded-lg border border-gray-200 text-center text-xs font-black text-gray-900 bg-white outline-none focus:border-indigo-400"
                                             />
                                             <span className="text-xs font-bold text-gray-400">%</span>
@@ -524,7 +534,7 @@ export default function InventoryPage() {
                     </button>
                     <button
                         onClick={handleBulkSubmit}
-                        disabled={isBulkSubmitting || (needsShopifyPush && shopLocations.length > 1 && totalLocPercent !== 100)}
+                        disabled={isBulkSubmitting}
                         className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm rounded-2xl flex items-center gap-3 transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
                     >
                         {isBulkSubmitting ? (
@@ -604,8 +614,8 @@ export default function InventoryPage() {
                             key={btn.id}
                             onClick={() => setPlatformFilter(btn.id as any)}
                             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
-                                platformFilter === btn.id 
-                                    ? 'bg-gray-900 text-white shadow-lg' 
+                                platformFilter === btn.id
+                                    ? 'bg-gray-900 text-white shadow-lg'
                                     : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                             }`}
                         >
@@ -627,12 +637,12 @@ export default function InventoryPage() {
                                         <button onClick={toggleSelectAll} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
                                             {selectedIds.length === filteredAndSortedItems.length && filteredAndSortedItems.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                                         </button>
-                                        {/* Status filter dropdown toggle */}
+                                        {/* Status-based bulk select dropdown */}
                                         <div className="relative">
                                             <button
                                                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                                                className={`p-1 rounded-md hover:bg-gray-100 transition-colors ${statusFilter.length > 0 ? 'text-indigo-600' : 'text-gray-300'}`}
-                                                title="Filter by status"
+                                                className={`p-1 rounded-md hover:bg-gray-100 transition-colors ${selectedIds.length > 0 ? 'text-indigo-600' : 'text-gray-300'}`}
+                                                title="Select by status"
                                             >
                                                 <ChevronDown className="w-4 h-4" />
                                             </button>
@@ -640,17 +650,18 @@ export default function InventoryPage() {
                                                 <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 p-3 z-50 min-w-[220px] animate-in fade-in zoom-in-95 duration-200">
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Select by Status</p>
                                                     {statusCategories.map(cat => {
-                                                        const isActive = statusFilter.includes(cat.key);
-                                                        const count = items.filter(i => getItemStatusKey(i) === cat.key).length;
+                                                        const matchingIds = items.filter(i => getItemStatusKey(i) === cat.key).map(i => i.id);
+                                                        const count = matchingIds.length;
+                                                        const allSelected = count > 0 && matchingIds.every(id => selectedIds.includes(id));
                                                         return (
                                                             <button
                                                                 key={cat.key}
-                                                                onClick={() => toggleStatusFilter(cat.key)}
-                                                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all mb-1 ${isActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-600'}`}
+                                                                onClick={() => toggleSelectByStatus(cat.key)}
+                                                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all mb-1 ${allSelected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-600'}`}
                                                             >
                                                                 <div className="flex items-center gap-2">
-                                                                    <div className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center transition-all ${isActive ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
-                                                                        {isActive && <Check className="w-2.5 h-2.5 text-white" />}
+                                                                    <div className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center transition-all ${allSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'}`}>
+                                                                        {allSelected && <Check className="w-2.5 h-2.5 text-white" />}
                                                                     </div>
                                                                     {cat.label}
                                                                 </div>
@@ -660,21 +671,10 @@ export default function InventoryPage() {
                                                     })}
                                                     <hr className="my-2 border-gray-100" />
                                                     <button
-                                                        onClick={() => {
-                                                            // Select all items matching current status filter
-                                                            const matchingIds = items.filter(i => statusFilter.includes(getItemStatusKey(i))).map(i => i.id);
-                                                            setSelectedIds(prev => [...new Set([...prev, ...matchingIds])]);
-                                                        }}
-                                                        disabled={statusFilter.length === 0}
-                                                        className="w-full px-3 py-2 rounded-xl text-xs font-bold text-indigo-600 hover:bg-indigo-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                                    >
-                                                        Select filtered items
-                                                    </button>
-                                                    <button
-                                                        onClick={() => { setStatusFilter([]); setShowStatusDropdown(false); }}
+                                                        onClick={() => { setSelectedIds([]); setShowStatusDropdown(false); }}
                                                         className="w-full px-3 py-2 rounded-xl text-xs font-bold text-gray-400 hover:bg-gray-50 transition-all"
                                                     >
-                                                        Clear filters
+                                                        Clear all selections
                                                     </button>
                                                 </div>
                                             )}
@@ -728,11 +728,7 @@ export default function InventoryPage() {
                                             <td className="px-4 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 shrink-0 border border-gray-100 shadow-sm overflow-hidden">
-                                                        {item.image_url ? (
-                                                            <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <Package className="w-5 h-5" />
-                                                        )}
+                                                        {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" /> : <Package className="w-5 h-5" />}
                                                     </div>
                                                     <div className="min-w-0 max-w-[300px]">
                                                         <p className="text-sm font-black text-gray-900 line-clamp-2 whitespace-normal leading-tight">{item.name || 'Unnamed Product'}</p>
@@ -750,18 +746,14 @@ export default function InventoryPage() {
                                                             <ShoppingBag className="w-4 h-4" />
                                                         </a>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100" title="No Shopify Product Linked">
-                                                            <ShoppingBag className="w-4 h-4" />
-                                                        </div>
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><ShoppingBag className="w-4 h-4" /></div>
                                                     )}
                                                     {item.etsy_listing_id ? (
                                                         <a href={`https://www.etsy.com/your/shops/me/tools/listings/${item.etsy_listing_id}`} target="_blank" rel="noreferrer" title="Edit on Etsy" className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center hover:bg-orange-100 hover:text-orange-600 transition-colors border border-orange-100 shadow-sm">
                                                             <Store className="w-4 h-4" />
                                                         </a>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100" title="No Etsy Product Linked">
-                                                            <Store className="w-4 h-4" />
-                                                        </div>
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><Store className="w-4 h-4" /></div>
                                                     )}
                                                 </div>
                                             </td>
@@ -791,23 +783,14 @@ export default function InventoryPage() {
                                             <td className="pl-4 pr-8 py-4 text-right">
                                                 {item.shopify_variant_id && item.etsy_variant_id ? (
                                                     <button
-                                                        onClick={() => {
-                                                            setTargetItem(item);
-                                                            setSyncModalOpen(true);
-                                                        }}
+                                                        onClick={() => { setTargetItem(item); setSyncModalOpen(true); }}
                                                         className="px-4 py-2.5 bg-gray-900 text-white font-black text-[10px] rounded-xl shadow-lg shadow-gray-200 hover:bg-black transition-all flex items-center gap-2 active:scale-95 ml-auto uppercase tracking-widest"
                                                     >
-                                                        <Zap className="w-3.5 h-3.5 shadow-sm shadow-indigo-500/20" />
-                                                        Sync
+                                                        <Zap className="w-3.5 h-3.5" /> Sync
                                                     </button>
                                                 ) : (
-                                                    <button
-                                                        disabled
-                                                        className="px-4 py-2.5 bg-gray-50 text-gray-300 font-bold text-[10px] rounded-xl border border-gray-100 ml-auto uppercase tracking-widest cursor-not-allowed flex items-center gap-2"
-                                                        title="Cannot sync single-platform items"
-                                                    >
-                                                        <X className="w-3.5 h-3.5" />
-                                                        Locked
+                                                    <button disabled className="px-4 py-2.5 bg-gray-50 text-gray-300 font-bold text-[10px] rounded-xl border border-gray-100 ml-auto uppercase tracking-widest cursor-not-allowed flex items-center gap-2">
+                                                        <X className="w-3.5 h-3.5" /> Locked
                                                     </button>
                                                 )}
                                             </td>
@@ -820,25 +803,16 @@ export default function InventoryPage() {
                 </div>
             </div>
 
-
             {/* Modals */}
             <SyncProgressModal
                 isOpen={isProgressModalOpen}
                 jobId={syncJobId}
-                onClose={() => {
-                    setIsProgressModalOpen(false);
-                    loadData();
-                    setSelectedIds([]);
-                }}
+                onClose={() => { setIsProgressModalOpen(false); loadData(); setSelectedIds([]); }}
             />
 
-            {/* Symmetric Sync Modal */}
             <SymmetricSyncModal
                 isOpen={syncModalOpen}
-                onClose={() => {
-                    setSyncModalOpen(false);
-                    setTargetItem(null);
-                }}
+                onClose={() => { setSyncModalOpen(false); setTargetItem(null); }}
                 onConfirm={handleUpdateStock}
                 onSaveConfig={handleSaveConfig}
                 item={targetItem}

@@ -381,6 +381,23 @@ export async function getShopifyLocations(): Promise<{ id: string, name: string,
 }
 
 /**
+ * Get the shop's selected_location_ids from the shops table.
+ */
+export async function getShopSelectedLocationIds(): Promise<string[]> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return []
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('selected_location_ids')
+        .eq('owner_id', ownerId)
+        .maybeSingle()
+
+    if (!shop?.selected_location_ids || !Array.isArray(shop.selected_location_ids)) return []
+    return shop.selected_location_ids.map((id: any) => id.toString())
+}
+
+/**
  * Perform bulk sync operations for selected items
  */
 export async function bulkUpdateStock(
