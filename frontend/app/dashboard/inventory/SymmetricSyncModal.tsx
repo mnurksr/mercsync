@@ -202,7 +202,7 @@ export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onCon
                                             <input
                                                 type="range"
                                                 min="0"
-                                                max={finalStockToApply + (distribution[locId] || 0)}
+                                                max={finalStockToApply}
                                                 value={distribution[locId] || 0}
                                                 onChange={(e) => {
                                                     const val = parseInt(e.target.value) || 0;

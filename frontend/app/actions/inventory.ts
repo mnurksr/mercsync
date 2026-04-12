@@ -45,6 +45,7 @@ export type InventoryItem = {
     image_url: string | null
     status: string | null
     shopify_variant_id: string | null
+    shopify_inventory_item_id: string | null
     etsy_variant_id: string | null
     shopify_product_id: string | null
     etsy_listing_id: string | null
@@ -311,7 +312,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
             master_stock, shopify_stock_snapshot, etsy_stock_snapshot,
             shopify_updated_at, etsy_updated_at,
             updated_at,
-            shopify_variant_id, etsy_variant_id, 
+            shopify_variant_id, shopify_inventory_item_id, etsy_variant_id, 
             shopify_product_id, etsy_listing_id,
             location_inventory_map, selected_location_ids,
             shop:shops(main_location_id)
@@ -343,6 +344,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         etsy_updated_at: item.etsy_updated_at,
         updated_at: item.updated_at,
         shopify_variant_id: item.shopify_variant_id,
+        shopify_inventory_item_id: item.shopify_inventory_item_id || null,
         etsy_variant_id: item.etsy_variant_id,
         shopify_product_id: item.shopify_product_id,
         etsy_listing_id: item.etsy_listing_id,
@@ -420,17 +422,200 @@ export async function bulkUpdateStock(
 }
 
 /**
- * Manually trigger a stock sync for a specific item or all items
+ * Fetch latest stock counts from Shopify & Etsy APIs for all matched items,
+ * then update inventory_items.location_inventory_map and etsy_stock_snapshot.
+ * The DB trigger will auto-recalculate shopify_stock_snapshot from the map.
+ */
+export async function fetchLatestCounts(): Promise<{ success: boolean; message: string; updated: number }> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return { success: false, message: 'Not authenticated', updated: 0 }
+
+    try {
+        const { data: shop } = await supabase.from('shops').select('*').eq('owner_id', ownerId).single()
+        if (!shop) return { success: false, message: 'Shop not found', updated: 0 }
+
+        // Get all matched items (both platforms linked)
+        const { data: items } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('shop_id', shop.id)
+            .not('shopify_variant_id', 'is', null)
+            .not('etsy_variant_id', 'is', null)
+
+        if (!items || items.length === 0) return { success: true, message: 'No matched items to refresh.', updated: 0 }
+
+        const { getInventoryLevels } = await import('@/app/api/sync/lib/shopify')
+        const { getInventory } = await import('@/app/api/sync/lib/etsy')
+        const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token }
+
+        // Fetch all Shopify locations for this shop
+        const { data: locations } = await supabase
+            .from('inventory_locations')
+            .select('shopify_location_id')
+            .eq('shop_id', shop.id)
+        const locationIds = (locations || []).map((l: any) => l.shopify_location_id).filter(Boolean)
+
+        let updatedCount = 0
+
+        // Batch Shopify inventory levels (all locations, all inventory items)
+        const shopifyItemIds = items.map(i => i.shopify_inventory_item_id).filter(Boolean)
+        let shopifyLevelsMap: Record<string, { location_id: string, available: number }[]> = {}
+
+        if (locationIds.length > 0 && shopifyItemIds.length > 0) {
+            // Shopify API allows up to 50 inventory_item_ids per request
+            for (let i = 0; i < shopifyItemIds.length; i += 50) {
+                const batch = shopifyItemIds.slice(i, i + 50)
+                try {
+                    const res = await getInventoryLevels(creds, locationIds, batch)
+                    const levels = res?.inventory_levels || []
+                    levels.forEach((lvl: any) => {
+                        const key = lvl.inventory_item_id?.toString()
+                        if (!shopifyLevelsMap[key]) shopifyLevelsMap[key] = []
+                        shopifyLevelsMap[key].push({
+                            location_id: lvl.location_id?.toString(),
+                            available: lvl.available ?? 0
+                        })
+                    })
+                } catch (err: any) {
+                    console.error('Shopify batch inventory fetch error:', err.message)
+                }
+            }
+        }
+
+        // Process each item
+        for (const item of items) {
+            try {
+                // --- Shopify: build location_inventory_map from fetched levels ---
+                const levels = shopifyLevelsMap[item.shopify_inventory_item_id?.toString()] || []
+                const newLocationMap = levels.map(lvl => ({
+                    location_id: lvl.location_id,
+                    stock: lvl.available,
+                    updated_at: new Date().toISOString()
+                }))
+
+                // Calculate shopify total from selected locations
+                const selectedLocs: string[] = item.selected_location_ids || []
+                let shopifyTotal = 0
+                if (selectedLocs.length > 0) {
+                    shopifyTotal = newLocationMap
+                        .filter(l => selectedLocs.includes(l.location_id))
+                        .reduce((sum, l) => sum + (l.stock || 0), 0)
+                } else {
+                    shopifyTotal = newLocationMap.reduce((sum, l) => sum + (l.stock || 0), 0)
+                }
+
+                // --- Etsy: fetch live stock ---
+                let etsyStock = item.etsy_stock_snapshot || 0
+                if (item.etsy_listing_id && shop.etsy_access_token) {
+                    try {
+                        const etsyInv = await getInventory(item.etsy_listing_id, shop.etsy_access_token)
+                        const products = etsyInv?.products || []
+                        // Find matching offering by variant id
+                        for (const product of products) {
+                            const propIds = (product.property_values || []).map((pv: any) => pv.property_id?.toString())
+                            for (const offering of (product.offerings || [])) {
+                                if (offering.offering_id?.toString() === item.etsy_variant_id?.toString()) {
+                                    etsyStock = offering.quantity ?? 0
+                                    break
+                                }
+                            }
+                        }
+                        // Fallback: if single-variant listing, use first offering
+                        if (products.length === 1 && products[0].offerings?.length === 1) {
+                            etsyStock = products[0].offerings[0].quantity ?? 0
+                        }
+                    } catch (err: any) {
+                        console.error(`Etsy fetch error for listing ${item.etsy_listing_id}:`, err.message)
+                    }
+                }
+
+                // --- Update DB ---
+                await supabase
+                    .from('inventory_items')
+                    .update({
+                        location_inventory_map: newLocationMap,
+                        shopify_stock_snapshot: shopifyTotal,
+                        etsy_stock_snapshot: etsyStock,
+                        shopify_updated_at: new Date().toISOString(),
+                        etsy_updated_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', item.id)
+
+                updatedCount++
+            } catch (err: any) {
+                console.error(`Error refreshing item ${item.id}:`, err.message)
+            }
+        }
+
+        return { success: true, message: `Refreshed ${updatedCount} of ${items.length} items from live APIs.`, updated: updatedCount }
+    } catch (err: any) {
+        console.error('fetchLatestCounts error:', err)
+        return { success: false, message: err.message || 'An unexpected error occurred', updated: 0 }
+    }
+}
+
+/**
+ * Push master_stock to platforms for items that have a master_stock but are in Mismatch status.
+ * Only pushes to the platform(s) whose snapshot differs from master_stock.
+ */
+export async function pushMismatchStock(): Promise<{ success: boolean; message: string; pushed: number }> {
+    const { supabase, ownerId } = await getValidatedUserContext()
+    if (!ownerId) return { success: false, message: 'Not authenticated', pushed: 0 }
+
+    try {
+        const { data: shop } = await supabase.from('shops').select('*').eq('owner_id', ownerId).single()
+        if (!shop) return { success: false, message: 'Shop not found', pushed: 0 }
+
+        // Get matched items where master_stock > 0 and snapshots don't match
+        const { data: items } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('shop_id', shop.id)
+            .not('shopify_variant_id', 'is', null)
+            .not('etsy_variant_id', 'is', null)
+            .gt('master_stock', 0)
+
+        if (!items || items.length === 0) return { success: true, message: 'No mismatched items to push.', pushed: 0 }
+
+        // Filter to only items where at least one platform snapshot differs from master_stock
+        const mismatchedItems = items.filter(item =>
+            item.shopify_stock_snapshot !== item.master_stock ||
+            item.etsy_stock_snapshot !== item.master_stock
+        )
+
+        if (mismatchedItems.length === 0) return { success: true, message: 'All items are already in sync.', pushed: 0 }
+
+        let pushedCount = 0
+
+        for (const item of mismatchedItems) {
+            const platformsNeeded: Array<'shopify' | 'etsy'> = []
+            if (item.shopify_stock_snapshot !== item.master_stock) platformsNeeded.push('shopify')
+            if (item.etsy_stock_snapshot !== item.master_stock) platformsNeeded.push('etsy')
+
+            try {
+                await updateInventoryStock(item.id, item.master_stock, platformsNeeded)
+                pushedCount++
+            } catch (err: any) {
+                console.error(`Push mismatch error for ${item.id}:`, err.message)
+            }
+        }
+
+        return { success: true, message: `Pushed master stock to ${pushedCount} mismatched items.`, pushed: pushedCount }
+    } catch (err: any) {
+        console.error('pushMismatchStock error:', err)
+        return { success: false, message: err.message || 'An unexpected error occurred', pushed: 0 }
+    }
+}
+
+/**
+ * Manually trigger a stock sync for a specific item or all items (legacy)
  */
 export async function forceSyncStock(inventoryItemId?: string): Promise<{ success: boolean; message: string }> {
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return { success: false, message: 'Not authenticated' }
 
     try {
-        // In a real app, this might trigger an n8n webhook or a background job
-        // For now, we'll simulate it by updating the updated_at timestamp
-        // which would trigger an edge function or similar in a full implementation.
-
         if (inventoryItemId) {
             await supabase
                 .from('inventory_items')
