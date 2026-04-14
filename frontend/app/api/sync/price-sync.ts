@@ -16,9 +16,8 @@ export function calculatePrice(basePrice: number, rules: any | any[], targetPlat
     let newPrice = basePrice;
     
     // 1. Apply formula
-    // Supporting both 'value' (from single rule) and 'adjustment_value' (from settings array)
-    const val = (rule.adjustment_value !== undefined ? rule.adjustment_value : rule.value) || 0;
-    const type = rule.adjustment_type !== undefined ? rule.adjustment_type : (rule.type || 'percentage');
+    const val = rule.value || 0;
+    const type = rule.type || 'percentage';
 
     if (type === 'percentage') {
         newPrice = newPrice * (1 + (val / 100));
