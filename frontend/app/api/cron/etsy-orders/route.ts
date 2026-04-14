@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
                 // 2. Check settings
                 const { data: settings } = await supabase
                     .from('shop_settings')
-                    .select('auto_sync_enabled, sync_direction')
+                    .select('auto_sync_enabled, sync_direction, location_deduction_order')
                     .eq('shop_id', shop.id)
                     .maybeSingle();
 
@@ -132,29 +132,57 @@ export async function GET(req: NextRequest) {
                             continue;
                         }
 
-                        // 7. Decrease Shopify stock
+                        // 7. Decrease Shopify stock using Cascade Deduction
                         const newStock = Math.max(0, (item.master_stock || 0) - quantity);
-                        const mainLocationId = shop.main_location_id?.toString();
+                        let deductionOrder: string[] = settings?.location_deduction_order || [];
 
-                        if (mainLocationId && shop.access_token) {
+                        // Fallback to selected locations or main location if no custom order
+                        if (!deductionOrder || deductionOrder.length === 0) {
+                            if (item.selected_location_ids && item.selected_location_ids.length > 0) {
+                                deductionOrder = item.selected_location_ids;
+                            } else if (shop.main_location_id) {
+                                deductionOrder = [shop.main_location_id.toString()];
+                            }
+                        }
+
+                        if (deductionOrder.length > 0 && shop.access_token) {
                             try {
                                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
-
-                                // Get current Shopify inventory for main location
-                                const levelsData = await shopifyApi.getInventoryLevels(creds, [mainLocationId]);
-                                const level = (levelsData.inventory_levels || []).find(
+                                
+                                // Fetch stock at all relevant locations to know where we can deduct
+                                const levelsData = await shopifyApi.getInventoryLevels(creds, deductionOrder, item.shopify_inventory_item_id);
+                                const levels = (levelsData.inventory_levels || []).filter(
                                     (l: any) => l.inventory_item_id.toString() === item.shopify_inventory_item_id
                                 );
 
-                                if (level) {
-                                    const currentShopifyStock = level.available || 0;
-                                    const newShopifyStock = Math.max(0, currentShopifyStock - quantity);
+                                let remainingToDeduct = quantity;
+                                
+                                for (const locId of deductionOrder) {
+                                    if (remainingToDeduct <= 0) break;
 
-                                    await shopifyApi.setInventoryLevel(creds, mainLocationId, item.shopify_inventory_item_id, newShopifyStock);
-                                    console.log(`${logPrefix} ✅ Shopify stock decreased: ${currentShopifyStock} → ${newShopifyStock} (listing ${listingId}, qty ${quantity})`);
+                                    const level = levels.find((l: any) => l.location_id.toString() === locId);
+                                    if (level) {
+                                        const currentShopifyStock = level.available || 0;
+                                        if (currentShopifyStock > 0) {
+                                            const deductAmount = Math.min(currentShopifyStock, remainingToDeduct);
+                                            const newShopifyStock = currentShopifyStock - deductAmount;
+                                            
+                                            // Execute push
+                                            await shopifyApi.setInventoryLevel(creds, locId, item.shopify_inventory_item_id, newShopifyStock);
+                                            console.log(`${logPrefix} ✅ Shopify location ${locId} stock decreased: ${currentShopifyStock} → ${newShopifyStock} (-${deductAmount})`);
+                                            
+                                            remainingToDeduct -= deductAmount;
+                                        }
+                                    }
                                 }
+
+                                // If still remaining, maybe the total Shopify stock was lower than ordered quantity.
+                                if (remainingToDeduct > 0) {
+                                    console.log(`${logPrefix} ⚠️ Could not deduct all stock. Remaining: ${remainingToDeduct}`);
+                                }
+
                             } catch (shopifyErr: any) {
-                                console.error(`${logPrefix} ❌ Shopify stock update failed:`, shopifyErr.message);
+                                console.error(`${logPrefix} ❌ Shopify cascade stock update failed:`, shopifyErr.message);
                             }
                         }
 

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
-import { cloneToShopify } from '../../sync/lib/processor';
 import { createNotification } from '@/app/actions/notifications';
 import { calculatePrice } from '../../sync/price-sync';
 
@@ -35,9 +34,7 @@ export async function GET(req: NextRequest) {
                 shop_settings!inner (
                     auto_sync_enabled,
                     sync_direction,
-                    auto_create_products,
-                    auto_update_products,
-                    auto_delete_products,
+                    price_sync_enabled,
                     price_rules
                 )
             `)
@@ -61,9 +58,8 @@ export async function GET(req: NextRequest) {
             const canPull = settings.sync_direction === 'bidirectional' || settings.sync_direction === 'etsy_to_shopify';
             if (!canPull) continue;
 
-            const { auto_create_products, auto_update_products, auto_delete_products, price_rules } = settings;
+            const { price_sync_enabled, price_rules } = settings;
             const shopifyPriceRules = price_rules || [];
-            if (!auto_create_products && !auto_update_products && !auto_delete_products) continue;
 
             console.log(`[Etsy Products Cron] Processing shop ${shop.shop_domain} (${shop.etsy_shop_id})`);
 
@@ -95,9 +91,32 @@ export async function GET(req: NextRequest) {
                             .eq('etsy_listing_id', listingId)
                             .maybeSingle();
 
-                        if (matched && auto_update_products) {
-                            // Auto-Update only handles price changes (per spec).
-                            // Title and description changes are NOT auto-synced.
+                        // 1. Update DB staging tables and inventory names
+                        const stagingPayload = {
+                            shop_id: shop.id,
+                            etsy_listing_id: listingId,
+                            title: listing.title || '',
+                            status: listing.state || 'active',
+                            updated_at: new Date().toISOString(),
+                            raw_data: listing
+                        };
+                        
+                        await supabase
+                            .from('staging_etsy_products')
+                            .upsert(stagingPayload, { onConflict: 'shop_id, etsy_listing_id' });
+
+                        // Update inventory_items name if changed (only if it doesn't have a Shopify mapping, as Shopify is usually master for name. We'll skip for now or just trust Shopify. Wait, Etsy name might be useful. We'll leave inventory_items alone unless it's strictly Etsy only, but safe to just update it if there's no Shopify ID.)
+                        if (!matched?.shopify_product_id) {
+                             await supabase
+                                .from('inventory_items')
+                                .update({ name: listing.title, updated_at: new Date().toISOString() })
+                                .eq('shop_id', shop.id)
+                                .eq('etsy_listing_id', listingId)
+                                .is('shopify_product_id', null);
+                        }
+
+                        if (matched && matched.shopify_variant_id && price_sync_enabled) {
+                            // Price sync (Title and description changes are NOT auto-synced to opposite platform)
                             const priceNode = listing.price;
                             const basePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
                             const newPrice = basePrice ? calculatePrice(basePrice, shopifyPriceRules, 'shopify') || basePrice : null;
@@ -133,96 +152,14 @@ export async function GET(req: NextRequest) {
                                         metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id },
                                         created_at: new Date().toISOString()
                                     });
-                                    await createNotification(
-                                        supabase,
-                                        shop.id,
-                                        'sync_failed',
-                                        'Price Sync Failed',
-                                        `Failed to update Shopify variant ${matched.shopify_variant_id} price from Etsy listing ${listingId}. Error: ${e.message}`
-                                    );
                                 }
-                            }
-                        } else if (!matched && auto_create_products) {
-                            console.log(`[Etsy Products Cron] Auto-Creating Shopify Product from Etsy ${listingId}`);
-                            let cPrice = 0;
-                            if (listing.price) cPrice = listing.price.amount / listing.price.divisor;
-                            const images = listing.images || [];
-                            const imageUrl = images.length > 0 ? images[0].url_fullxfull : undefined;
-
-                            try {
-                                const cloneProduct = {
-                                    source_id: listingId,
-                                    title: listing.title,
-                                    sku: listing.sku?.[0] || `ETSY-${listingId}`,
-                                    price: cPrice,
-                                    stock: listing.quantity || 1,
-                                    image: imageUrl || '',
-                                    description: listing.description,
-                                    variants: [{
-                                        source_variant_id: listingId,
-                                        title: 'Default Title',
-                                        sku: listing.sku?.[0] || `ETSY-${listingId}`,
-                                        price: cPrice,
-                                        stock: listing.quantity || 1,
-                                        selected: true
-                                    }],
-                                    price_rule: shopifyPriceRules
-                                };
-                                const createdShopifyProduct = await cloneToShopify(shop, cloneProduct, 'cron-job');
-
-                                if (createdShopifyProduct && createdShopifyProduct.variants && createdShopifyProduct.variants.length > 0) {
-                                    const variant = createdShopifyProduct.variants[0];
-                                    await supabase.from('inventory_items').insert({
-                                        shop_id: shop.id,
-                                        shopify_product_id: createdShopifyProduct.id.toString(),
-                                        shopify_variant_id: variant.id.toString(),
-                                        shopify_inventory_item_id: variant.inventory_item_id.toString(),
-                                        etsy_listing_id: listingId,
-                                        sku: variant.sku || cloneProduct.sku,
-                                        name: createdShopifyProduct.title,
-                                        master_stock: variant.inventory_quantity || cloneProduct.stock,
-                                        shopify_stock_snapshot: variant.inventory_quantity || cloneProduct.stock,
-                                        etsy_stock_snapshot: cloneProduct.stock,
-                                        status: 'Matched'
-                                    });
-                                }
-
-                                await supabase.from('sync_logs').insert({
-                                    shop_id: shop.id,
-                                    source: 'etsy',
-                                    direction: 'etsy_to_shopify',
-                                    event_type: 'product_create',
-                                    status: 'success',
-                                    metadata: { etsy_listing_id: listingId, title: listing.title },
-                                    created_at: new Date().toISOString()
-                                });
-                            } catch (e: any) {
-                                console.error(`[Etsy Products Cron] Failed to create Shopify Product for Etsy ${listingId}:`, e);
-                                await supabase.from('sync_logs').insert({
-                                    shop_id: shop.id,
-                                    source: 'etsy',
-                                    direction: 'etsy_to_shopify',
-                                    event_type: 'product_create',
-                                    status: 'failed',
-                                    error_message: e.message,
-                                    metadata: { etsy_listing_id: listingId, title: listing.title },
-                                    created_at: new Date().toISOString()
-                                });
-                                await createNotification(
-                                    supabase,
-                                    shop.id,
-                                    'sync_failed',
-                                    'Auto-Create Failed',
-                                    `Failed to automatically create Shopify product from Etsy listing ${listingId}. Error: ${e.message}`
-                                );
                             }
                         }
                     }
                 }
 
-                // --- HANDLE PRODUCT DEACTIVATION (ETSY -> SHOPIFY) ---
-                if (auto_delete_products) {
-                    try {
+                // --- HANDLE PRODUCT DEACTIVATION (ETSY INACTIVE/DELETED) ---
+                try {
                         const inactiveData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'inactive', 0, 100);
                         if (inactiveData?.results?.length > 0) {
                             const recentInactives = inactiveData.results.filter((l: any) => l.last_modified_timestamp >= timeThreshold);
@@ -230,42 +167,38 @@ export async function GET(req: NextRequest) {
 
                             for (const listing of recentInactives) {
                                 const lId = listing.listing_id.toString();
+                                
+                                // Update staging state
+                                await supabase
+                                    .from('staging_etsy_products')
+                                    .update({ status: 'inactive' })
+                                    .eq('shop_id', shop.id)
+                                    .eq('etsy_listing_id', lId);
+
                                 const { data: matchedItem } = await supabase
                                     .from('inventory_items')
-                                    .select('shopify_product_id')
+                                    .select('id, shopify_product_id')
                                     .eq('shop_id', shop.id)
                                     .eq('etsy_listing_id', lId)
                                     .maybeSingle();
 
-                                if (matchedItem?.shopify_product_id) {
-                                    console.log(`[Etsy Products Cron] Auto-Archiving Shopify Product ${matchedItem.shopify_product_id} (Etsy ${lId} Inactive)`);
-                                    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+                                if (matchedItem?.id) {
+                                    console.log(`[Etsy Products Cron] Unlinking Etsy Listing ${lId} (Inactive)`);
                                     try {
-                                        await shopifyApi.updateProduct(creds, matchedItem.shopify_product_id, {
-                                            id: matchedItem.shopify_product_id,
-                                            status: 'archived'
-                                        });
-                                        await supabase.from('sync_logs').insert({
-                                            shop_id: shop.id,
-                                            source: 'etsy',
-                                            direction: 'etsy_to_shopify',
-                                            event_type: 'product_delete',
-                                            status: 'success',
-                                            metadata: { etsy_listing_id: lId, shopify_product_id: matchedItem.shopify_product_id, action: 'archived' },
-                                            created_at: new Date().toISOString()
-                                        });
+                                        await supabase
+                                            .from('inventory_items')
+                                            .update({
+                                                etsy_listing_id: null,
+                                                etsy_variant_id: null,
+                                                master_stock: 0,
+                                                etsy_stock_snapshot: 0,
+                                                status: 'Matching', // Unlinked from this side
+                                                updated_at: new Date().toISOString()
+                                            })
+                                            .eq('id', matchedItem.id);
+
                                     } catch (err: any) {
-                                        console.error(`[Etsy Products Cron] Failed to archive ${matchedItem.shopify_product_id}:`, err);
-                                        await supabase.from('sync_logs').insert({
-                                            shop_id: shop.id,
-                                            source: 'etsy',
-                                            direction: 'etsy_to_shopify',
-                                            event_type: 'product_delete',
-                                            status: 'failed',
-                                            error_message: err.message,
-                                            metadata: { etsy_listing_id: lId, shopify_product_id: matchedItem.shopify_product_id },
-                                            created_at: new Date().toISOString()
-                                        });
+                                        console.error(`[Etsy Products Cron] Failed to unlink ${lId}:`, err);
                                     }
                                 }
                             }
@@ -273,7 +206,6 @@ export async function GET(req: NextRequest) {
                     } catch (e) {
                         console.error(`[Etsy Products Cron] Deactivation sync failed:`, e);
                     }
-                }
                 processedCount++;
 
             } catch (shopErr) {

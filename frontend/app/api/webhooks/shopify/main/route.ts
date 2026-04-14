@@ -3,7 +3,6 @@ import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { handleInventoryUpdate } from '../inventory-sync';
 import { handlePriceUpdate } from '../../../sync/price-sync';
-import { handleProductSync } from '../product-sync';
 
 export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
@@ -58,43 +57,71 @@ export async function POST(req: NextRequest) {
                     console.error(`[Shopify Webhook] Price sync error:`, err);
                 });
 
-                // Fire-and-forget: Auto Create/Update to Etsy
-                handleProductSync(payload, topic, shop, supabase).then((result: any) => {
-                    console.log(`[Shopify Webhook] Product sync result: ${result.status} — ${result.message}`);
-                }).catch((err: any) => {
-                    console.error(`[Shopify Webhook] Product sync error:`, err);
-                });
+                // Update staging table and inventory names
+                const { data: theShopData } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
+                if (theShopData && payload.id) {
+                    const productId = payload.id.toString();
+                    
+                    // Update staging
+                    const stagingPayload = {
+                        shop_id: theShopData.id,
+                        shopify_product_id: productId,
+                        title: payload.title || '',
+                        status: payload.status || 'draft',
+                        updated_at: new Date().toISOString(),
+                        raw_data: payload
+                    };
+                    
+                    await supabase
+                        .from('staging_shopify_products')
+                        .upsert(stagingPayload, { onConflict: 'shop_id, shopify_product_id' });
+
+                    // Update inventory_items name/image if changed
+                    const imageUrl = payload.images?.[0]?.src || null;
+                    await supabase
+                        .from('inventory_items')
+                        .update({
+                            name: payload.title,
+                            ...(imageUrl ? { image_url: imageUrl } : {}),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('shop_id', theShopData.id)
+                        .eq('shopify_product_id', productId);
+                }
                 break;
 
             case 'products/delete':
-                console.log(`[Shopify Webhook] Product deleted for ${shop}: ${payload.id}`);
+                console.log(`[Shopify Webhook] Product deleted on Shopify: ${payload.id}`);
                 
                 // Find shop to get ID
-                const { data: theShop } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
+                const { data: deleteShop } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
                 
-                // Fire-and-forget: Auto Delete from Etsy
-                handleProductSync(payload, topic, shop, supabase).then((result: any) => {
-                    console.log(`[Shopify Webhook] Product Delete sync result: ${result.status} — ${result.message}`);
-                }).catch((err: any) => {
-                    console.error(`[Shopify Webhook] Product Delete sync error:`, err);
-                });
-
-                if (theShop) {
+                if (deleteShop) {
+                    const productId = payload.id.toString();
+                    
                     // Remove from staging
                     await supabase
                         .from('staging_shopify_products')
                         .delete()
-                        .eq('shop_id', theShop.id)
-                        .eq('shopify_product_id', payload.id.toString());
+                        .eq('shop_id', deleteShop.id)
+                        .eq('shopify_product_id', productId);
                     
-                    // Remove from inventory_items
+                    // Unlink from inventory_items instead of delete to make it Etsy-only
                     await supabase
                         .from('inventory_items')
-                        .delete()
-                        .eq('shop_id', theShop.id)
-                        .eq('shopify_product_id', payload.id.toString());
+                        .update({
+                            shopify_product_id: null,
+                            shopify_variant_id: null,
+                            shopify_inventory_item_id: null,
+                            master_stock: 0,
+                            shopify_stock_snapshot: 0,
+                            status: 'Matching', // It's no longer matched
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('shop_id', deleteShop.id)
+                        .eq('shopify_product_id', productId);
                         
-                    console.log(`[Shopify Webhook] Cleaned up DB records for deleted product ${payload.id}`);
+                    console.log(`[Shopify Webhook] Unlinked DB records for deleted product ${productId}`);
                 }
                 break;
 

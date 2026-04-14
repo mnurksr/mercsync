@@ -33,10 +33,13 @@ export type ShopSettings = {
     auto_sync_enabled: boolean
     low_stock_threshold: number
     
-    // Auto Product Sync
+    // Permissions/Toggles
     auto_create_products: boolean
     auto_update_products: boolean
     auto_delete_products: boolean
+
+    // Locations
+    location_deduction_order: string[]
 
     // Price
     price_sync_enabled: boolean
@@ -58,6 +61,7 @@ const DEFAULT_SETTINGS: ShopSettings = {
     auto_create_products: false,
     auto_update_products: false,
     auto_delete_products: false,
+    location_deduction_order: [],
     price_sync_enabled: false,
     price_rules: [],
     notification_channels: { in_app: true, email: false, slack_webhook_url: null },
@@ -98,6 +102,7 @@ export async function getSettings(): Promise<ShopSettings> {
         auto_create_products: settings.auto_create_products ?? DEFAULT_SETTINGS.auto_create_products,
         auto_update_products: settings.auto_update_products ?? DEFAULT_SETTINGS.auto_update_products,
         auto_delete_products: settings.auto_delete_products ?? DEFAULT_SETTINGS.auto_delete_products,
+        location_deduction_order: settings.location_deduction_order || DEFAULT_SETTINGS.location_deduction_order,
         price_sync_enabled: settings.price_sync_enabled ?? DEFAULT_SETTINGS.price_sync_enabled,
         price_rules: settings.price_rules || DEFAULT_SETTINGS.price_rules,
         notification_channels: settings.notification_channels || DEFAULT_SETTINGS.notification_channels,
@@ -139,6 +144,7 @@ export async function updateSettings(
     if (updates.auto_create_products !== undefined) payload.auto_create_products = updates.auto_create_products
     if (updates.auto_update_products !== undefined) payload.auto_update_products = updates.auto_update_products
     if (updates.auto_delete_products !== undefined) payload.auto_delete_products = updates.auto_delete_products
+    if (updates.location_deduction_order !== undefined) payload.location_deduction_order = updates.location_deduction_order
 
     // Upsert: insert if not exists, update if exists
     const { error } = await supabase

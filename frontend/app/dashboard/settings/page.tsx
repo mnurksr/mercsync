@@ -6,7 +6,7 @@ import {
     ShoppingBag, Store, Check, X, ExternalLink,
     ArrowUpRight, Unlink, Save, Loader2,
     CreditCard, Trash2, ArrowRight, Star,
-    Mail, BellRing
+    Mail, BellRing, ChevronUp, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
@@ -59,8 +59,10 @@ export default function SettingsPage() {
         auto_sync_enabled: false,
         low_stock_threshold: 0,
         auto_create_products: false,
+        auto_create_products: false,
         auto_update_products: false,
         auto_delete_products: false,
+        location_deduction_order: [],
         price_sync_enabled: false,
         price_rules: [],
         notification_channels: { in_app: true, email: false, slack_webhook_url: null },
@@ -329,7 +331,7 @@ export default function SettingsPage() {
                         />
                     )}
                     {activeTab === 'sync' && (
-                        <SyncTab settings={settings} updateField={updateField} />
+                        <SyncTab settings={settings} updateField={updateField} locations={locations} storesConnected={stores.shopify.connected} />
                     )}
                     {activeTab === 'locations' && (
                         <LocationsTab
@@ -437,7 +439,41 @@ function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyM
 
 // ─── Sync Settings Tab (simplified) ──────────
 
-function SyncTab({ settings, updateField }: { settings: ShopSettings; updateField: any }) {
+function SyncTab({ settings, updateField, locations, storesConnected }: { settings: ShopSettings; updateField: any; locations: any[]; storesConnected: boolean }) {
+    
+    // Sort locations based on the saved deduction order
+    // If a location is not in the array, it goes to the bottom
+    const sortedLocations = [...locations].sort((a, b) => {
+        const indexA = settings.location_deduction_order.indexOf(a.id);
+        const indexB = settings.location_deduction_order.indexOf(b.id);
+        if (indexA === -1 && indexB === -1) return 0;
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+    });
+
+    const moveLocation = (index: number, direction: 'up' | 'down') => {
+        const currentOrder = settings.location_deduction_order.length > 0 
+            ? [...settings.location_deduction_order]
+            : locations.map(l => l.id); // Initialize if empty
+        
+        // Ensure all locations exist in the order array
+        locations.forEach(loc => {
+            if (!currentOrder.includes(loc.id)) currentOrder.push(loc.id);
+        });
+
+        if (direction === 'up' && index > 0) {
+            const temp = currentOrder[index];
+            currentOrder[index] = currentOrder[index - 1];
+            currentOrder[index - 1] = temp;
+        } else if (direction === 'down' && index < currentOrder.length - 1) {
+            const temp = currentOrder[index];
+            currentOrder[index] = currentOrder[index + 1];
+            currentOrder[index + 1] = temp;
+        }
+        updateField('location_deduction_order', currentOrder);
+    };
+
     return (
         <div className="space-y-4">
             <SectionHeader title="Sync Settings" description="Configure how inventory synchronizes between your platforms" />
@@ -451,36 +487,6 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                     <ToggleSwitch
                         enabled={settings.auto_sync_enabled}
                         onChange={(v) => updateField('auto_sync_enabled', v)}
-                    />
-                </SettingRow>
-
-                <SettingRow
-                    label="Auto-Create Products"
-                    description="When a new product is created on the source platform, automatically clone it to the destination platform as a Draft."
-                >
-                    <ToggleSwitch
-                        enabled={settings.auto_create_products}
-                        onChange={(v) => updateField('auto_create_products', v)}
-                    />
-                </SettingRow>
-
-                <SettingRow
-                    label="Auto-Update Prices"
-                    description="When a product's price changes on one platform, automatically push the updated price to the matched platform (applying Price Rules if configured)."
-                >
-                    <ToggleSwitch
-                        enabled={settings.auto_update_products}
-                        onChange={(v) => updateField('auto_update_products', v)}
-                    />
-                </SettingRow>
-
-                <SettingRow
-                    label="Auto-Delete Products"
-                    description="When a product is deleted safely delete or deactivate the matched item on the destination platform."
-                >
-                    <ToggleSwitch
-                        enabled={settings.auto_delete_products}
-                        onChange={(v) => updateField('auto_delete_products', v)}
                     />
                 </SettingRow>
 
@@ -499,7 +505,55 @@ function SyncTab({ settings, updateField }: { settings: ShopSettings; updateFiel
                         ]}
                     />
                 </SettingRow>
+            </div>
 
+            {/* Location Deduction Priority */}
+            <div className="mt-8 bg-white rounded-2xl border border-gray-200 p-6">
+                <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Shopify Location Deduction Priority</h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                        When an order is placed on Etsy, we need to reduce stock on Shopify. If a product has stock in multiple Shopify locations, we will deduct stock in the order defined below (top to bottom).
+                    </p>
+                </div>
+                
+                {!storesConnected ? (
+                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                        <p className="text-sm text-gray-400">Connect Shopify to manage locations.</p>
+                    </div>
+                ) : locations.length === 0 ? (
+                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                        <p className="text-sm text-gray-400">Loading locations...</p>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {sortedLocations.map((loc, index) => (
+                            <div key={loc.id} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded text-xs font-bold text-gray-500">
+                                        {index + 1}
+                                    </div>
+                                    <span className="text-sm font-semibold text-gray-700">{loc.name}</span>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <button 
+                                        onClick={() => moveLocation(index, 'up')}
+                                        disabled={index === 0}
+                                        className="text-gray-400 hover:text-indigo-600 disabled:opacity-30 p-1"
+                                    >
+                                        <ChevronUp className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        onClick={() => moveLocation(index, 'down')}
+                                        disabled={index === sortedLocations.length - 1}
+                                        className="text-gray-400 hover:text-indigo-600 disabled:opacity-30 p-1"
+                                    >
+                                        <ChevronDown className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );
