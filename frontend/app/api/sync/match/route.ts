@@ -87,22 +87,26 @@ export async function POST(req: Request) {
                 sStock = sItem.stock_quantity ?? 0;
             }
 
+
             const eStock = matchedEtsy?.stock_quantity ?? 0;
-            
+
+            // Detect digital product from either staging source
+            const isDigital = sItem.is_digital === true || matchedEtsy?.is_digital === true;
+
             // STATUS & MASTER STOCK LOGIC
-            // If they match -> Synced, Master = Stock
-            // If they dont match -> MISMATCH, Master = 0
-            // If single sided -> Marketplace Only, Master = Stock
             let status = 'Marketplace Only';
             let masterStock = sStock;
 
-            if (matchedEtsy) {
+            if (isDigital) {
+                status = 'Digital';
+                masterStock = 0;
+            } else if (matchedEtsy) {
                 if (sStock === eStock) {
                     status = 'Synced';
                     masterStock = sStock;
                 } else {
                     status = 'MISMATCH';
-                    masterStock = 0; // Forced 0 as per user request if not equal
+                    masterStock = 0;
                 }
             }
 
@@ -111,6 +115,7 @@ export async function POST(req: Request) {
                 sku: sItem.sku || matchedEtsy?.sku || 'NO-SKU',
                 name: sItem.name || matchedEtsy?.name || 'Unknown Product',
                 status: status,
+                is_digital: isDigital,
                 shopify_product_id: sItem.shopify_product_id,
                 shopify_variant_id: sItem.shopify_variant_id,
                 shopify_inventory_item_id: sItem.shopify_inventory_item_id,
@@ -143,18 +148,21 @@ export async function POST(req: Request) {
         for (const eItem of (eStaging || [])) {
             if (processedEtsyVariants.has(eItem.etsy_variant_id)) continue;
 
+            const isEtsyDigital = eItem.is_digital === true;
+
             const inventoryPayload = {
                 shop_id: realShopId,
                 sku: eItem.sku || 'NO-SKU',
                 name: eItem.name || 'Unknown Etsy Product',
-                status: 'Marketplace Only',
+                status: isEtsyDigital ? 'Digital' : 'Marketplace Only',
+                is_digital: isEtsyDigital,
                 shopify_product_id: null,
                 shopify_variant_id: null,
                 shopify_inventory_item_id: null,
                 etsy_listing_id: eItem.etsy_listing_id,
                 etsy_variant_id: eItem.etsy_variant_id,
                 image_url: eItem.image_url,
-                master_stock: eItem.stock_quantity ?? 0,
+                master_stock: isEtsyDigital ? 0 : (eItem.stock_quantity ?? 0),
                 shopify_stock_snapshot: null,
                 etsy_stock_snapshot: eItem.stock_quantity ?? 0,
                 location_inventory_map: {},

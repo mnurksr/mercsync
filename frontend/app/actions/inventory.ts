@@ -44,6 +44,7 @@ export type InventoryItem = {
     updated_at: string
     image_url: string | null
     status: string | null
+    is_digital: boolean
     shopify_variant_id: string | null
     shopify_inventory_item_id: string | null
     etsy_variant_id: string | null
@@ -308,7 +309,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
     let baseQuery = supabase
         .from('inventory_items')
         .select(`
-            id, sku, name, image_url, status,
+            id, sku, name, image_url, status, is_digital,
             master_stock, shopify_stock_snapshot, etsy_stock_snapshot,
             shopify_updated_at, etsy_updated_at,
             updated_at,
@@ -337,6 +338,7 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         name: item.name || 'Unnamed Product',
         image_url: item.image_url,
         status: item.status || 'Matching',
+        is_digital: item.is_digital === true,
         master_stock: item.master_stock || 0,
         shopify_stock_snapshot: item.shopify_stock_snapshot || 0,
         etsy_stock_snapshot: item.etsy_stock_snapshot || 0,
@@ -461,6 +463,9 @@ export async function fetchLatestCounts(): Promise<{ success: boolean; message: 
 
         if (!items || items.length === 0) return { success: true, message: 'No matched items to refresh.', updated: 0 }
 
+        // Skip digital products (no stock tracking)
+        const physicalItems = items.filter(item => item.is_digital !== true);
+
         const { getInventoryLevels } = await import('@/app/api/sync/lib/shopify')
         const { getInventory } = await import('@/app/api/sync/lib/etsy')
         const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token }
@@ -475,7 +480,7 @@ export async function fetchLatestCounts(): Promise<{ success: boolean; message: 
         let updatedCount = 0
 
         // Batch Shopify inventory levels (all locations, all inventory items)
-        const shopifyItemIds = items.map(i => i.shopify_inventory_item_id).filter(Boolean)
+        const shopifyItemIds = physicalItems.map(i => i.shopify_inventory_item_id).filter(Boolean)
         let shopifyLevelsMap: Record<string, { location_id: string, available: number }[]> = {}
 
         if (locationIds.length > 0 && shopifyItemIds.length > 0) {
@@ -500,7 +505,7 @@ export async function fetchLatestCounts(): Promise<{ success: boolean; message: 
         }
 
         // Process each item
-        for (const item of items) {
+        for (const item of physicalItems) {
             try {
                 // --- Shopify: build location_inventory_map from fetched levels ---
                 const levels = shopifyLevelsMap[item.shopify_inventory_item_id?.toString()] || []
@@ -595,8 +600,11 @@ export async function pushMismatchStock(): Promise<{ success: boolean; message: 
 
         if (!items || items.length === 0) return { success: true, message: 'No mismatched items to push.', pushed: 0 }
 
+        // Skip digital products
+        const physicalItems = items.filter(item => item.is_digital !== true);
+
         // Filter to only items where at least one platform snapshot differs from master_stock
-        const mismatchedItems = items.filter(item =>
+        const mismatchedItems = physicalItems.filter(item =>
             item.shopify_stock_snapshot !== item.master_stock ||
             item.etsy_stock_snapshot !== item.master_stock
         )
@@ -676,6 +684,11 @@ export async function updateInventoryStock(
 
         if (fetchErr || !item) {
             return { success: false, message: 'Item not found' };
+        }
+
+        // Digital products cannot have stock updated
+        if (item.is_digital === true) {
+            return { success: false, message: 'Digital products do not require stock management.' };
         }
 
         // 2. Fetch Shop Details

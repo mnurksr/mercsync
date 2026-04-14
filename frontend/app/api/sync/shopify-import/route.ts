@@ -79,6 +79,11 @@ export async function POST(req: NextRequest) {
             const productImage = product.image ? product.image.src : (product.images?.[0]?.src || null);
             const description = product.body_html || '';
 
+            // Detect digital product at the product level
+            const isProductDigital =
+                (product.product_type || '').toLowerCase() === 'gift_card' ||
+                (product.variants || []).every((v: any) => v.requires_shipping === false);
+
             product.variants.forEach((variant: any) => {
                 let finalImage = productImage;
                 if (variant.image_id && product.images) {
@@ -89,6 +94,9 @@ export async function POST(req: NextRequest) {
                 const fullName = variant.title === "Default Title"
                     ? product.title
                     : `${product.title} - ${variant.title}`;
+
+                // A variant is digital if the product is digital OR this specific variant doesn't require shipping
+                const isDigital = isProductDigital || variant.requires_shipping === false;
 
                 stagingRows.push({
                     shop_id: dbShopId,
@@ -104,6 +112,7 @@ export async function POST(req: NextRequest) {
                     description: description,
                     status: product.status,
                     stock_quantity: variant.inventory_quantity || 0,
+                    is_digital: isDigital,
                     selected_location_ids: defaultLocationIds,
                     updated_at: new Date().toISOString()
                 });

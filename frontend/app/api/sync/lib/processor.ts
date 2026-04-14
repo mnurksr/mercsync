@@ -428,6 +428,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
         metadata?: {
             image_url?: string | null;
             status?: string | null;
+            is_digital?: boolean;
             shopify_inventory_item_id?: string | null;
             master_stock?: number;
             shopify_stock_snapshot?: number;
@@ -480,7 +481,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 etsy_listing_id: eId || (existingItem?.etsy_listing_id),
                 etsy_variant_id: eVarId || (existingItem?.etsy_variant_id),
                 image_url: metadata?.image_url || existingItem?.image_url,
-                status: metadata?.status || 'Matching',
+                status: metadata?.is_digital ? 'Digital' : (metadata?.status || 'Matching'),
+                is_digital: metadata?.is_digital || false,
                 shopify_inventory_item_id: metadata?.shopify_inventory_item_id || existingItem?.shopify_inventory_item_id,
                 shopify_stock_snapshot: metadata?.shopify_stock_snapshot || existingItem?.shopify_stock_snapshot || 0,
                 etsy_stock_snapshot: metadata?.etsy_stock_snapshot || existingItem?.etsy_stock_snapshot || 0,
@@ -534,6 +536,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 shopify_updated_at: sp.shopify_updated_at,
                 location_inventory_map: sp.location_inventory_map || {},
                 selected_location_ids: shop.selected_location_ids || [],
+                is_digital: sp.is_digital === true,
             };
 
             // Look for Etsy match in staging (BIDIRECTIONAL CHECK)
@@ -570,6 +573,8 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 eVarId = ep.etsy_variant_id;
                 metadata.etsy_stock_snapshot = ep.stock_quantity;
                 metadata.etsy_updated_at = ep.etsy_updated_at;
+                // Digital if either platform flags it
+                if (ep.is_digital === true) metadata.is_digital = true;
                 metadata.status = (sp.stock_quantity === ep.stock_quantity) ? 'Matching' : 'Action Required';
                 processedEtsyVariantIds.add(ep.etsy_variant_id);
             } else {
@@ -605,6 +610,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             const metadata: any = {
                 image_url: ep.image_url,
                 status: 'Matching',
+                is_digital: ep.is_digital === true,
                 etsy_stock_snapshot: ep.stock_quantity,
                 etsy_updated_at: ep.etsy_updated_at,
                 selected_location_ids: shop.selected_location_ids || [],

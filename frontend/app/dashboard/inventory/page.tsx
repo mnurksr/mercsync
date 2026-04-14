@@ -94,9 +94,11 @@ export default function InventoryPage() {
         { key: 'action_required', label: 'Action Required', color: 'bg-red-100 text-red-700' },
         { key: 'shopify_only', label: 'Shopify Only', color: 'bg-blue-100 text-blue-700' },
         { key: 'etsy_only', label: 'Etsy Only', color: 'bg-orange-100 text-orange-700' },
+        { key: 'digital', label: 'Digital', color: 'bg-purple-100 text-purple-700' },
     ], []);
 
     const getItemStatusKey = useCallback((item: InventoryItem): string => {
+        if (item.is_digital) return 'digital';
         if (!item.shopify_variant_id || !item.etsy_variant_id) {
             if (item.shopify_variant_id && !item.etsy_variant_id) return 'shopify_only';
             if (item.etsy_variant_id && !item.shopify_variant_id) return 'etsy_only';
@@ -127,6 +129,10 @@ export default function InventoryPage() {
         }
 
         return [...result].sort((a, b) => {
+            // Digital items always go to the bottom
+            if (a.is_digital && !b.is_digital) return 1;
+            if (!a.is_digital && b.is_digital) return -1;
+
             const productA = a.shopify_product_id || a.etsy_listing_id || '';
             const productB = b.shopify_product_id || b.etsy_listing_id || '';
             if (productA !== productB) {
@@ -211,6 +217,7 @@ export default function InventoryPage() {
     };
 
     const getStockStatus = (item: InventoryItem) => {
+        if (item.is_digital) return { label: 'Digital', color: 'bg-purple-50 text-purple-600 ring-purple-500/20' };
         if (!item.shopify_variant_id || !item.etsy_variant_id) {
             if (item.shopify_variant_id && !item.etsy_variant_id) return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
             if (item.etsy_variant_id && !item.shopify_variant_id) return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
@@ -252,9 +259,10 @@ export default function InventoryPage() {
 
     // --- Bulk Edit Helpers ---
     const openBulkEdit = () => {
-        const selectedItems = items.filter(i => selectedIds.includes(i.id) && i.shopify_variant_id && i.etsy_variant_id);
+        // Exclude digital products from bulk edit
+        const selectedItems = items.filter(i => selectedIds.includes(i.id) && i.shopify_variant_id && i.etsy_variant_id && !i.is_digital);
         if (selectedItems.length === 0) {
-            toast.error('Please select matched items (both platforms linked)');
+            toast.error('Please select matched, non-digital items');
             return;
         }
         setBulkEditItems(selectedItems.map(item => ({
@@ -763,7 +771,7 @@ export default function InventoryPage() {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4 text-center">
-                                                <span className="text-base font-black text-gray-900">{item.status === 'Action Required' ? '-' : item.master_stock}</span>
+                                                <span className="text-base font-black text-gray-900">{item.is_digital ? '∞' : (item.status === 'Action Required' ? '-' : item.master_stock)}</span>
                                             </td>
                                             <td className="px-2 py-4">
                                                 <div className="flex flex-col items-center justify-center">
@@ -781,7 +789,11 @@ export default function InventoryPage() {
                                                 </div>
                                             </td>
                                             <td className="pl-4 pr-8 py-4 text-right">
-                                                {item.shopify_variant_id && item.etsy_variant_id ? (
+                                                {item.is_digital ? (
+                                                    <button disabled className="px-4 py-2.5 bg-purple-50 text-purple-400 font-bold text-[10px] rounded-xl border border-purple-100 ml-auto uppercase tracking-widest cursor-not-allowed flex items-center gap-2">
+                                                        <Package className="w-3.5 h-3.5" /> Digital
+                                                    </button>
+                                                ) : item.shopify_variant_id && item.etsy_variant_id ? (
                                                     <button
                                                         onClick={() => { setTargetItem(item); setSyncModalOpen(true); }}
                                                         className="px-4 py-2.5 bg-gray-900 text-white font-black text-[10px] rounded-xl shadow-lg shadow-gray-200 hover:bg-black transition-all flex items-center gap-2 active:scale-95 ml-auto uppercase tracking-widest"

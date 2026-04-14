@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
                                 variant_title: variantTitle,
                                 description: listing.description || "",
                                 has_variations: listing.has_variations,
+                                is_digital: listing.is_digital === true,
                                 url: listing.url,
                                 etsy_updated_at: listing.updated_timestamp ? new Date(listing.updated_timestamp * 1000).toISOString() : new Date().toISOString(),
                                 updated_at: new Date().toISOString()
@@ -112,6 +113,7 @@ export async function POST(req: NextRequest) {
                             variant_title: "Default Title",
                             description: listing.description || "",
                             has_variations: listing.has_variations,
+                            is_digital: listing.is_digital === true,
                             url: listing.url,
                             etsy_updated_at: listing.updated_timestamp ? new Date(listing.updated_timestamp * 1000).toISOString() : new Date().toISOString(),
                             updated_at: new Date().toISOString()
