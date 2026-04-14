@@ -210,12 +210,15 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
 
     (items || []).forEach(item => {
         const groupId = item[parentIdField] || item.id;
-        const otherVariantId = platform === 'shopify' ? item.etsy_variant_id : item.shopify_variant_id;
-        const linkedBackVariantId = matchedBackMap[platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id];
+        const myVariantIdForCross = platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id;
+        const mappedCrossId = platform === 'shopify' ? crossEtsyListingMap[myVariantIdForCross] : crossShopifyProductMap[myVariantIdForCross];
         
-        // Product is matched if either side has a pointer
+        // Product is matched if either the reliable cross map has it, or linkedBackVariantId is verified.
+        // We use the cross maps as the primary source of truth because they verify against both other staging tables + inventory_items DB
+        const isMatched = !!mappedCrossId || !!linkedBackVariantId;
+
+        const otherVariantId = platform === 'shopify' ? item.etsy_variant_id : item.shopify_variant_id;
         const finalOtherVariantId = otherVariantId || linkedBackVariantId;
-        const isMatched = !!finalOtherVariantId;
         const otherStock = isMatched ? (otherStocksMap[finalOtherVariantId!] || 0) : undefined;
 
         if (!groups[groupId]) {
@@ -236,10 +239,8 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             };
         }
 
-        const myVariantIdForCross = platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id;
-
         groups[groupId].variants.push({
-            id: platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id,
+            id: myVariantIdForCross,
             dbId: item.id,
             title: item.variant_title || 'Default Title',
             sku: item.sku,

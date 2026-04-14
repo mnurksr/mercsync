@@ -76,17 +76,25 @@ export async function POST(req: NextRequest) {
                         .from('staging_shopify_products')
                         .upsert(stagingPayload, { onConflict: 'shop_id, shopify_product_id' });
 
-                    // Update inventory_items name/image if changed
+                    // Update inventory_items name/image/sku at variant level
+                    const variants = payload.variants || [];
                     const imageUrl = payload.images?.[0]?.src || null;
-                    await supabase
-                        .from('inventory_items')
-                        .update({
-                            name: payload.title,
-                            ...(imageUrl ? { image_url: imageUrl } : {}),
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('shop_id', theShopData.id)
-                        .eq('shopify_product_id', productId);
+                    
+                    for (const v of variants) {
+                        const variantTitlePart = v.title === 'Default Title' ? '' : ` - ${v.title}`;
+                        const fullName = `${payload.title || ''}${variantTitlePart}`;
+                        
+                        await supabase
+                            .from('inventory_items')
+                            .update({
+                                name: fullName,
+                                sku: v.sku || 'NO-SKU',
+                                ...(imageUrl ? { image_url: imageUrl } : {}),
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('shop_id', theShopData.id)
+                            .eq('shopify_variant_id', v.id.toString());
+                    }
                 }
                 break;
 
@@ -121,6 +129,13 @@ export async function POST(req: NextRequest) {
                         .eq('shop_id', deleteShop.id)
                         .eq('shopify_product_id', productId);
                         
+                    // Unlink pointers in staging_etsy_products
+                    await supabase
+                        .from('staging_etsy_products')
+                        .update({ shopify_product_id: null, shopify_variant_id: null })
+                        .eq('shop_id', deleteShop.id)
+                        .eq('shopify_product_id', productId);
+
                     console.log(`[Shopify Webhook] Unlinked DB records for deleted product ${productId}`);
                 }
                 break;

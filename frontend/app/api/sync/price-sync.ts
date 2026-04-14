@@ -128,7 +128,7 @@ export async function handlePriceUpdate(
         // 1. Validate connection and retrieve internal shop_id
         const { data: shops } = await supabase
             .from('shops')
-            .select('id, etsy_shop_id, etsy_token, etsy_token_expires_at, is_active, shopify_connected, etsy_connected, shopify_currency, etsy_currency')
+            .select('id, etsy_shop_id, etsy_access_token, is_active, shopify_connected, etsy_connected, shopify_currency, etsy_currency')
             .eq('shop_domain', shopDomain)
             .limit(1);
 
@@ -204,14 +204,14 @@ export async function handlePriceUpdate(
 
         // 6. Fetch the current Etsy Inventory (Required to build the exact PUT payload)
         console.log(`[Price Sync] Fetching current Etsy inventory for listing ${etsyListingId}...`);
-        const currentInventory = await getInventory(etsyListingId, shop.etsy_token);
+        const currentInventory = await getInventory(etsyListingId, shop.etsy_access_token);
 
         // 7. Merge the new prices into the inventory payload
         const updatedInventoryPayload = mergePriceUpdate(currentInventory, priceUpdates);
 
         // 8. PUT to Etsy using the unified function
         console.log(`[Price Sync] Updating prices on Etsy for listing ${etsyListingId}...`);
-        await updateInventory(etsyListingId, shop.etsy_token, updatedInventoryPayload);
+        await updateInventory(etsyListingId, shop.etsy_access_token, updatedInventoryPayload);
 
         status = 'success';
         return { status: 'success', message: 'Successfully updated Etsy prices' };
