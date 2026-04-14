@@ -279,8 +279,8 @@ export default function ProductsPage() {
             isOpen: true,
             sourceData,
             targetPlatform,
-            initialData: existing,
-            targetId: item.id // Use listing ID as target parent hint if potentially matched
+            initialData: existing
+            // targetId is omitted because "Clone" expects to create a new product, not inject into source id
         });
     };
 

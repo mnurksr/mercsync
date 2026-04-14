@@ -398,7 +398,18 @@ export default function CloneModal({
                     </button>
                     <button
                         onClick={() => {
-                            const selectedVariants = formData.variants.filter(v => v.selected !== false);
+                            let finalVariants = formData.variants.filter(v => v.selected !== false);
+                            
+                            // If it's a single variant item, ensure the top-level inputs (price, stock, sku) 
+                            // cascade down to the variant object so backend sees the user edits
+                            if (formData.variants.length <= 1 && finalVariants.length === 1) {
+                                finalVariants[0] = {
+                                    ...finalVariants[0],
+                                    price: formData.price,
+                                    stock: formData.stock,
+                                    sku: formData.sku
+                                };
+                            }
 
                             onConfirm({
                                 source_id: sourceData.sourceId,
@@ -409,7 +420,7 @@ export default function CloneModal({
                                 stock: formData.stock,
                                 description: formData.description,
                                 image: formData.image,
-                                variants: selectedVariants,
+                                variants: finalVariants,
                                 price_rule: formData.apply_pricing_rule ? formData.selected_rule : null
                             });
                         }}
