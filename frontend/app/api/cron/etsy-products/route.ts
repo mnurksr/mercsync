@@ -197,6 +197,13 @@ export async function GET(req: NextRequest) {
                                             })
                                             .eq('id', matchedItem.id);
 
+                                        // Unlink pointers in staging_shopify_products
+                                        await supabase
+                                            .from('staging_shopify_products')
+                                            .update({ etsy_listing_id: null, etsy_variant_id: null })
+                                            .eq('shop_id', shop.id)
+                                            .eq('etsy_listing_id', lId);
+
                                     } catch (err: any) {
                                         console.error(`[Etsy Products Cron] Failed to unlink ${lId}:`, err);
                                     }
