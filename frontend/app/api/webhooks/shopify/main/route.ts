@@ -62,17 +62,8 @@ export async function POST(req: NextRequest) {
                 if (theShopData && payload.id) {
                     const productId = payload.id.toString();
                     
-                    // Update overall product data in staging
-                    await supabase
-                        .from('staging_shopify_products')
-                        .update({
-                            product_title: payload.title || '',
-                            status: payload.status || 'draft',
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('shop_id', theShopData.id)
-                        .eq('shopify_product_id', productId);
-
+                    // (Status and product_title have been moved into the variant loop below for guaranteed targeting)
+                    
                     // Update inventory_items name/image/sku at variant level
                     const variants = payload.variants || [];
                     const imageUrl = payload.images?.[0]?.src || null;
@@ -100,7 +91,10 @@ export async function POST(req: NextRequest) {
                                 name: fullName,
                                 variant_title: v.title,
                                 sku: variantSku,
-                                price: parseFloat(v.price) || 0
+                                price: parseFloat(v.price) || 0,
+                                status: payload.status || 'draft',
+                                product_title: payload.title || '',
+                                updated_at: new Date().toISOString()
                             })
                             .eq('shop_id', theShopData.id)
                             .eq('shopify_variant_id', v.id.toString());
