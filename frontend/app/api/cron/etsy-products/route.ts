@@ -67,70 +67,65 @@ export async function GET(req: NextRequest) {
                 // Determine timestamps: fetch last 20 minutes to match 15-minute cron with safe overlap
                 const timeThreshold = Math.floor(Date.now() / 1000) - (20 * 60);
 
-                // We can't query by last_modified_tsz easily in standard getListingsByState without search params, 
-                // but for MVP we will pull the first page of active AND draft listings and filter.
-                // --- HANDLE UPDATES & CREATES (ACTIVE & DRAFT) ---
+                // Fetch ALL active AND draft listings from Etsy
                 const activeData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'active', 0, 100);
                 const draftData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'draft', 0, 100);
                 
-                const combinedResults = [...(activeData?.results || []), ...(draftData?.results || [])];
-                const etsyData = { results: combinedResults };
+                const allActiveListings = [...(activeData?.results || []), ...(draftData?.results || [])];
+                
+                // Collect all listing IDs that currently exist on Etsy (for deletion detection later)
+                const etsyLiveListingIds = new Set(allActiveListings.map((l: any) => l.listing_id.toString()));
 
-                if (etsyData && etsyData.results && etsyData.results.length > 0) {
-                    const recentListings = etsyData.results.filter((l: any) => l.last_modified_timestamp >= timeThreshold);
-                    console.log(`[Etsy Products Cron] Found ${recentListings.length} modified listings (active+draft) for ${shop.shop_domain}`);
+                // --- HANDLE UPDATES & CREATES ---
+                const recentListings = allActiveListings.filter((l: any) => l.last_modified_timestamp >= timeThreshold);
+                console.log(`[Etsy Products Cron] Found ${recentListings.length} modified listings (active+draft) for ${shop.shop_domain}`);
 
-                    for (const listing of recentListings) {
-                        const listingId = listing.listing_id.toString();
+                for (const listing of recentListings) {
+                    const listingId = listing.listing_id.toString();
 
-                        // Extract base price from listing
-                        const priceNode = listing.price;
-                        const etsyBasePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
+                    // Extract base price from listing
+                    const priceNode = listing.price;
+                    const etsyBasePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
 
-                        // Match with DB — fetch more fields for smarter updates
-                        const { data: matched } = await supabase
-                            .from('inventory_items')
-                            .select('id, shopify_product_id, shopify_variant_id, last_synced_etsy_price')
-                            .eq('shop_id', shop.id)
-                            .eq('etsy_listing_id', listingId)
-                            .maybeSingle();
+                    // ── 1. Update staging_etsy_products ──
+                    // The staging table is keyed per-variant (etsy_variant_id), but we get listing-level data.
+                    // Use .update() by etsy_listing_id to update ALL variant rows for this listing.
+                    const stagingUpdate: any = {
+                        name: listing.title || '',
+                        product_title: listing.title || '',
+                        status: listing.state || 'active',
+                        updated_at: new Date().toISOString(),
+                    };
+                    if (etsyBasePrice !== null) stagingUpdate.price = etsyBasePrice;
+                    if (listing.skus && listing.skus.length > 0) stagingUpdate.sku = listing.skus[0];
+                    if (listing.quantity !== undefined) stagingUpdate.stock_quantity = listing.quantity;
 
-                        // ── 1. Update staging_etsy_products with ALL relevant fields ──
-                        const stagingPayload: any = {
-                            shop_id: shop.id,
-                            etsy_listing_id: listingId,
-                            name: listing.title || '',
-                            product_title: listing.title || '',
-                            status: listing.state || 'active',
-                            updated_at: new Date().toISOString(),
-                            raw_data: listing
-                        };
+                    const { error: stagingErr } = await supabase
+                        .from('staging_etsy_products')
+                        .update(stagingUpdate)
+                        .eq('shop_id', shop.id)
+                        .eq('etsy_listing_id', listingId);
 
-                        // Add price if available
-                        if (etsyBasePrice !== null) {
-                            stagingPayload.price = etsyBasePrice;
-                        }
-                        // Add SKU if available
-                        if (listing.skus && listing.skus.length > 0) {
-                            stagingPayload.sku = listing.skus[0];
-                        }
-                        // Add stock quantity if available
-                        if (listing.quantity !== undefined) {
-                            stagingPayload.stock_quantity = listing.quantity;
-                        }
+                    if (stagingErr) {
+                        console.error(`[Etsy Products Cron] Staging update error for ${listingId}:`, stagingErr.message);
+                    }
 
-                        await supabase
-                            .from('staging_etsy_products')
-                            .upsert(stagingPayload, { onConflict: 'shop_id, etsy_listing_id' });
+                    // ── 2. Update inventory_items ──
+                    // Match with DB — fetch fields for smarter updates
+                    const { data: matchedItems } = await supabase
+                        .from('inventory_items')
+                        .select('id, shopify_product_id, shopify_variant_id, last_synced_etsy_price')
+                        .eq('shop_id', shop.id)
+                        .eq('etsy_listing_id', listingId);
 
-                        // ── 2. Update inventory_items for ALL matched items (name + status tracking) ──
-                        if (matched?.id) {
+                    if (matchedItems && matchedItems.length > 0) {
+                        for (const matched of matchedItems) {
                             const invUpdate: any = {
                                 updated_at: new Date().toISOString(),
                                 etsy_updated_at: new Date().toISOString()
                             };
 
-                            // Only update name if this is an Etsy-only item (Shopify is master for name on matched items)
+                            // Only update name if Etsy-only (Shopify is master for name on matched items)
                             if (!matched.shopify_product_id) {
                                 invUpdate.name = listing.title;
                             }
@@ -139,117 +134,132 @@ export async function GET(req: NextRequest) {
                                 .from('inventory_items')
                                 .update(invUpdate)
                                 .eq('id', matched.id);
-                        }
 
-                        // ── 3. Price Sync: Etsy → Shopify (with ping-pong protection) ──
-                        if (matched && matched.shopify_variant_id && price_sync_enabled && etsyBasePrice !== null) {
-                            // PING-PONG GUARD: Compare current Etsy price with what we last pushed
-                            const lastSyncedPrice = matched.last_synced_etsy_price ? parseFloat(matched.last_synced_etsy_price) : null;
+                            // ── 3. Price Sync: Etsy → Shopify (with ping-pong protection) ──
+                            if (matched.shopify_variant_id && price_sync_enabled && etsyBasePrice !== null) {
+                                const lastSyncedPrice = matched.last_synced_etsy_price ? parseFloat(matched.last_synced_etsy_price) : null;
 
-                            // If the Etsy price matches what we sent → we caused this change, skip
-                            if (lastSyncedPrice !== null && Math.abs(lastSyncedPrice - etsyBasePrice) < 0.02) {
-                                console.log(`[Etsy Products Cron] Price unchanged from our sync (${etsyBasePrice} ≈ ${lastSyncedPrice}). Skipping reverse sync for listing ${listingId}.`);
-                                continue; // ← This breaks the ping-pong loop!
-                            }
+                                // GUARD: If Etsy price matches what WE last pushed → skip
+                                if (lastSyncedPrice !== null && Math.abs(lastSyncedPrice - etsyBasePrice) < 0.02) {
+                                    console.log(`[Etsy Products Cron] Price unchanged from our sync (${etsyBasePrice} ≈ ${lastSyncedPrice}). Skipping for listing ${listingId}.`);
+                                    continue;
+                                }
 
-                            // Price is genuinely different → user changed it on Etsy. Calculate and push to Shopify.
-                            const hasShopifyRule = shopifyPriceRules.some((r: any) => r.platform === 'shopify');
-                            const newPrice = hasShopifyRule 
-                                ? calculatePrice(etsyBasePrice, shopifyPriceRules, 'shopify') || etsyBasePrice 
-                                : etsyBasePrice;
+                                // Genuine change. Calculate and push to Shopify.
+                                const hasShopifyRule = shopifyPriceRules.some((r: any) => r.platform === 'shopify');
+                                const newPrice = hasShopifyRule 
+                                    ? calculatePrice(etsyBasePrice, shopifyPriceRules, 'shopify') || etsyBasePrice 
+                                    : etsyBasePrice;
 
-                            if (newPrice) {
-                                try {
-                                    console.log(`[Etsy Products Cron] Manual Etsy price change detected! Syncing to Shopify variant ${matched.shopify_variant_id}: ${etsyBasePrice} → ${newPrice}`);
-                                    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+                                if (newPrice) {
+                                    try {
+                                        console.log(`[Etsy Products Cron] Manual Etsy price change detected! Syncing to Shopify variant ${matched.shopify_variant_id}: ${etsyBasePrice} → ${newPrice}`);
+                                        const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
 
-                                    await shopifyApi.updateVariant(creds, matched.shopify_variant_id, {
-                                        id: matched.shopify_variant_id,
-                                        price: newPrice.toString()
-                                    });
+                                        await shopifyApi.updateVariant(creds, matched.shopify_variant_id, {
+                                            id: matched.shopify_variant_id,
+                                            price: newPrice.toString()
+                                        });
 
-                                    await supabase.from('sync_logs').insert({
-                                        shop_id: shop.id,
-                                        source: 'etsy',
-                                        direction: 'etsy_to_shopify',
-                                        event_type: 'price_update',
-                                        status: 'success',
-                                        metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id, old_price: etsyBasePrice, new_price: newPrice },
-                                        created_at: new Date().toISOString()
-                                    });
-                                } catch (e: any) {
-                                    console.error(`[Etsy Products Cron] Failed to update Shopify variant price ${matched.shopify_variant_id}:`, e);
-                                    await supabase.from('sync_logs').insert({
-                                        shop_id: shop.id,
-                                        source: 'etsy',
-                                        direction: 'etsy_to_shopify',
-                                        event_type: 'price_update',
-                                        status: 'failed',
-                                        error_message: e.message,
-                                        metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id },
-                                        created_at: new Date().toISOString()
-                                    });
+                                        // CRITICAL: Save what we pushed TO Shopify so Shopify webhook won't bounce it back
+                                        await supabase.from('inventory_items').update({
+                                            last_synced_shopify_price: newPrice
+                                        }).eq('id', matched.id);
+
+                                        await supabase.from('sync_logs').insert({
+                                            shop_id: shop.id,
+                                            source: 'etsy',
+                                            direction: 'etsy_to_shopify',
+                                            event_type: 'price_update',
+                                            status: 'success',
+                                            metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id, old_price: etsyBasePrice, new_price: newPrice },
+                                            created_at: new Date().toISOString()
+                                        });
+                                    } catch (e: any) {
+                                        console.error(`[Etsy Products Cron] Failed to update Shopify variant price ${matched.shopify_variant_id}:`, e);
+                                        await supabase.from('sync_logs').insert({
+                                            shop_id: shop.id,
+                                            source: 'etsy',
+                                            direction: 'etsy_to_shopify',
+                                            event_type: 'price_update',
+                                            status: 'failed',
+                                            error_message: e.message,
+                                            metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id },
+                                            created_at: new Date().toISOString()
+                                        });
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // --- HANDLE PRODUCT DEACTIVATION (ETSY INACTIVE/DELETED) ---
+                // --- HANDLE DELETED PRODUCTS (not just inactive) ---
+                // Compare our staging table against what Etsy actually has.
+                // If a listing is in our staging but NOT in Etsy's live listings, it was deleted.
                 try {
-                        const inactiveData = await etsyApi.getListingsByState(shop.etsy_shop_id, shop.etsy_access_token, 'inactive', 0, 100);
-                        if (inactiveData?.results?.length > 0) {
-                            const recentInactives = inactiveData.results.filter((l: any) => l.last_modified_timestamp >= timeThreshold);
-                            console.log(`[Etsy Products Cron] Found ${recentInactives.length} recently in-activated listings for ${shop.shop_domain}`);
+                    const { data: ourStagingRows } = await supabase
+                        .from('staging_etsy_products')
+                        .select('etsy_listing_id')
+                        .eq('shop_id', shop.id);
 
-                            for (const listing of recentInactives) {
-                                const lId = listing.listing_id.toString();
-                                
-                                // Update staging state
+                    if (ourStagingRows && ourStagingRows.length > 0) {
+                        // Find unique listing IDs in our staging that are NOT in Etsy's live set
+                        const ourListingIds = [...new Set(ourStagingRows.map(r => r.etsy_listing_id))];
+                        const deletedIds = ourListingIds.filter(id => !etsyLiveListingIds.has(id));
+
+                        if (deletedIds.length > 0) {
+                            console.log(`[Etsy Products Cron] Found ${deletedIds.length} deleted/missing listings: ${deletedIds.join(', ')}`);
+
+                            for (const deletedId of deletedIds) {
+                                // Also check inactive state before assuming deletion
+                                // (might just be deactivated, which we handle the same way)
+
+                                // Remove from staging
                                 await supabase
                                     .from('staging_etsy_products')
-                                    .update({ status: 'inactive' })
+                                    .delete()
                                     .eq('shop_id', shop.id)
-                                    .eq('etsy_listing_id', lId);
+                                    .eq('etsy_listing_id', deletedId);
 
-                                const { data: matchedItem } = await supabase
+                                // Unlink from inventory_items
+                                const { data: linkedItem } = await supabase
                                     .from('inventory_items')
-                                    .select('id, shopify_product_id')
+                                    .select('id, shopify_variant_id')
                                     .eq('shop_id', shop.id)
-                                    .eq('etsy_listing_id', lId)
+                                    .eq('etsy_listing_id', deletedId)
                                     .maybeSingle();
 
-                                if (matchedItem?.id) {
-                                    console.log(`[Etsy Products Cron] Unlinking Etsy Listing ${lId} (Inactive)`);
-                                    try {
-                                        await supabase
-                                            .from('inventory_items')
-                                            .update({
-                                                etsy_listing_id: null,
-                                                etsy_variant_id: null,
-                                                master_stock: 0,
-                                                etsy_stock_snapshot: 0,
-                                                status: 'Matching', // Unlinked from this side
-                                                updated_at: new Date().toISOString()
-                                            })
-                                            .eq('id', matchedItem.id);
+                                if (linkedItem) {
+                                    await supabase
+                                        .from('inventory_items')
+                                        .update({
+                                            etsy_listing_id: null,
+                                            etsy_variant_id: null,
+                                            master_stock: 0,
+                                            etsy_stock_snapshot: 0,
+                                            status: linkedItem.shopify_variant_id ? 'Matching' : 'Action Required',
+                                            updated_at: new Date().toISOString()
+                                        })
+                                        .eq('id', linkedItem.id);
 
-                                        // Unlink pointers in staging_shopify_products
+                                    // Clear cross-platform pointers in shopify staging
+                                    if (linkedItem.shopify_variant_id) {
                                         await supabase
                                             .from('staging_shopify_products')
                                             .update({ etsy_listing_id: null, etsy_variant_id: null })
                                             .eq('shop_id', shop.id)
-                                            .eq('etsy_listing_id', lId);
-
-                                    } catch (err: any) {
-                                        console.error(`[Etsy Products Cron] Failed to unlink ${lId}:`, err);
+                                            .eq('etsy_listing_id', deletedId);
                                     }
+
+                                    console.log(`[Etsy Products Cron] ✅ Unlinked deleted Etsy listing ${deletedId}`);
                                 }
                             }
                         }
-                    } catch (e) {
-                        console.error(`[Etsy Products Cron] Deactivation sync failed:`, e);
                     }
+                } catch (e) {
+                    console.error(`[Etsy Products Cron] Deletion detection failed:`, e);
+                }
                 processedCount++;
 
             } catch (shopErr) {

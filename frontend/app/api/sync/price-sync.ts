@@ -159,13 +159,27 @@ export async function handlePriceUpdate(
         
         const { data: variantMappings } = await supabase
             .from('inventory_items')
-            .select('id, shop_id, etsy_listing_id, etsy_variant_id, shopify_product_id, shopify_variant_id')
+            .select('id, shop_id, etsy_listing_id, etsy_variant_id, shopify_product_id, shopify_variant_id, last_synced_shopify_price')
             .eq('shop_id', shop.id)
             .eq('shopify_product_id', shopifyProductId)
             .not('etsy_listing_id', 'is', null);
 
         if (!variantMappings || variantMappings.length === 0) {
             return { status: 'skipped', message: 'Product is not mapped to an Etsy listing' };
+        }
+
+        // PING-PONG GUARD: Check if this Shopify price change was caused by US (Etsy cron pushing to Shopify).
+        // If so, skip to prevent infinite loop.
+        const shopifyVariantsRaw = shopifyPayload.variants || [];
+        const firstVariant = shopifyVariantsRaw[0];
+        const firstMapping = variantMappings[0];
+        if (firstVariant && firstMapping?.last_synced_shopify_price) {
+            const currentShopifyPrice = parseFloat(firstVariant.price);
+            const lastPushedPrice = parseFloat(firstMapping.last_synced_shopify_price);
+            if (Math.abs(currentShopifyPrice - lastPushedPrice) < 0.02) {
+                console.log(`[Price Sync] Shopify price (${currentShopifyPrice}) matches last_synced_shopify_price (${lastPushedPrice}). Skipping Etsy push to prevent ping-pong.`);
+                return { status: 'skipped', message: 'Price change was caused by our own Etsy→Shopify sync' };
+            }
         }
 
         // 4. Calculate new prices for mapped variants
