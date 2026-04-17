@@ -124,8 +124,14 @@ export async function GET(req: NextRequest) {
                             if (newPrice) {
                                 try {
                                     console.log(`[Etsy Products Cron] Auto-Updating price on Shopify variant ${matched.shopify_variant_id} from Etsy ${listingId} (${basePrice} → ${newPrice})`);
+                                    
+                                    // TEMPORARILY DISABLED: To prevent infinite price loop ping-pong!
+                                    // When Shopify syncs to Etsy, Etsy's last_modified updates. This cron then saw the new Etsy price
+                                    // and pushed it BACK to Shopify, creating a never-ending loop of price changes due to rule calculations.
+                                    // We will implement a proper "last_synced_hash" or disable bidirectional price sync to solve this cleanly.
+                                    
+                                    /*
                                     const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
-
                                     await shopifyApi.updateVariant(creds, matched.shopify_variant_id, {
                                         id: matched.shopify_variant_id,
                                         price: newPrice.toString()
@@ -140,6 +146,7 @@ export async function GET(req: NextRequest) {
                                         metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id, old_price: basePrice, new_price: newPrice },
                                         created_at: new Date().toISOString()
                                     });
+                                    */
                                 } catch (e: any) {
                                     console.error(`[Etsy Products Cron] Failed to update Shopify variant price ${matched.shopify_variant_id}:`, e);
                                     await supabase.from('sync_logs').insert({
