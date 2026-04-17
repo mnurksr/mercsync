@@ -212,6 +212,19 @@ export async function handlePriceUpdate(
         console.log(`[Price Sync] Updating prices on Etsy for listing ${etsyListingId}...`);
         await updateInventory(etsyListingId, shop.etsy_access_token, updatedInventoryPayload);
 
+        // 9. Save pushed prices to prevent infinite ping-pong
+        // When Etsy cron reads the price back, it will compare against this value.
+        // If they match → "we sent it, skip". If different → "user changed it on Etsy, sync to Shopify".
+        for (const mapping of variantMappings) {
+            const pushedPrice = newPrices[mapping.etsy_variant_id!];
+            if (pushedPrice !== undefined) {
+                await supabase
+                    .from('inventory_items')
+                    .update({ last_synced_etsy_price: pushedPrice })
+                    .eq('id', mapping.id);
+            }
+        }
+
         status = 'success';
         return { status: 'success', message: 'Successfully updated Etsy prices' };
 
