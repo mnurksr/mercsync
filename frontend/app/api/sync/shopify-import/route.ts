@@ -139,12 +139,25 @@ export async function POST(req: NextRequest) {
         const activeLocationIds = locations.filter((l: any) => l.active).map((l: any) => l.id);
 
         if (activeLocationIds.length > 0) {
-            const inventoryLevelsData = await shopifyApi.getInventoryLevels(creds, activeLocationIds);
-            const levels = inventoryLevelsData.inventory_levels || [];
+            // Shopify API restricts inventory levels to 50 items per request
+            const itemIdsToFetch = Array.from(new Set(stagingRows.map(r => r.shopify_inventory_item_id).filter(Boolean)));
+            let allLevels: any[] = [];
+            
+            for (let i = 0; i < itemIdsToFetch.length; i += 50) {
+                const batch = itemIdsToFetch.slice(i, i + 50);
+                try {
+                    const data = await shopifyApi.getInventoryLevels(creds, activeLocationIds, batch);
+                    if (data && data.inventory_levels) {
+                        allLevels = allLevels.concat(data.inventory_levels);
+                    }
+                } catch (err: any) {
+                    console.error('[Shopify Import] Batch inventory fetch error:', err.message);
+                }
+            }
 
             // Aggregate by inventory_item_id
             const aggregated: Record<string, { total: number, locations: any[], latest_update: string }> = {};
-            levels.forEach((level: any) => {
+            allLevels.forEach((level: any) => {
                 const itemId = level.inventory_item_id.toString();
                 if (!aggregated[itemId]) {
                     aggregated[itemId] = { total: 0, locations: [], latest_update: '0' };
