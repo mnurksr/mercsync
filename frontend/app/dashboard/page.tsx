@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import {
     Package, TrendingUp, AlertTriangle, Clock,
     Link2, ArrowRight, RefreshCw, ShoppingBag,
-    Store, CheckCircle2, XCircle, Activity
+    Store, CheckCircle2, XCircle, Activity, Bell
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -493,72 +493,4 @@ function timeAgo(dateStr: string) {
     if (hours < 24) return `${hours}H`;
     const days = Math.floor(hours / 24);
     return `${days}D`;
-}
-
-// ═══ Sub-Components ═══
-
-function StatCard({ icon, bgColor, value, label, valueColor = 'text-gray-900' }: {
-    icon: React.ReactNode;
-    bgColor: string;
-    value: string | number;
-    label: string;
-    valueColor?: string;
-}) {
-    return (
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3 mb-3">
-                <div className={`w-10 h-10 ${bgColor} rounded-xl flex items-center justify-center`}>
-                    {icon}
-                </div>
-            </div>
-            <div className={`text-2xl font-bold ${valueColor}`}>{value}</div>
-            <div className="text-xs text-gray-500 mt-1">{label}</div>
-        </div>
-    );
-}
-
-function PlatformRow({ name, icon, color, connected, domain }: {
-    name: string;
-    icon: React.ReactNode;
-    color: string;
-    connected: boolean;
-    domain: string | null;
-}) {
-    return (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50/50">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: color }}>
-                {icon}
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900">{name}</p>
-                {connected && domain && (
-                    <p className="text-xs text-gray-400 truncate">{domain}</p>
-                )}
-            </div>
-            {connected ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                    <CheckCircle2 className="w-3 h-3" /> Connected
-                </span>
-            ) : (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
-                    <XCircle className="w-3 h-3" /> Not Connected
-                </span>
-            )}
-        </div>
-    );
-}
-
-function QuickActionLink({ href, label, description }: { href: string; label: string; description: string }) {
-    return (
-        <Link
-            href={href}
-            className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group"
-        >
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 transition-colors">{label}</p>
-                <p className="text-xs text-gray-400">{description}</p>
-            </div>
-            <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-500 transition-colors shrink-0" />
-        </Link>
-    );
 }
