@@ -183,7 +183,7 @@ export default function Dashboard() {
             </div>
         );
     }
-
+    return (
         <div className="space-y-6 pb-20">
             {/* ═══ Header with Refresh ═══ */}
             <div className="flex items-center justify-between mb-8">
