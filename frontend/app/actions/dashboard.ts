@@ -157,15 +157,17 @@ export async function getRecentActivity(ownerId?: string): Promise<ActivityItem[
 
     if (shopIds.length === 0) return []
 
-    // Fetch from inventory_ledger + join inventory_items for product name
+    // Fetch from sync_logs + join inventory_items for product name
     const { data, error } = await supabase
-        .from('inventory_ledger')
+        .from('sync_logs')
         .select(`
             id,
-            reason_code,
+            event_type,
             created_at,
-            change_amount,
-            source_platform,
+            old_stock,
+            new_stock,
+            source,
+            status,
             inventory_items (name)
         `)
         .in('shop_id', shopIds)
@@ -176,11 +178,11 @@ export async function getRecentActivity(ownerId?: string): Promise<ActivityItem[
 
     return data.map((item: any) => ({
         id: item.id,
-        action: formatFrendlyAction(item.reason_code),
+        action: formatFrendlyAction(item.event_type),
         product: item.inventory_items?.name || 'Unknown Product',
-        platform: item.source_platform || 'system',
+        platform: item.source || 'system',
         time: timeAgo(new Date(item.created_at)),
-        status: 'success' // Default to success as ledger records successful changes
+        status: item.status === 'failed' ? 'error' : 'success'
     }))
 }
 
