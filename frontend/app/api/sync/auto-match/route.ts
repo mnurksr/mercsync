@@ -1,52 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 
+const STOP_WORDS = new Set(['the', 'a', 'an', 'and', 'or', 'with', 'for', 'in', 'on', 'at', 'to', 'of', 'by']);
+
 /**
  * Normalizes a string for comparison (N8N Aligned)
  */
 function normalize(str: string) {
-    return (str || "").toLowerCase()
+    const cleanStr = (str || "").toLowerCase()
         .replace(/[^a-z0-9]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+        
+    // Remove stop words to prevent false positives like "The XYZ" matching "The ABC"
+    return cleanStr.split(' ')
+        .filter(word => !STOP_WORDS.has(word))
+        .join(' ');
 }
 
 /**
- * Calculates similarity score between two strings (Enhance E-Commerce Matcher)
+ * Calculates similarity score between two strings (0-100)
  */
 function getSimilarity(s1: string, s2: string) {
     const n1 = normalize(s1);
     const n2 = normalize(s2);
+    
     if (!n1 || !n2) return 0;
     if (n1 === n2) return 100;
-
-    // 1. Substring Match (handles simple appended words perfectly)
-    if (n1.includes(n2) || n2.includes(n1)) {
-        const smaller = n1.length < n2.length ? n1 : n2;
-        // If the substring is reasonably substantial, give it a very high score
-        if (smaller.length > 10) return 92;
-    }
 
     const set1 = new Set(n1.split(' ').filter(Boolean));
     const set2 = new Set(n2.split(' ').filter(Boolean));
 
+    // Word-based Dice Coefficient
     const intersection = new Set([...set1].filter(x => set2.has(x)));
-    
-    // 2. Word-based Dice Coefficient (more forgiving than Jaccard for suffixes)
-    // Formula: (2 * intersection) / (set1 + set2)
-    const diceCoefficient = (2.0 * intersection.size) / (set1.size + set2.size) * 100;
+    const diceCoefficient = (set1.size === 0 && set2.size === 0) ? 0 : (2.0 * intersection.size) / (set1.size + set2.size) * 100;
 
-    // 3. Longest Common Prefix check (handles "Product A version 1" vs "Product A version 2")
+    // Substring match check (only if one is a EXACT multi-word substring of the other)
+    let substringBonus = 0;
+    if (set1.size > 1 && set2.size > 1) {
+       if (n1.includes(n2) || n2.includes(n1)) {
+           // If one is fully contained in the other as a whole sentence
+           substringBonus = 20; 
+       }
+    }
+
+    // Longest Common Prefix check
     let lcpLength = 0;
     const minLen = Math.min(n1.length, n2.length);
     for (let i = 0; i < minLen; i++) {
         if (n1[i] === n2[i]) lcpLength++;
         else break;
     }
-    const prefixRatio = (lcpLength / Math.max(n1.length, n2.length)) * 100;
+    // Prefix ratio is only valuable if it matches at least a full word's length (e.g. 5+ chars)
+    const prefixRatio = lcpLength > 4 ? (lcpLength / Math.max(n1.length, n2.length)) * 100 : 0;
 
-    // We take the best meaningful score
-    return Math.max(diceCoefficient, prefixRatio > 50 ? prefixRatio : 0);
+    const finalScore = Math.max(diceCoefficient, prefixRatio) + substringBonus;
+    return Math.min(finalScore, 100); 
 }
 
 export async function POST(req: NextRequest) {
@@ -128,8 +137,8 @@ export async function POST(req: NextRequest) {
                     score += 5; // 5% bonus for both being single-variant
                 }
 
-                // Threshold check (55 is a safe lower bound when using bonuses)
-                if (score > bestScore && score >= 55) {
+                // Threshold check (68 is a safe lower bound when using bonuses)
+                if (score > bestScore && score >= 68) {
                     bestScore = score;
                     bestMatchEgid = eGid;
                 }
@@ -177,8 +186,8 @@ export async function POST(req: NextRequest) {
                             }
 
                             const score = getSimilarity(sFullName, eFullName);
-                            // Lower threshold to 50 because they are already within a strictly matched parent group
-                            if (score > highestScore && score >= 50) {
+                            // Lower threshold to 65 because they are already within a strictly matched parent group
+                            if (score > highestScore && score >= 65) {
                                 highestScore = score;
                                 bestMatch = eVar;
                                 matchReason = "Semantic Title Match";
