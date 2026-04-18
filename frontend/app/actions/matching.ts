@@ -358,23 +358,29 @@ export async function matchProducts(
                 .maybeSingle()
 
             if (shopifyInv && etsyInv) {
-                // Merge into shopify row, delete etsy-only row
-                await adminSupabase
-                    .from('inventory_items')
-                    .update({
-                        etsy_listing_id: etsyInv.etsy_listing_id,
-                        etsy_variant_id: match.etsyVariantId,
-                        etsy_stock_snapshot: etsyInv.etsy_stock_snapshot,
-                        etsy_updated_at: etsyInv.etsy_updated_at,
-                        status: 'Matching',
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', shopifyInv.id)
+                // Merge: Both platform rows exist. 
+                // IMPORTANT: Delete etsy-only row FIRST to free unique constraint on etsy_variant_id,
+                // THEN update shopify row with etsy data.
+                const etsyData = {
+                    etsy_listing_id: etsyInv.etsy_listing_id,
+                    etsy_variant_id: match.etsyVariantId,
+                    etsy_stock_snapshot: etsyInv.etsy_stock_snapshot,
+                    etsy_updated_at: etsyInv.etsy_updated_at,
+                };
 
                 await adminSupabase
                     .from('inventory_items')
                     .delete()
                     .eq('id', etsyInv.id)
+
+                await adminSupabase
+                    .from('inventory_items')
+                    .update({
+                        ...etsyData,
+                        status: 'Matching',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', shopifyInv.id)
             } else if (shopifyInv) {
                 // Only Shopify row exists — add Etsy data
                 const { data: ev } = await adminSupabase
@@ -398,7 +404,7 @@ export async function matchProducts(
                 // Only Etsy row exists — add Shopify data
                 const { data: sv } = await adminSupabase
                     .from('staging_shopify_products')
-                    .select('shopify_product_id, shopify_inventory_item_id, stock_quantity, shopify_updated_at')
+                    .select('shopify_product_id, shopify_inventory_item_id, stock_quantity, shopify_updated_at, image_url')
                     .eq('shopify_variant_id', match.shopifyVariantId)
                     .maybeSingle()
 
@@ -410,6 +416,7 @@ export async function matchProducts(
                         shopify_inventory_item_id: sv?.shopify_inventory_item_id,
                         shopify_stock_snapshot: sv?.stock_quantity || 0,
                         shopify_updated_at: sv?.shopify_updated_at,
+                        image_url: sv?.image_url || etsyInv.image_url,
                         status: 'Matching',
                         updated_at: new Date().toISOString()
                     })
