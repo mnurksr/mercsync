@@ -222,6 +222,32 @@ export async function disconnectShop(platform: string = 'shopify', ownerId?: str
         }
 
         if (platform === 'etsy') {
+            // First get the shop ID
+            const { data: shop } = await supabase
+                .from('shops')
+                .select('id')
+                .eq('owner_id', resolvedOwnerId)
+                .single()
+
+            if (shop) {
+                // Delete all Etsy staging products
+                await supabase
+                    .from('staging_etsy_products')
+                    .delete()
+                    .eq('shop_id', shop.id)
+
+                // Unmatch all inventory items
+                await supabase
+                    .from('inventory_items')
+                    .update({
+                        etsy_variant_id: null,
+                        etsy_listing_id: null,
+                        etsy_stock_snapshot: 0
+                    })
+                    .eq('shop_id', shop.id)
+            }
+
+            // Clear connection tokens
             const { error } = await supabase
                 .from('shops')
                 .update({
@@ -232,7 +258,7 @@ export async function disconnectShop(platform: string = 'shopify', ownerId?: str
                 .eq('owner_id', resolvedOwnerId)
 
             if (error) throw error
-            return { success: true, message: 'Etsy disconnected' }
+            return { success: true, message: 'Etsy disconnected and all corresponding data wiped' }
         }
 
         return { success: false, message: 'Invalid platform' }

@@ -36,16 +36,38 @@ export async function POST(req: NextRequest) {
         switch (topic) {
             case 'app/uninstalled':
                 console.log(`[Shopify Webhook] App uninstalled for ${shop}`);
-                // Deactivate shop and clear sensitive tokens immediately.
-                // Full data deletion happens via shop/redact GDPR webhook 48h later.
-                await supabase
+                // Immediate Deactivation & Token Scrubbing
+                const { data: dbShop } = await supabase
                     .from('shops')
                     .update({ 
                         is_active: false, 
                         shopify_connected: false,
-                        access_token: null
+                        access_token: null,
+                        etsy_connected: false,
+                        etsy_access_token: null,
+                        etsy_refresh_token: null
                     })
-                    .eq('shop_domain', shop);
+                    .eq('shop_domain', shop)
+                    .select('id')
+                    .single();
+
+                if (dbShop) {
+                    console.log(`[Shopify Webhook] Executing immediate Deep Wipe for shop ${dbShop.id}`);
+                    
+                    // Delete staging data
+                    await supabase.from('staging_products').delete().eq('shop_id', dbShop.id);
+                    await supabase.from('staging_etsy_products').delete().eq('shop_id', dbShop.id);
+                    
+                    // Delete inventory mapping
+                    await supabase.from('inventory_items').delete().eq('shop_id', dbShop.id);
+
+                    // Delete history/logs
+                    await supabase.from('inventory_ledger').delete().eq('shop_id', dbShop.id);
+                    await supabase.from('sync_jobs').delete().eq('shop_id', dbShop.id);
+                    
+                    // Note: 'shops' record is kept (but scrubbed) so user ID isn't completely lost for billing history 
+                    // shop/redact GDPR webhook will fully delete the 'shops' record 48 hours later.
+                }
                 break;
 
             case 'shop/update':

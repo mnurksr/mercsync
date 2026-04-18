@@ -16,51 +16,48 @@ const PLANS = [
         icon: Zap,
         color: 'from-blue-500 to-indigo-600',
         badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
-        description: 'For small shops getting started',
+        description: 'Mükemmel bir başlangıç',
         features: [
-            'Up to 100 products synced',
-            '2 connected stores',
-            'Automatic stock sync',
-            'Email support',
-            'Basic analytics'
+            '500 Ürüne kadar senkronizasyon',
+            '1 Etsy mağazası bağlantısı',
+            'Saatlik stok senkronizasyonu',
+            'Temel otomatik eşleştirme (Auto-match)',
+            'E-posta desteği'
         ]
     },
     {
         id: 'professional',
-        name: 'Professional',
+        name: 'Growth',
         price: 79,
         icon: Crown,
         color: 'from-violet-500 to-purple-600',
         badgeColor: 'bg-violet-50 text-violet-700 border-violet-200',
         popular: true,
-        description: 'For growing businesses',
+        description: 'Büyüyen işletmeler için',
         features: [
-            'Up to 1,000 products synced',
-            '5 connected stores',
-            'Real-time stock sync',
-            'Priority support',
-            'Advanced analytics',
-            'AI-powered matching',
-            'Variant injection'
+            '5,000 Ürüne kadar senkronizasyon',
+            '1 Etsy mağazası bağlantısı',
+            'Gerçek zamanlı (Real-time) stok senkronu',
+            'Fiyat kuralı (Price margin) eşitleme',
+            'Öncelikli destek',
+            'AI destekli akıllı eşleştirme'
         ]
     },
     {
         id: 'enterprise',
-        name: 'Enterprise',
+        name: 'Unlimited',
         price: 199,
         icon: Shield,
         color: 'from-gray-800 to-gray-900',
         badgeColor: 'bg-gray-100 text-gray-700 border-gray-200',
-        description: 'For high-volume sellers',
+        description: 'Yüksek hacimli satıcılar',
         features: [
-            'Unlimited products synced',
-            'Unlimited stores',
-            'Real-time stock sync',
-            'Dedicated account manager',
-            'Custom integrations',
-            'API access',
-            'White-label options',
-            'SLA guarantee'
+            'Sınırsız ürün senkronizasyonu',
+            '1 Etsy mağazası bağlantısı',
+            'Gerçek zamanlı (Real-time) stok senkronu',
+            'Fiyat kuralı (Price margin) eşitleme',
+            'Özel müşteri temsilcisi',
+            'SLA Garantisi'
         ]
     }
 ];

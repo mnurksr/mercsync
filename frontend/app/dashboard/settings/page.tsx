@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getConnectedShop, disconnectShop, getShopifyLocations as fetchShopifyLocations, saveShopifyLocations, getShopLocationConfig } from '../../actions/shop';
+import { getDashboardStats } from '../../actions/dashboard';
 import {
     getSettings, updateSettings,
     type ShopSettings, type SyncDirection,
@@ -52,6 +53,8 @@ export default function SettingsPage() {
         shopify: { connected: false, name: null as string | null, domain: null as string | null, plan_type: null as string | null, currency: 'USD' },
         etsy: { connected: false, name: null as string | null, shopId: null as string | null, currency: 'USD' }
     });
+
+    const [productsCount, setProductsCount] = useState(0);
 
     // Settings state
     const [settings, setSettings] = useState<ShopSettings>({
@@ -95,11 +98,14 @@ export default function SettingsPage() {
 
     const loadData = async () => {
         try {
-            const [shopify, etsy, savedSettings] = await Promise.all([
+            const [shopify, etsy, savedSettings, dashStats] = await Promise.all([
                 getConnectedShop('shopify'),
                 getConnectedShop('etsy'),
-                getSettings()
+                getSettings(),
+                getDashboardStats()
             ]);
+
+            setProductsCount(dashStats.productsSynced || 0);
 
             setStores({
                 shopify: { 
@@ -358,7 +364,7 @@ export default function SettingsPage() {
                         />
                     )}
                     {activeTab === 'billing' && (
-                        <BillingTab stores={stores} />
+                        <BillingTab stores={stores} productsCount={productsCount} />
                     )}
                     {activeTab === 'advanced' && (
                         <AdvancedTab />
@@ -409,18 +415,6 @@ function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyM
     return (
         <div className="space-y-4">
             <SectionHeader title="Connected Stores" description="Manage your e-commerce platform connections" />
-
-            <StoreCard
-                name="Shopify"
-                icon={<ShoppingBag className="w-6 h-6 text-white" />}
-                color="#95BF47"
-                connected={stores.shopify.connected}
-                domain={stores.shopify.domain}
-                currency={stores.shopify.currency}
-                onConnect={() => { setShopName(''); setShowShopifyModal(true); }}
-                onDisconnect={() => onDisconnect('shopify')}
-                adminUrl={stores.shopify.domain ? `https://${stores.shopify.domain}/admin` : undefined}
-            />
 
             <StoreCard
                 name="Etsy"
@@ -914,29 +908,29 @@ const PLAN_TIERS = [
         name: 'Starter',
         price: 29,
         color: 'from-blue-500 to-indigo-600',
-        description: 'For small shops getting started',
-        features: ['Up to 100 products synced', '2 connected stores', 'Automatic stock sync', 'Email support']
+        description: 'Mükemmel bir başlangıç',
+        features: ['500 Ürüne kadar senkronizasyon', '1 Etsy mağazası bağlantısı', 'Saatlik stok senkronizasyonu', 'Temel otomatik eşleştirme (Auto-match)', 'E-posta desteği']
     },
     {
         id: 'professional',
-        name: 'Professional',
+        name: 'Growth',
         price: 79,
         color: 'from-violet-500 to-purple-600',
         popular: true,
-        description: 'For growing businesses',
-        features: ['Up to 1,000 products synced', '5 connected stores', 'Real-time stock sync', 'Priority support', 'AI-powered matching']
+        description: 'Büyüyen işletmeler için',
+        features: ['5,000 Ürüne kadar senkronizasyon', '1 Etsy mağazası bağlantısı', 'Gerçek zamanlı (Real-time) stok senkronu', 'Fiyat kuralı (Price margin) eşitleme', 'Öncelikli destek', 'AI destekli akıllı eşleştirme']
     },
     {
         id: 'enterprise',
-        name: 'Enterprise',
+        name: 'Unlimited',
         price: 199,
         color: 'from-gray-800 to-gray-900',
-        description: 'For high-volume sellers',
-        features: ['Unlimited products synced', 'Unlimited stores', 'Dedicated account manager', 'API access', 'SLA guarantee']
+        description: 'Yüksek hacimli satıcılar',
+        features: ['Sınırsız ürün senkronizasyonu', '1 Etsy mağazası bağlantısı', 'Gerçek zamanlı (Real-time) stok senkronu', 'Fiyat kuralı (Price margin) eşitleme', 'Özel müşteri temsilcisi', 'SLA Garantisi']
     }
 ];
 
-function BillingTab({ stores }: { stores: any }) {
+function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?: number }) {
     const toast = useToast();
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
@@ -967,6 +961,17 @@ function BillingTab({ stores }: { stores: any }) {
             setLoadingPlan(null);
         }
     };
+
+    // Calculate limit based on current plan
+    const getLimit = () => {
+        if (planType.toLowerCase() === 'starter') return 500;
+        if (planType.toLowerCase() === 'professional' || planType.toLowerCase() === 'growth') return 5000;
+        if (planType.toLowerCase() === 'enterprise' || planType.toLowerCase() === 'unlimited') return 'Unlimited';
+        return 0; // free/guest
+    };
+
+    const limit = getLimit();
+    const widthPercent = (limit === 'Unlimited' || limit === 0) ? 0 : Math.min(100, Math.round((productsCount / (limit as number)) * 100));
 
     return (
         <div className="space-y-4">
@@ -1006,7 +1011,7 @@ function BillingTab({ stores }: { stores: any }) {
             {/* Plan Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {PLAN_TIERS.map((plan) => {
-                    const isCurrent = plan.id === currentPlanId;
+                    const isCurrent = plan.id === currentPlanId || (plan.name === 'Growth' && currentPlanId === 'professional') || (plan.name === 'Unlimited' && currentPlanId === 'enterprise');
                     const isLoading = loadingPlan === plan.id;
 
                     return (
@@ -1088,35 +1093,27 @@ function BillingTab({ stores }: { stores: any }) {
             </div>
 
             {/* Usage */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Usage This Month</h3>
-                <div className="space-y-4">
-                    <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-sm text-gray-600">Sync Operations</span>
-                            <span className="text-sm font-medium text-gray-900">
-                                {isPaid ? 'Unlimited' : '0 / 100'}
-                            </span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2">
-                            <div className={`h-2 rounded-full transition-all ${isPaid ? 'bg-green-500 w-[10%]' : 'bg-gray-300 w-0'}`} />
-                        </div>
-                    </div>
-                    <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-sm text-gray-600">Connected Stores</span>
-                            <span className="text-sm font-medium text-gray-900">
-                                {(stores.shopify?.connected ? 1 : 0) + (stores.etsy?.connected ? 1 : 0)} / {isPaid ? '∞' : '2'}
-                            </span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2">
-                            <div className="bg-blue-500 h-2 rounded-full" style={{
-                                width: `${((stores.shopify?.connected ? 1 : 0) + (stores.etsy?.connected ? 1 : 0)) * 50}%`
-                            }} />
+            {isPaid && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                    <h3 className="text-sm font-semibold text-gray-900 mb-4">Usage This Month</h3>
+                    <div className="space-y-4">
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-sm text-gray-600">Senkronize Edilen Ürün</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                    {limit === 'Unlimited' ? 'Sınırsız' : `${productsCount} / ${limit}`}
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2">
+                                <div 
+                                    className={`h-2 rounded-full transition-all ${widthPercent > 90 ? 'bg-red-500' : widthPercent > 75 ? 'bg-yellow-500' : 'bg-green-500'}`} 
+                                    style={{ width: `${limit === 'Unlimited' ? 100 : widthPercent}%` }} 
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             <p className="text-xs text-gray-400 text-center">
                 Secure payment powered by Shopify Billing. Cancel anytime from your Shopify admin.
