@@ -99,6 +99,7 @@ export async function GET(req: NextRequest) {
                     if (etsyBasePrice !== null) stagingUpdate.price = etsyBasePrice;
                     if (listing.skus && listing.skus.length > 0) stagingUpdate.sku = listing.skus[0];
                     if (listing.quantity !== undefined) stagingUpdate.stock_quantity = listing.quantity;
+                    if (listing.description !== undefined) stagingUpdate.description = listing.description;
 
                     const { error: stagingErr } = await supabase
                         .from('staging_etsy_products')
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
                     // Match with DB — fetch fields for smarter updates
                     const { data: matchedItems } = await supabase
                         .from('inventory_items')
-                        .select('id, shopify_product_id, shopify_variant_id, last_synced_etsy_price')
+                        .select('id, shopify_product_id, shopify_variant_id, last_synced_etsy_price, etsy_stock_snapshot')
                         .eq('shop_id', shop.id)
                         .eq('etsy_listing_id', listingId);
 
@@ -128,6 +129,15 @@ export async function GET(req: NextRequest) {
                             // Only update name if Etsy-only (Shopify is master for name on matched items)
                             if (!matched.shopify_product_id) {
                                 invUpdate.name = listing.title;
+                            }
+
+                            // Update etsy_stock_snapshot if stock changed
+                            if (listing.quantity !== undefined) {
+                                const currentSnapshot = matched.etsy_stock_snapshot || 0;
+                                if (currentSnapshot !== listing.quantity) {
+                                    invUpdate.etsy_stock_snapshot = listing.quantity;
+                                    console.log(`[Etsy Products Cron] Stock changed for listing ${listingId}: ${currentSnapshot} → ${listing.quantity}`);
+                                }
                             }
 
                             await supabase
@@ -223,36 +233,38 @@ export async function GET(req: NextRequest) {
                                     .eq('etsy_listing_id', deletedId);
 
                                 // Unlink from inventory_items
-                                const { data: linkedItem } = await supabase
+                                const { data: linkedItems } = await supabase
                                     .from('inventory_items')
-                                    .select('id, shopify_variant_id')
+                                    .select('id, shopify_variant_id, etsy_variant_id')
                                     .eq('shop_id', shop.id)
-                                    .eq('etsy_listing_id', deletedId)
-                                    .maybeSingle();
+                                    .eq('etsy_listing_id', deletedId);
 
-                                if (linkedItem) {
-                                    await supabase
-                                        .from('inventory_items')
-                                        .update({
-                                            etsy_listing_id: null,
-                                            etsy_variant_id: null,
-                                            master_stock: 0,
-                                            etsy_stock_snapshot: 0,
-                                            status: linkedItem.shopify_variant_id ? 'Matching' : 'Action Required',
-                                            updated_at: new Date().toISOString()
-                                        })
-                                        .eq('id', linkedItem.id);
-
-                                    // Clear cross-platform pointers in shopify staging
-                                    if (linkedItem.shopify_variant_id) {
+                                if (linkedItems && linkedItems.length > 0) {
+                                    for (const linkedItem of linkedItems) {
                                         await supabase
-                                            .from('staging_shopify_products')
-                                            .update({ etsy_listing_id: null, etsy_variant_id: null })
-                                            .eq('shop_id', shop.id)
-                                            .eq('etsy_listing_id', deletedId);
-                                    }
+                                            .from('inventory_items')
+                                            .update({
+                                                etsy_listing_id: null,
+                                                etsy_variant_id: null,
+                                                master_stock: 0,
+                                                etsy_stock_snapshot: 0,
+                                                status: linkedItem.shopify_variant_id ? 'Matching' : 'Action Required',
+                                                updated_at: new Date().toISOString()
+                                            })
+                                            .eq('id', linkedItem.id);
 
-                                    console.log(`[Etsy Products Cron] ✅ Unlinked deleted Etsy listing ${deletedId}`);
+                                        // Clear cross-platform pointers in shopify staging
+                                        // staging_shopify_products uses shopify_variant_id as key, NOT etsy_listing_id
+                                        if (linkedItem.shopify_variant_id) {
+                                            await supabase
+                                                .from('staging_shopify_products')
+                                                .update({ etsy_variant_id: null })
+                                                .eq('shop_id', shop.id)
+                                                .eq('shopify_variant_id', linkedItem.shopify_variant_id);
+                                        }
+
+                                        console.log(`[Etsy Products Cron] ✅ Unlinked deleted Etsy listing ${deletedId} (variant ${linkedItem.etsy_variant_id})`);
+                                    }
                                 }
                             }
                         }

@@ -484,8 +484,9 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 status: metadata?.is_digital ? 'Digital' : (metadata?.status || 'Matching'),
                 is_digital: metadata?.is_digital || false,
                 shopify_inventory_item_id: metadata?.shopify_inventory_item_id || existingItem?.shopify_inventory_item_id,
-                shopify_stock_snapshot: metadata?.shopify_stock_snapshot || existingItem?.shopify_stock_snapshot || 0,
-                etsy_stock_snapshot: metadata?.etsy_stock_snapshot || existingItem?.etsy_stock_snapshot || 0,
+                // Use explicit null checks — 0 is a valid value, not "missing"
+                shopify_stock_snapshot: metadata?.shopify_stock_snapshot ?? existingItem?.shopify_stock_snapshot ?? 0,
+                etsy_stock_snapshot: metadata?.etsy_stock_snapshot ?? existingItem?.etsy_stock_snapshot ?? 0,
                 shopify_updated_at: metadata?.shopify_updated_at || existingItem?.shopify_updated_at,
                 etsy_updated_at: metadata?.etsy_updated_at || existingItem?.etsy_updated_at,
                 location_inventory_map: metadata?.location_inventory_map || existingItem?.location_inventory_map || {},
