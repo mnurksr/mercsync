@@ -62,7 +62,6 @@ export default function SettingsPage() {
         auto_sync_enabled: false,
         low_stock_threshold: 0,
         auto_create_products: false,
-        auto_create_products: false,
         auto_update_products: false,
         auto_delete_products: false,
         location_deduction_order: [],
@@ -105,7 +104,7 @@ export default function SettingsPage() {
                 getDashboardStats()
             ]);
 
-            setProductsCount(dashStats.productsSynced || 0);
+            setProductsCount(dashStats.totalProducts || 0);
 
             setStores({
                 shopify: { 
