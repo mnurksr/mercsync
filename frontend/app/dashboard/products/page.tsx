@@ -940,7 +940,7 @@ export default function ProductsPage() {
                                                                             </td>
                                                                             <td className="px-4 py-3">
                                                                                 <span className="text-sm font-medium text-gray-900">{variant.price}</span>
-                                                                                <span className="text-[10px] text-gray-500 ml-0.5">TL</span>
+                                                                                <span className="text-[10px] text-gray-500 ml-0.5">$</span>
                                                                             </td>
                                                                             <td className="px-4 py-3 text-right">
                                                                                 {variant.isMatched ? (

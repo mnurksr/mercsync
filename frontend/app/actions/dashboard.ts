@@ -9,6 +9,7 @@ export type DashboardStats = {
     atRiskProducts: number
     connectedStores: number
     lastSync: string
+    matchedProducts: number
 }
 
 export type ActivityItem = {
@@ -79,7 +80,6 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
     }
 
     // Success Rate & Last Sync from Ledger
-    // Calculate simple success rate from last 100 entries
     let successRate = 0
     let lastSyncTime = '--'
 
@@ -89,14 +89,35 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
             .select('created_at, reason_code')
             .in('shop_id', shopIds)
             .order('created_at', { ascending: false })
-            .limit(50)
+            .limit(100)
 
         if (ledger && ledger.length > 0) {
-            lastSyncTime = new Date(ledger[0].created_at).toLocaleString()
-            // Assume all ledger entries are successful syncs/changes for now unless we have status
-            // The logic for 'success' vs 'error' isn't explicit in schema, so assume 98% for MVP unless error log table exists
-            successRate = 98
+            // Calculate relative time for last sync
+            const lastDate = new Date(ledger[0].created_at)
+            const diffMs = Date.now() - lastDate.getTime()
+            const diffMins = Math.floor(diffMs / 60000)
+            if (diffMins < 1) lastSyncTime = 'Just now'
+            else if (diffMins < 60) lastSyncTime = `${diffMins}m ago`
+            else if (diffMins < 1440) lastSyncTime = `${Math.floor(diffMins / 60)}h ago`
+            else lastSyncTime = `${Math.floor(diffMins / 1440)}d ago`
+
+            // Calculate success rate: entries with known sync reason codes are successful
+            const errorCodes = ['sync_error', 'api_error', 'rate_limit', 'timeout']
+            const errorCount = ledger.filter(e => errorCodes.includes(e.reason_code)).length
+            successRate = Math.round(((ledger.length - errorCount) / ledger.length) * 100)
         }
+    }
+
+    // Matched products count (products with both Shopify and Etsy IDs)
+    let matchedCount = 0
+    if (shopIds.length > 0) {
+        const { count } = await supabase
+            .from('inventory_items')
+            .select('*', { count: 'exact', head: true })
+            .in('shop_id', shopIds)
+            .not('shopify_variant_id', 'is', null)
+            .not('etsy_variant_id', 'is', null)
+        matchedCount = count || 0
     }
 
     return {
@@ -104,7 +125,8 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         syncSuccessRate: successRate,
         atRiskProducts: riskProducts,
         connectedStores: storeCount || 0,
-        lastSync: lastSyncTime
+        lastSync: lastSyncTime,
+        matchedProducts: matchedCount
     }
 }
 

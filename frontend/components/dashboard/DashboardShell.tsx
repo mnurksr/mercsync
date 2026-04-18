@@ -80,9 +80,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                             <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </button>
                         <NotificationBell />
-                        <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-sm font-semibold text-white">
-                            {user?.email?.charAt(0).toUpperCase() || 'U'}
-                        </div>
                     </div>
                 </header>
 

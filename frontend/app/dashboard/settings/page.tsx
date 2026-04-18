@@ -906,62 +906,188 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
     );
 }
 
-// ─── Billing Tab (populated with real data) ──
+// ─── Billing Tab (with inline plan cards) ──
+
+const PLAN_TIERS = [
+    {
+        id: 'starter',
+        name: 'Starter',
+        price: 29,
+        color: 'from-blue-500 to-indigo-600',
+        description: 'For small shops getting started',
+        features: ['Up to 100 products synced', '2 connected stores', 'Automatic stock sync', 'Email support']
+    },
+    {
+        id: 'professional',
+        name: 'Professional',
+        price: 79,
+        color: 'from-violet-500 to-purple-600',
+        popular: true,
+        description: 'For growing businesses',
+        features: ['Up to 1,000 products synced', '5 connected stores', 'Real-time stock sync', 'Priority support', 'AI-powered matching']
+    },
+    {
+        id: 'enterprise',
+        name: 'Enterprise',
+        price: 199,
+        color: 'from-gray-800 to-gray-900',
+        description: 'For high-volume sellers',
+        features: ['Unlimited products synced', 'Unlimited stores', 'Dedicated account manager', 'API access', 'SLA guarantee']
+    }
+];
 
 function BillingTab({ stores }: { stores: any }) {
+    const toast = useToast();
+    const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
     const planType = stores.shopify?.plan_type || 'guest';
     const planLabel = planType === 'guest' ? 'Free' : planType.charAt(0).toUpperCase() + planType.slice(1);
     const isPaid = planType && !['guest', 'none', 'pending', 'basic'].includes(planType.toLowerCase());
+    const currentPlanId = isPaid ? planType.toLowerCase() : null;
+
+    const handleSelectPlan = async (planId: string) => {
+        if (planId === currentPlanId) return;
+        setLoadingPlan(planId);
+        try {
+            const res = await fetch('/api/billing/create-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan: planId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to create subscription');
+            if (data.confirmationUrl) {
+                window.top ? window.top.location.href = data.confirmationUrl : window.location.href = data.confirmationUrl;
+            } else {
+                throw new Error('No confirmation URL received');
+            }
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to start billing.');
+        } finally {
+            setLoadingPlan(null);
+        }
+    };
 
     return (
         <div className="space-y-4">
             <SectionHeader title="Billing & Plan" description="Manage your subscription and view usage" />
 
-            {/* Current Plan Card */}
+            {/* Current Plan Summary */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                            isPaid ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gray-100'
-                        }`}>
-                            {isPaid ? (
-                                <Star className="w-6 h-6 text-white" />
-                            ) : (
-                                <CreditCard className="w-6 h-6 text-gray-400" />
-                            )}
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-gray-900">{planLabel} Plan</h3>
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                    isPaid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                                }`}>
-                                    {isPaid ? 'Active' : 'Free Tier'}
-                                </span>
-                            </div>
-                            <p className="text-sm text-gray-500 mt-0.5">
-                                {isPaid
-                                    ? 'Your subscription is managed through Shopify Billing.'
-                                    : 'Upgrade to unlock automatic synchronization and premium features.'
-                                }
-                            </p>
-                        </div>
+                <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                        isPaid ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gray-100'
+                    }`}>
+                        {isPaid ? (
+                            <Star className="w-6 h-6 text-white" />
+                        ) : (
+                            <CreditCard className="w-6 h-6 text-gray-400" />
+                        )}
                     </div>
-                    <Link
-                        href="/billing"
-                        className={`px-5 py-2.5 font-medium rounded-xl text-sm transition-colors flex items-center gap-2 ${
-                            isPaid
-                                ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                    >
-                        {isPaid ? 'Manage Plan' : 'Upgrade'}
-                        <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-900">{planLabel} Plan</h3>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                isPaid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                                {isPaid ? 'Active' : 'Free Tier'}
+                            </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                            {isPaid
+                                ? 'Your subscription is managed through Shopify Billing.'
+                                : 'Upgrade to unlock automatic synchronization and premium features.'
+                            }
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            {/* Quota */}
+            {/* Plan Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {PLAN_TIERS.map((plan) => {
+                    const isCurrent = plan.id === currentPlanId;
+                    const isLoading = loadingPlan === plan.id;
+
+                    return (
+                        <div
+                            key={plan.id}
+                            className={`relative bg-white rounded-2xl border overflow-hidden transition-all hover:shadow-md ${
+                                isCurrent
+                                    ? 'border-indigo-300 ring-2 ring-indigo-100'
+                                    : plan.popular
+                                        ? 'border-violet-200'
+                                        : 'border-gray-200'
+                            }`}
+                        >
+                            {plan.popular && !isCurrent && (
+                                <div className="absolute -top-px left-1/2 -translate-x-1/2">
+                                    <span className="inline-block px-3 py-0.5 bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider rounded-b-lg">
+                                        Most Popular
+                                    </span>
+                                </div>
+                            )}
+                            {isCurrent && (
+                                <div className="absolute -top-px left-1/2 -translate-x-1/2">
+                                    <span className="inline-block px-3 py-0.5 bg-indigo-600 text-white text-[9px] font-bold uppercase tracking-wider rounded-b-lg">
+                                        Current Plan
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="p-5 flex-1">
+                                <div className="flex items-center gap-3 mb-3 mt-2">
+                                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${plan.color} flex items-center justify-center`}>
+                                        <Star className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-gray-900 text-sm">{plan.name}</h4>
+                                        <p className="text-[11px] text-gray-500">{plan.description}</p>
+                                    </div>
+                                </div>
+
+                                <div className="mb-4">
+                                    <span className="text-2xl font-extrabold text-gray-900">${plan.price}</span>
+                                    <span className="text-xs text-gray-400 ml-1">/month</span>
+                                </div>
+
+                                <ul className="space-y-1.5 mb-4">
+                                    {plan.features.map((f, i) => (
+                                        <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                            <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                            <span>{f}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            <div className="px-5 pb-5">
+                                <button
+                                    onClick={() => handleSelectPlan(plan.id)}
+                                    disabled={isCurrent || !!loadingPlan}
+                                    className={`w-full py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 ${
+                                        isCurrent
+                                            ? 'bg-indigo-50 text-indigo-600 cursor-default'
+                                            : plan.popular
+                                                ? 'bg-gray-900 text-white hover:bg-gray-800'
+                                                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {isLoading ? (
+                                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...</>
+                                    ) : isCurrent ? (
+                                        <><Check className="w-3.5 h-3.5" /> Current Plan</>
+                                    ) : (
+                                        <><ArrowRight className="w-3.5 h-3.5" /> {isPaid ? 'Switch Plan' : 'Get Started'}</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Usage */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-4">Usage This Month</h3>
                 <div className="space-y-4">
@@ -991,6 +1117,10 @@ function BillingTab({ stores }: { stores: any }) {
                     </div>
                 </div>
             </div>
+
+            <p className="text-xs text-gray-400 text-center">
+                Secure payment powered by Shopify Billing. Cancel anytime from your Shopify admin.
+            </p>
         </div>
     );
 }
@@ -1138,11 +1268,6 @@ function StoreCard({ name, icon, color, connected, domain, currency, onConnect, 
                                     <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-emerald-100 flex items-center gap-1">
                                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Connected
                                     </span>
-                                    {currency && (
-                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wider rounded-md border border-gray-200">
-                                            {currency}
-                                        </span>
-                                    )}
                                 </div>
                             )}
                         </div>

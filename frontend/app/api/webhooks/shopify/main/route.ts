@@ -36,9 +36,15 @@ export async function POST(req: NextRequest) {
         switch (topic) {
             case 'app/uninstalled':
                 console.log(`[Shopify Webhook] App uninstalled for ${shop}`);
+                // Deactivate shop and clear sensitive tokens immediately.
+                // Full data deletion happens via shop/redact GDPR webhook 48h later.
                 await supabase
                     .from('shops')
-                    .update({ is_active: false, shopify_connected: false })
+                    .update({ 
+                        is_active: false, 
+                        shopify_connected: false,
+                        access_token: null
+                    })
                     .eq('shop_domain', shop);
                 break;
 
