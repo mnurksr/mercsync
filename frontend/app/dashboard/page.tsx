@@ -186,9 +186,9 @@ export default function Dashboard() {
         );
     }
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-8 pb-20">
             {/* ═══ Header with Refresh ═══ */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Overview</h1>
                     <p className="text-sm text-gray-500 font-medium capitalize">Real-time store synchronization overview</p>
@@ -256,173 +256,159 @@ export default function Dashboard() {
                 </div>
             </section>
 
-            {/* ═══ Health Status Area ═══ */}
-            {stats.mismatchCount > 0 || stats.actionRequiredCount > 0 ? (
-                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-red-50 text-red-600 rounded-xl">
-                                <AlertTriangle className="w-5 h-5" />
+            {/* ═══ Main Display Grid ═══ */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                {/* ── LEFT COLUMN: Feeds (Activity & Notifications) ── */}
+                <div className="lg:col-span-8 space-y-8">
+                    
+                    {/* Recent Sync Activity */}
+                    <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                                    <Activity className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-black text-gray-900">Live Sync Activity</h3>
                             </div>
-                            <div>
-                                <h3 className="text-xl font-black text-gray-900">Inventory Health Alerts</h3>
-                                <p className="text-xs text-red-500 font-bold uppercase tracking-widest mt-1">Manual intervention required for {stats.mismatchCount + stats.actionRequiredCount} items</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3">
-                            {stats.mismatchCount > 0 && (
-                                <button 
-                                    onClick={handlePushMismatch}
-                                    disabled={isPushingMismatch}
-                                    className="flex items-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-amber-600/20"
-                                >
-                                    {isPushingMismatch ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                                    Sync All Mismatches
-                                </button>
-                            )}
-                            <Link href="/dashboard/inventory" className="px-6 py-3 bg-gray-100 text-gray-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-900 hover:text-white transition-all">
-                                View Inventory
+                            <Link href="/dashboard/sync-history" className="text-[10px] font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors">
+                                View Full History
                             </Link>
                         </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Action Required List */}
-                        {stats.actionRequiredCount > 0 && (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg w-fit text-[10px] font-black uppercase">
-                                    <AlertTriangle className="w-3 h-3" /> Mappings Needed
+                        <div className="space-y-1">
+                            {activities.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Activity className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                                    <p className="text-sm text-gray-400 font-bold">Passive Monitoring</p>
+                                    <p className="text-xs text-gray-300">Activity will be logged here as sync happens.</p>
                                 </div>
-                                <div className="space-y-2">
-                                    {stats.actionRequiredItems.slice(0, 3).map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50/50 hover:bg-white border border-transparent hover:border-gray-100 transition-all group">
-                                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-200 shrink-0">
-                                                {item.image_url ? <img src={item.image_url} className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-gray-400 m-3" />}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-xs font-black text-gray-900 truncate">{item.name}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold">{item.sku}</p>
-                                            </div>
-                                            <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Mismatch List */}
-                        {stats.mismatchCount > 0 && (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg w-fit text-[10px] font-black uppercase">
-                                    <Activity className="w-3 h-3" /> Stock Discrepancies
-                                </div>
-                                <div className="space-y-2">
-                                    {stats.mismatchItems.slice(0, 3).map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50/50 hover:bg-white border border-transparent hover:border-gray-100 transition-all group">
-                                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-200 shrink-0">
-                                                {item.image_url ? <img src={item.image_url} className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-gray-400 m-3" />}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-xs font-black text-gray-900 truncate">{item.name}</p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-[10px] font-bold text-blue-600">S: {item.shopify_stock_snapshot}</span>
-                                                    <span className="text-[10px] font-bold text-orange-600">E: {item.etsy_stock_snapshot}</span>
-                                                </div>
-                                            </div>
-                                            <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-900 transition-colors" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </section>
-            ) : (
-                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shadow-inner scale-110">
-                            <CheckCircle2 className="w-8 h-8" />
+                            ) : (
+                                activities.slice(0, 10).map((item) => (
+                                    <ActivityItemRow key={item.id} item={item} />
+                                ))
+                            )}
                         </div>
-                        <div>
-                            <h3 className="text-xl font-black text-gray-900">Store Connection Healthy</h3>
-                            <p className="text-sm text-gray-400 font-bold">All matched items are currently in sync across your Shopify and Etsy stores.</p>
-                        </div>
-                    </div>
-                    <Link href="/dashboard/inventory" className="flex items-center gap-3 px-8 py-4 bg-gray-50 hover:bg-gray-900 text-gray-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all group">
-                        Manage Inventory <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-                </section>
-            )}
+                    </section>
 
-            {/* ═══ Activity & Notifications ═══ */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                {/* Notifications List */}
-                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                                <Bell className="w-5 h-5" />
+                    {/* Recent Alerts Feed */}
+                    <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+                                    <Bell className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-black text-gray-900">Recent Alerts</h3>
                             </div>
-                            <h3 className="text-lg font-black text-gray-900">Recent Alerts</h3>
                         </div>
-                    </div>
 
-                    <div className="space-y-4">
-                        {notifications.length === 0 ? (
-                            <div className="text-center py-12">
-                                <Bell className="w-12 h-12 text-gray-100 mx-auto mb-4" />
-                                <p className="text-sm text-gray-400 font-bold">Everything looks great!</p>
-                                <p className="text-xs text-gray-300">No new notifications to show.</p>
-                            </div>
-                        ) : (
-                            notifications.slice(0, 5).map((item) => (
-                                <div key={item.id} className={`p-4 rounded-2xl border transition-all ${!item.is_read ? 'bg-indigo-50/30 border-indigo-100' : 'bg-gray-50/50 border-gray-100'}`}>
-                                    <div className="flex justify-between items-start gap-4">
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`text-sm ${!item.is_read ? 'font-black text-gray-900' : 'font-bold text-gray-600'}`}>{item.title}</p>
-                                            <p className="text-xs text-gray-500 mt-1 line-clamp-1">{item.message}</p>
+                        <div className="space-y-4">
+                            {notifications.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Bell className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                                    <p className="text-sm text-gray-400 font-bold">Everything looks great!</p>
+                                    <p className="text-xs text-gray-300">No new notifications to show.</p>
+                                </div>
+                            ) : (
+                                notifications.slice(0, 5).map((item) => (
+                                    <div key={item.id} className={`p-4 rounded-2xl border transition-all ${!item.is_read ? 'bg-indigo-50/30 border-indigo-100/50' : 'bg-gray-50/50 border-gray-100'}`}>
+                                        <div className="flex justify-between items-start gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`text-sm ${!item.is_read ? 'font-black text-gray-900' : 'font-bold text-gray-600'}`}>{item.title}</p>
+                                                <p className="text-xs text-gray-500 mt-1 line-clamp-1">{item.message}</p>
+                                            </div>
+                                            <span className="text-[10px] font-black text-gray-400 whitespace-nowrap uppercase tracking-widest">{timeAgo(item.created_at)}</span>
                                         </div>
-                                        <span className="text-[10px] font-black text-gray-400 whitespace-nowrap uppercase tracking-widest">{timeAgo(item.created_at)}</span>
+                                        {item.action_url && (
+                                            <Link href={item.action_url} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest">
+                                                View Details <ArrowRight className="w-2.5 h-2.5" />
+                                            </Link>
+                                        )}
                                     </div>
-                                    {item.action_url && (
-                                        <Link href={item.action_url} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest">
-                                            View Details <ArrowRight className="w-2.5 h-2.5" />
-                                        </Link>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </section>
-
-                {/* Recent Sync Activity */}
-                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                                <Activity className="w-5 h-5" />
-                            </div>
-                            <h3 className="text-lg font-black text-gray-900">Sync Activity</h3>
+                                ))
+                            )}
                         </div>
-                        <Link href="/dashboard/history" className="text-xs font-black text-emerald-600 hover:text-emerald-800 uppercase tracking-widest flex items-center gap-2">
-                            View All <ArrowRight className="w-3 h-3" />
-                        </Link>
-                    </div>
+                    </section>
+                </div>
 
-                    <div className="space-y-1">
-                        {activities.length === 0 ? (
-                            <div className="text-center py-12">
-                                <Activity className="w-12 h-12 text-gray-100 mx-auto mb-4" />
-                                <p className="text-sm text-gray-400 font-bold">Passive Monitoring</p>
-                                <p className="text-xs text-gray-300">Activity will be logged here as sync happens.</p>
+                {/* ── RIGHT COLUMN: Health Sidebar ── */}
+                <div className="lg:col-span-4 sticky top-8">
+                    <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 flex flex-col">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stats.mismatchCount > 0 || stats.actionRequiredCount > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                {stats.mismatchCount > 0 || stats.actionRequiredCount > 0 ? <AlertTriangle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
                             </div>
-                        ) : (
-                            activities.map((item) => (
-                                <ActivityItemRow key={item.id} item={item} />
-                            ))
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Inventory Health</h3>
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${stats.mismatchCount > 0 || stats.actionRequiredCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                                    {stats.mismatchCount > 0 || stats.actionRequiredCount > 0 ? 'Action Required' : 'Status: Healthy'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Summary Boxes Box */}
+                        <div className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 mb-8">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Current Issues</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Link href="/dashboard/products?status=unmatched" className="p-4 bg-white rounded-2xl border border-gray-100 hover:border-red-200 hover:shadow-md transition-all group">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 group-hover:text-red-600">Mappings</p>
+                                    <span className="text-2xl font-black text-gray-900">{stats.actionRequiredCount}</span>
+                                </Link>
+                                <Link href="/dashboard/inventory" className="p-4 bg-white rounded-2xl border border-gray-100 hover:border-amber-200 hover:shadow-md transition-all group">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 group-hover:text-amber-600">Mismatch</p>
+                                    <span className="text-2xl font-black text-gray-900">{stats.mismatchCount}</span>
+                                </Link>
+                            </div>
+                        </div>
+
+                        {/* Problematic List (Nested inside) */}
+                        {(stats.actionRequiredCount > 0 || stats.mismatchCount > 0) && (
+                            <div className="flex-1">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Immediate Attention</p>
+                                <div className="space-y-3">
+                                    {[...stats.actionRequiredItems, ...stats.mismatchItems].slice(0, 5).map((item) => (
+                                        <div key={item.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-gray-100 hover:shadow-lg hover:shadow-gray-200/50 transition-all group">
+                                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-50 shrink-0 border border-gray-100">
+                                                {item.image_url ? <img src={item.image_url} className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-gray-300 m-3" />}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-black text-gray-900 truncate">{item.name}</p>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                                                    {item.shopify_stock_snapshot !== undefined ? `Stock: ${item.shopify_stock_snapshot} vs ${item.etsy_stock_snapshot}` : 'Needs Mapping'}
+                                                </p>
+                                            </div>
+                                            <ArrowRight className="w-3 h-3 text-gray-300 group-hover:text-gray-900 transition-colors" />
+                                        </div>
+                                    ))}
+                                </div>
+                                <Link href="/dashboard/inventory" className="mt-4 block text-center text-[10px] font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors">
+                                    Check All Issues <ArrowRight className="inline w-2.5 h-2.5 ml-1" />
+                                </Link>
+                            </div>
                         )}
-                    </div>
-                </section>
+
+                        {/* Push Button Integrated inside */}
+                        {stats.mismatchCount > 0 && (
+                            <button 
+                                onClick={handlePushMismatch}
+                                disabled={isPushingMismatch}
+                                className="mt-8 flex items-center justify-center gap-3 py-5 bg-indigo-600 disabled:bg-gray-100 text-white disabled:text-gray-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/30 active:scale-95 group"
+                            >
+                                {isPushingMismatch ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                Sync All Discrepancies
+                            </button>
+                        )}
+
+                        {stats.mismatchCount === 0 && stats.actionRequiredCount === 0 && (
+                            <div className="py-12 text-center">
+                                <div className="w-16 h-16 bg-emerald-50 text-emerald-400 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                                    <CheckCircle2 className="w-8 h-8" />
+                                </div>
+                                <p className="text-sm font-black text-gray-900">Your Store is Healthy</p>
+                                <p className="text-xs text-gray-400 font-bold max-w-[180px] mx-auto mt-2">All matched items are perfectly in sync across Shopify & Etsy.</p>
+                            </div>
+                        )}
+                    </section>
+                </div>
             </div>
         </div>
     );

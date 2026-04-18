@@ -103,7 +103,9 @@ export async function createNotification(
     if (!eventEnabled) return
 
     // 2. In-App Notification
-    if (channels?.in_app) {
+    // Channels should also default to TRUE for critical events if null/undefined
+    const inAppEnabled = channels?.in_app ?? isCritical
+    if (inAppEnabled) {
         await supabase.from('notifications').insert({
             shop_id: shopId,
             type: type,
@@ -115,7 +117,8 @@ export async function createNotification(
     }
 
     // 3. Email Notification (Resend) — build Shopify embedded app URL
-    if (channels?.email && settings.notification_email) {
+    const emailEnabled = channels?.email ?? isCritical
+    if (emailEnabled && settings.notification_email) {
         let absoluteUrl: string | null = null;
         if (actionUrl) {
             // Fetch shop_domain for building the embedded URL
