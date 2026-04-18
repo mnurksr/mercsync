@@ -215,6 +215,25 @@ export async function handlePriceUpdate(
             return { status: 'skipped', message: 'No prices needed updating based on rules' };
         }
 
+        // --- CHANGE DETECTION ---
+        // If ALL calculated prices match what we pushed last time, skip the API call.
+        let hasPriceChange = false;
+        for (const mapping of variantMappings) {
+            const calculated = newPrices[mapping.etsy_variant_id!];
+            if (calculated === undefined) continue;
+            
+            const lastPushed = mapping.last_synced_etsy_price ? parseFloat(mapping.last_synced_etsy_price) : 0;
+            if (Math.abs(calculated - lastPushed) > 0.009) { // Using 0.01 margin for float variations
+                hasPriceChange = true;
+                break;
+            }
+        }
+
+        if (!hasPriceChange) {
+            console.log(`[Price Sync] Calculated prices match last_synced_etsy_price for all variants. Skipping Etsy push.`);
+            return { status: 'skipped', message: 'Prices are already up to date on Etsy' };
+        }
+
         // 6. Fetch the current Etsy Inventory (Required to build the exact PUT payload)
         console.log(`[Price Sync] Fetching current Etsy inventory for listing ${etsyListingId}...`);
         const currentInventory = await getInventory(etsyListingId, shop.etsy_access_token);

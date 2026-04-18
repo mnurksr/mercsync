@@ -94,7 +94,12 @@ export async function createNotification(
     if (!settings) return
 
     const { notification_channels: channels, notification_events: events } = settings
-    const eventEnabled = events?.[type]
+    
+    // Critical events should be ENABLED by default if settings are null or true.
+    // Only explicitly 'false' should block them.
+    const isCritical = ['stock_zero', 'sync_failed', 'oversell_risk'].includes(type)
+    const eventEnabled = events?.[type] ?? isCritical
+    
     if (!eventEnabled) return
 
     // 2. In-App Notification
