@@ -10,7 +10,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getConnectedShop } from '../actions/shop';
 import { getDashboardStats, getRecentActivity, type DashboardStats, type ActivityItem } from '../actions/dashboard';
-import { getSetupStatus, type SetupStatus } from '../actions/staging';
+import { getNotifications, markAsRead, type NotificationItem } from '../actions/notifications';
+import { pushMismatchStock } from '../actions/inventory';
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
@@ -24,14 +25,18 @@ export default function Dashboard() {
     const [isLoading, setIsLoading] = useState(true);
 
     const [stats, setStats] = useState<DashboardStats>({
-        productsSynced: 0,
-        syncSuccessRate: 0,
-        atRiskProducts: 0,
+        totalProducts: 0,
+        matchedProducts: 0,
+        mismatchCount: 0,
+        actionRequiredCount: 0,
         connectedStores: 0,
         lastSync: '--',
-        matchedProducts: 0
+        mismatchItems: [],
+        actionRequiredItems: []
     });
     const [activities, setActivities] = useState<ActivityItem[]>([]);
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [isPushingMismatch, setIsPushingMismatch] = useState(false);
 
     const [stores, setStores] = useState({
         shopify: { connected: false, name: null as string | null, lastSync: null as string | null },
@@ -82,12 +87,12 @@ export default function Dashboard() {
 
     const loadData = async () => {
         try {
-            const [shopify, etsy, dashboardStats, recentActivity, wizardStatus] = await Promise.all([
+            const [shopify, etsy, dashboardStats, recentActivity, latestNotifications] = await Promise.all([
                 getConnectedShop('shopify'),
                 getConnectedShop('etsy'),
                 getDashboardStats(),
                 getRecentActivity(),
-                getSetupStatus()
+                getNotifications()
             ]);
 
             // Security check: If Server Actions couldn't find ANY identity (Session OR Cookie)
@@ -102,9 +107,6 @@ export default function Dashboard() {
                 router.push('/billing');
                 return;
             }
-
-            // NOTE: The Server-Side layout.tsx guard handles routing for incomplete setup or missing plans.
-            // We no longer need to check `wizardStatus.isComplete` or `shopify.plan_type` here on the client.
 
             const newStores = {
                 shopify: {
@@ -122,12 +124,30 @@ export default function Dashboard() {
             setStores(newStores);
             setStats(dashboardStats);
             setActivities(recentActivity);
+            setNotifications(latestNotifications);
 
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
+        }
+    };
+
+    const handlePushMismatch = async () => {
+        setIsPushingMismatch(true);
+        try {
+            const res = await pushMismatchStock();
+            if (res.success) {
+                toast.success(res.message);
+                loadData();
+            } else {
+                toast.error(res.message);
+            }
+        } catch {
+            toast.error('Failed to push mismatch stock');
+        } finally {
+            setIsPushingMismatch(false);
         }
     };
 
@@ -164,50 +184,77 @@ export default function Dashboard() {
         );
     }
 
-    return (
-        <div className="space-y-6">
-            {/* ═══ Stat Cards ═══ */}
-            <section>
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Sync Health</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard
-                        icon={<Package className="w-5 h-5 text-blue-600" />}
-                        bgColor="bg-blue-50"
-                        value={stats.productsSynced}
-                        label="Total Products"
-                    />
-                    <StatCard
-                        icon={<TrendingUp className="w-5 h-5 text-green-600" />}
-                        bgColor="bg-green-50"
-                        value={`${stats.syncSuccessRate}%`}
-                        label="Sync Success Rate"
-                        valueColor={stats.syncSuccessRate >= 90 ? 'text-green-600' : stats.syncSuccessRate >= 50 ? 'text-yellow-600' : 'text-red-600'}
-                    />
-                    <StatCard
-                        icon={<AlertTriangle className="w-5 h-5 text-orange-600" />}
-                        bgColor="bg-orange-50"
-                        value={stats.atRiskProducts}
-                        label="Low Stock Items"
-                        valueColor={stats.atRiskProducts > 0 ? 'text-orange-600' : 'text-gray-900'}
-                    />
-                    <StatCard
-                        icon={<Clock className="w-5 h-5 text-purple-600" />}
-                        bgColor="bg-purple-50"
-                        value={stats.lastSync}
-                        label="Last Sync"
-                    />
+        <div className="space-y-6 pb-20">
+            {/* ═══ Header with Refresh ═══ */}
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Overview</h1>
+                    <p className="text-sm text-gray-500 font-medium capitalize">Real-time store synchronization overview</p>
                 </div>
-            </section>
+                <button 
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-50"
+                >
+                    <RefreshCw className={`w-5 h-5 text-indigo-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
 
-            {/* ═══ Middle Row: Store Status + Quick Actions ═══ */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Store Connection Status */}
-                <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <Link2 className="w-4 h-4 text-gray-400" />
-                        Connected Platforms
-                    </h3>
-                    <div className="space-y-3">
+            {/* ═══ Inventory Summary Row ═══ */}
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Stats Card */}
+                <div className="lg:col-span-2 bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900">Inventory Sync Health</h3>
+                            <p className="text-xs text-gray-400 font-semibold tracking-wide uppercase mt-1">Product Data Stats</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                            <Clock className="w-3 h-3" /> {stats.lastSync}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Package className="w-6 h-6" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-500">Total Products</span>
+                            </div>
+                            <div className="flex items-end gap-2">
+                                <span className="text-4xl font-black text-gray-900">{stats.totalProducts}</span>
+                                <span className="text-xs text-gray-400 font-bold mb-1">Unique Items</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Link2 className="w-6 h-6" />
+                                </div>
+                                <span className="text-sm font-bold text-gray-500">Matched Sync</span>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-end gap-2">
+                                    <span className="text-4xl font-black text-gray-900">{stats.matchedProducts}</span>
+                                    <span className="text-xs text-gray-400 font-bold mb-1">/ {stats.totalProducts} matched</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                                    <div 
+                                        className="bg-emerald-500 h-1.5 rounded-full" 
+                                        style={{ width: `${stats.totalProducts > 0 ? (stats.matchedProducts / stats.totalProducts) * 100 : 0}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Platform Status */}
+                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 flex flex-col">
+                    <h3 className="text-lg font-black text-gray-900 mb-6">Store Connections</h3>
+                    <div className="space-y-4 flex-1">
                         <PlatformRow
                             name="Shopify"
                             icon={<ShoppingBag className="w-4 h-4 text-white" />}
@@ -223,77 +270,229 @@ export default function Dashboard() {
                             domain={stores.etsy.name}
                         />
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-50">
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-500">Matched Products</span>
-                            <span className="font-bold text-gray-900">{stats.matchedProducts} / {stats.productsSynced}</span>
+                    <Link 
+                        href="/dashboard/settings" 
+                        className="mt-6 flex items-center justify-center gap-2 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-900 hover:text-white transition-all group"
+                    >
+                        Store Settings <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                </div>
+            </section>
+
+            {/* ═══ Alerts Row (Mismatches & Action Required) ═══ */}
+            {(stats.mismatchCount > 0 || stats.actionRequiredCount > 0) && (
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Action Required */}
+                    <div className="bg-red-50/50 border border-red-100 rounded-[2rem] p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-red-100 text-red-600 rounded-xl">
+                                    <AlertTriangle className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-black text-red-900">Action Required</h3>
+                            </div>
+                            <span className="px-3 py-1 bg-red-600 text-white rounded-full text-[10px] font-black">{stats.actionRequiredCount} ITEMS</span>
                         </div>
-                        <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
-                            <div
-                                className="bg-indigo-500 h-1.5 rounded-full transition-all"
-                                style={{ width: stats.productsSynced > 0 ? `${Math.round((stats.matchedProducts / stats.productsSynced) * 100)}%` : '0%' }}
-                            />
+                        
+                        <div className="space-y-3 mb-6">
+                            {stats.actionRequiredItems.map(item => (
+                                <div key={item.id} className="bg-white/80 p-3 rounded-2xl flex items-center gap-3 border border-red-50">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0">
+                                        {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-gray-300" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-black text-gray-900 truncate">{item.name}</p>
+                                        <p className="text-[10px] font-bold text-gray-400">{item.sku}</p>
+                                    </div>
+                                    <Link href="/dashboard/inventory" className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
+                                        <ArrowRight className="w-4 h-4" />
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                        <Link href="/dashboard/inventory" className="text-xs font-black text-red-600 hover:text-red-800 flex items-center gap-2 uppercase tracking-wide">
+                            View All Items <ArrowRight className="w-3 h-3" />
+                        </Link>
+                    </div>
+
+                    {/* Mismatches */}
+                    <div className="bg-amber-50/50 border border-amber-100 rounded-[2rem] p-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-amber-100 text-amber-600 rounded-xl">
+                                    <Activity className="w-5 h-5" />
+                                </div>
+                                <h3 className="text-lg font-black text-amber-900">Inventory Mismatch</h3>
+                            </div>
+                            <button 
+                                onClick={handlePushMismatch}
+                                disabled={isPushingMismatch}
+                                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-amber-600/20"
+                            >
+                                {isPushingMismatch ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                Push All to Sync
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 mb-6">
+                            {stats.mismatchItems.map(item => (
+                                <div key={item.id} className="bg-white/80 p-3 rounded-2xl flex items-center gap-3 border border-amber-50">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0 text-center flex items-center justify-center">
+                                         {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-gray-300" />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-black text-gray-900 truncate">{item.name}</p>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 rounded">S: {item.shopify_stock_snapshot}</span>
+                                            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 rounded">E: {item.etsy_stock_snapshot}</span>
+                                        </div>
+                                    </div>
+                                    <Link href="/dashboard/inventory" className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
+                                        <ArrowRight className="w-4 h-4" />
+                                    </Link>
+                                </div>
+                            ))}
+                        </div>
+                        <Link href="/dashboard/inventory" className="text-xs font-black text-amber-600 hover:text-amber-800 flex items-center gap-2 uppercase tracking-wide">
+                            Fix Discrepancies <ArrowRight className="w-3 h-3" />
+                        </Link>
+                    </div>
+                </section>
+            )}
+
+            {/* ═══ Activity & Notifications ═══ */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                {/* Notifications List */}
+                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                                <Bell className="w-5 h-5" />
+                            </div>
+                            <h3 className="text-lg font-black text-gray-900">Recent Alerts</h3>
                         </div>
                     </div>
-                </div>
 
-                {/* Quick Actions */}
-                <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-gray-400" />
-                        Quick Actions
-                    </h3>
-                    <div className="space-y-2">
-                        <QuickActionLink href="/dashboard/products" label="Manage Products" description="View, match, and sync your products" />
-                        <QuickActionLink href="/dashboard/inventory" label="Inventory Overview" description="Check stock levels across platforms" />
-                        <QuickActionLink href="/dashboard/history" label="Sync History" description="Review past synchronization events" />
-                        <QuickActionLink href="/dashboard/settings" label="Settings" description="Configure sync rules, locations, and billing" />
+                    <div className="space-y-4">
+                        {notifications.length === 0 ? (
+                            <div className="text-center py-12">
+                                <Bell className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                                <p className="text-sm text-gray-400 font-bold">Everything looks great!</p>
+                                <p className="text-xs text-gray-300">No new notifications to show.</p>
+                            </div>
+                        ) : (
+                            notifications.slice(0, 5).map((item) => (
+                                <div key={item.id} className={`p-4 rounded-2xl border transition-all ${!item.is_read ? 'bg-indigo-50/30 border-indigo-100' : 'bg-gray-50/50 border-gray-100'}`}>
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm ${!item.is_read ? 'font-black text-gray-900' : 'font-bold text-gray-600'}`}>{item.title}</p>
+                                            <p className="text-xs text-gray-500 mt-1 line-clamp-1">{item.message}</p>
+                                        </div>
+                                        <span className="text-[10px] font-black text-gray-400 whitespace-nowrap uppercase tracking-widest">{timeAgo(item.created_at)}</span>
+                                    </div>
+                                    {item.action_url && (
+                                        <Link href={item.action_url} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest">
+                                            View Details <ArrowRight className="w-2.5 h-2.5" />
+                                        </Link>
+                                    )}
+                                </div>
+                            ))
+                        )}
                     </div>
-                </div>
-            </div>
+                </section>
 
-            {/* ═══ Recent Activity ═══ */}
-            <section>
-                <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                            <RefreshCw className="w-4 h-4 text-gray-400" />
-                            Recent Activity
-                        </h3>
-                        <Link href="/dashboard/history" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                {/* Recent Sync Activity */}
+                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                                <Activity className="w-5 h-5" />
+                            </div>
+                            <h3 className="text-lg font-black text-gray-900">Sync Activity</h3>
+                        </div>
+                        <Link href="/dashboard/history" className="text-xs font-black text-emerald-600 hover:text-emerald-800 uppercase tracking-widest flex items-center gap-2">
                             View All <ArrowRight className="w-3 h-3" />
                         </Link>
                     </div>
 
-                    {activities.length === 0 ? (
-                        <div className="text-center py-8">
-                            <RefreshCw className="w-8 h-8 text-gray-200 mx-auto mb-3" />
-                            <p className="text-sm text-gray-400 font-medium">No sync activity yet</p>
-                            <p className="text-xs text-gray-300 mt-1">Activity will appear here once products start syncing</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-1">
-                            {activities.map((item) => (
-                                <div key={item.id} className="flex items-center gap-3 py-2.5 px-3 rounded-xl hover:bg-gray-50 transition-colors">
-                                    <div className={`w-2 h-2 rounded-full shrink-0 ${
-                                        item.status === 'success' ? 'bg-green-500' : item.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
-                                    }`} />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-gray-800 font-medium truncate">{item.action}</p>
-                                        <p className="text-xs text-gray-400 truncate">{item.product}</p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{item.platform}</span>
-                                        <p className="text-[10px] text-gray-300">{item.time}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </section>
+                    <div className="space-y-1">
+                        {activities.length === 0 ? (
+                            <div className="text-center py-12">
+                                <Activity className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                                <p className="text-sm text-gray-400 font-bold">Passive Monitoring</p>
+                                <p className="text-xs text-gray-300">Activity will be logged here as sync happens.</p>
+                            </div>
+                        ) : (
+                            activities.map((item) => (
+                                <ActivityItemRow key={item.id} item={item} />
+                            ))
+                        )}
+                    </div>
+                </section>
+            </div>
         </div>
     );
+}
+
+// ═══ Expanded Sub-Components ═══
+
+function ActivityItemRow({ item }: { item: ActivityItem }) {
+    return (
+        <div className="flex items-center gap-4 py-3 px-4 rounded-2xl hover:bg-gray-50 transition-colors group">
+            <div className={`w-2.5 h-2.5 rounded-full shrink-0 group-hover:scale-125 transition-transform ${item.status === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'}`} />
+            <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-900 font-black truncate">{item.action}</p>
+                <p className="text-[11px] text-gray-400 font-bold truncate">{item.product}</p>
+            </div>
+            <div className="text-right shrink-0">
+                <span className={`text-[9px] font-black uppercase tracking-widest ${item.platform === 'shopify' ? 'text-blue-500' : 'text-orange-500'}`}>{item.platform}</span>
+                <p className="text-[10px] text-gray-300 font-bold">{item.time}</p>
+            </div>
+        </div>
+    );
+}
+
+function PlatformRow({ name, icon, color, connected, domain }: {
+    name: string;
+    icon: React.ReactNode;
+    color: string;
+    connected: boolean;
+    domain: string | null;
+}) {
+    return (
+        <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50/50 border border-transparent hover:border-gray-100 transition-all">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: color }}>
+                {icon}
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-black text-gray-900">{name}</p>
+                {connected && domain && (
+                    <p className="text-xs text-gray-400 font-bold truncate opacity-60">{domain}</p>
+                )}
+            </div>
+            {connected ? (
+                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-100/50 px-2.5 py-1 rounded-lg uppercase tracking-wider">
+                    <CheckCircle2 className="w-3 h-3" /> Live
+                </span>
+            ) : (
+                <span className="flex items-center gap-1 text-[10px] font-black text-gray-400 bg-gray-100 px-2.5 py-1 rounded-lg uppercase tracking-wider">
+                    <XCircle className="w-3 h-3" /> Offline
+                </span>
+            )}
+        </div>
+    );
+}
+
+function timeAgo(dateStr: string) {
+    const date = new Date(dateStr);
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return `${seconds}S`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}M`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}H`;
+    const days = Math.floor(hours / 24);
+    return `${days}D`;
 }
 
 // ═══ Sub-Components ═══

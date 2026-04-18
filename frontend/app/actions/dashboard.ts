@@ -4,12 +4,14 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 
 export type DashboardStats = {
-    productsSynced: number
-    syncSuccessRate: number
-    atRiskProducts: number
+    totalProducts: number
+    matchedProducts: number
+    mismatchCount: number
+    actionRequiredCount: number
     connectedStores: number
     lastSync: string
-    matchedProducts: number
+    mismatchItems: any[]
+    actionRequiredItems: any[]
 }
 
 export type ActivityItem = {
@@ -32,101 +34,83 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         supabase = context.supabase
         resolvedOwnerId = context.ownerId
 
-        if (!resolvedOwnerId) return { productsSynced: 0, syncSuccessRate: 0, atRiskProducts: 0, connectedStores: 0, lastSync: '--' }
+        if (!resolvedOwnerId) return { totalProducts: 0, matchedProducts: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
     }
 
-    // Connected Stores
-    const { count: storeCount } = await supabase
-        .from('shops')
-        .select('*', { count: 'exact', head: true })
-        .eq('owner_id', resolvedOwnerId)
-        .eq('is_active', true)
-
-    // Products Synced (Total items)
-    const { count: productCount } = await supabase
-        .from('inventory_items')
-        .select('*', { count: 'exact', head: true })
-    // Assuming we filter by shop_id which belongs to user, but simplify:
-    // Join shops to filter by owner_id? 
-    // Or simpler: We need to know which shops belong to user first.
-    // For MVP, lets assume RLS filters items by shop ownership or we join.
-    // inventory_items has shop_id.
-    // Let's get user's shops first.
-
+    // 1. Get user's shops
     const { data: userShops } = await supabase
         .from('shops')
         .select('id')
         .eq('owner_id', resolvedOwnerId)
+        .eq('is_active', true)
 
     const shopIds = userShops?.map(s => s.id) || []
+    const storeCount = shopIds.length
 
-    let totalProducts = 0
-    let riskProducts = 0
-
-    if (shopIds.length > 0) {
-        const { count } = await supabase
-            .from('inventory_items')
-            .select('*', { count: 'exact', head: true })
-            .in('shop_id', shopIds)
-        totalProducts = count || 0
-
-        // At Risk: Low stock (<5)
-        const { count: riskCount } = await supabase
-            .from('inventory_items')
-            .select('*', { count: 'exact', head: true })
-            .in('shop_id', shopIds)
-            .lt('master_stock', 5)
-        riskProducts = riskCount || 0
+    if (shopIds.length === 0) {
+        return { totalProducts: 0, matchedProducts: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
     }
 
-    // Success Rate & Last Sync from Ledger
-    let successRate = 0
+    // 2. Count Unique Products and Collect Alerts
+    const { data: productStats } = await supabase
+        .from('inventory_items')
+        .select('id, name, sku, image_url, shopify_product_id, etsy_listing_id, status, shopify_stock_snapshot, etsy_stock_snapshot')
+        .in('shop_id', shopIds)
+
+    let uniqueProducts = new Set<string>()
+    let matchedProductsSet = new Set<string>()
+    let mismatchItems: any[] = []
+    let actionRequiredItems: any[] = []
+
+    if (productStats) {
+        productStats.forEach((item: any) => {
+            const productKey = item.shopify_product_id || item.etsy_listing_id
+            if (productKey) uniqueProducts.add(productKey)
+
+            if (item.shopify_product_id && item.etsy_listing_id) {
+                matchedProductsSet.add(productKey!)
+            }
+
+            // Variant level checks
+            if (item.status === 'Action Required') {
+                actionRequiredItems.push(item)
+            } else if (item.status === 'MISMATCH' || item.status === 'Mismatch' || item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
+                // Only count mismatch if both IDs are present (it's a linked item)
+                if (item.shopify_product_id && item.etsy_listing_id) {
+                    mismatchItems.push(item)
+                }
+            }
+        })
+    }
+
+    // 3. Last Sync from Ledger
     let lastSyncTime = '--'
+    const { data: ledger } = await supabase
+        .from('inventory_ledger')
+        .select('created_at')
+        .in('shop_id', shopIds)
+        .order('created_at', { ascending: false })
+        .limit(1)
 
-    if (shopIds.length > 0) {
-        const { data: ledger } = await supabase
-            .from('inventory_ledger')
-            .select('created_at, reason_code')
-            .in('shop_id', shopIds)
-            .order('created_at', { ascending: false })
-            .limit(100)
-
-        if (ledger && ledger.length > 0) {
-            // Calculate relative time for last sync
-            const lastDate = new Date(ledger[0].created_at)
-            const diffMs = Date.now() - lastDate.getTime()
-            const diffMins = Math.floor(diffMs / 60000)
-            if (diffMins < 1) lastSyncTime = 'Just now'
-            else if (diffMins < 60) lastSyncTime = `${diffMins}m ago`
-            else if (diffMins < 1440) lastSyncTime = `${Math.floor(diffMins / 60)}h ago`
-            else lastSyncTime = `${Math.floor(diffMins / 1440)}d ago`
-
-            // Calculate success rate: entries with known sync reason codes are successful
-            const errorCodes = ['sync_error', 'api_error', 'rate_limit', 'timeout']
-            const errorCount = ledger.filter(e => errorCodes.includes(e.reason_code)).length
-            successRate = Math.round(((ledger.length - errorCount) / ledger.length) * 100)
-        }
-    }
-
-    // Matched products count (products with both Shopify and Etsy IDs)
-    let matchedCount = 0
-    if (shopIds.length > 0) {
-        const { count } = await supabase
-            .from('inventory_items')
-            .select('*', { count: 'exact', head: true })
-            .in('shop_id', shopIds)
-            .not('shopify_variant_id', 'is', null)
-            .not('etsy_variant_id', 'is', null)
-        matchedCount = count || 0
+    if (ledger && ledger.length > 0) {
+        const lastDate = new Date(ledger[0].created_at)
+        const diffMs = Date.now() - lastDate.getTime()
+        const diffMins = Math.floor(diffMs / 60000)
+        if (diffMins < 1) lastSyncTime = 'Just now'
+        else if (diffMins < 60) lastSyncTime = `${diffMins}m ago`
+        else if (diffMins < 1440) lastSyncTime = `${Math.floor(diffMins / 60)}h ago`
+        else lastSyncTime = `${Math.floor(diffMins / 1440)}d ago`
     }
 
     return {
-        productsSynced: totalProducts,
-        syncSuccessRate: successRate,
-        atRiskProducts: riskProducts,
-        connectedStores: storeCount || 0,
+        totalProducts: uniqueProducts.size,
+        matchedProducts: matchedProductsSet.size,
+        mismatchCount: mismatchItems.length,
+        actionRequiredCount: actionRequiredItems.length,
+        connectedStores: storeCount,
         lastSync: lastSyncTime,
-        matchedProducts: matchedCount
+        mismatchItems: mismatchItems.slice(0, 5), // Only top 5 for dashboard
+        actionRequiredItems: actionRequiredItems.slice(0, 5)
     }
 }
 
