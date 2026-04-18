@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
+import { createNotification } from '../../../actions/notifications';
 
 const POLL_WINDOW_MS = 20 * 60 * 1000; // 20 minutes overlap to avoid missing orders
 
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
                 // 2. Check settings
                 const { data: settings } = await supabase
                     .from('shop_settings')
-                    .select('auto_sync_enabled, sync_direction, location_deduction_order')
+                    .select('auto_sync_enabled, sync_direction, location_deduction_order, low_stock_threshold')
                     .eq('shop_id', shop.id)
                     .maybeSingle();
 
@@ -187,12 +188,35 @@ export async function GET(req: NextRequest) {
                         }
 
                         // 8. Update DB
+                        const oldStock = item.master_stock || 0;
                         await supabase.from('inventory_items').update({
                             master_stock: newStock,
                             etsy_stock_snapshot: Math.max(0, (item.master_stock || 0) - quantity),
                             etsy_updated_at: new Date().toISOString(),
                             updated_at: new Date().toISOString()
                         }).eq('id', item.id);
+
+                        // --- 8a. Notification Triggers (Bidirectional) ---
+                        const threshold = settings?.low_stock_threshold || 0;
+                        if (newStock === 0) {
+                            await createNotification(
+                                supabase,
+                                shop.id,
+                                'stock_zero',
+                                'Stock Reached Zero',
+                                `Product (Item ID: ${item.shopify_inventory_item_id}) is out of stock after an Etsy order.`,
+                                `/dashboard/inventory`
+                            );
+                        } else if (threshold > 0 && newStock <= threshold && oldStock > threshold) {
+                            await createNotification(
+                                supabase,
+                                shop.id,
+                                'oversell_risk',
+                                'Low Stock Alert',
+                                `Product (Item ID: ${item.shopify_inventory_item_id}) dropped to ${newStock} units after an Etsy order.`,
+                                `/dashboard/inventory`
+                            );
+                        }
 
                         totalItemsSynced++;
                     }

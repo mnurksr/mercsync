@@ -202,105 +202,72 @@ export default function Dashboard() {
                 </button>
             </div>
 
-            {/* ═══ Inventory Summary Row ═══ */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Stats Card */}
-                <div className="lg:col-span-2 bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h3 className="text-lg font-black text-gray-900">Inventory Sync Health</h3>
-                            <p className="text-xs text-gray-400 font-semibold tracking-wide uppercase mt-1">Product Data Stats</p>
+            {/* ═══ Stats Overview ═══ */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Shopify Stat */}
+                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 group hover:shadow-2xl hover:shadow-gray-300/30 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <ShoppingBag className="w-6 h-6" />
                         </div>
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl text-[10px] font-black uppercase tracking-widest">
-                            <Clock className="w-3 h-3" /> {stats.lastSync}
+                        <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Shopify Items</p>
+                            <h3 className="text-sm font-black text-gray-900">Total Available</h3>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <Package className="w-6 h-6" />
-                                </div>
-                                <span className="text-sm font-bold text-gray-500">Inventory Overview</span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-end gap-2">
-                                    <span className="text-4xl font-black text-gray-900">{stats.totalProducts}</span>
-                                    <span className="text-xs text-gray-400 font-bold mb-1">Total Unique Items</span>
-                                </div>
-                                <div className="flex items-center gap-4 mt-2">
-                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-[10px] font-black uppercase">
-                                        <ShoppingBag className="w-3 h-3" /> Shopify: {stats.shopifyProductCount}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-[10px] font-black uppercase">
-                                        <Store className="w-3 h-3" /> Etsy: {stats.etsyProductCount}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-emerald-50/30 border border-emerald-100/50 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <Link2 className="w-6 h-6" />
-                                </div>
-                                <span className="text-sm font-bold text-gray-500">Cross-Store Linking</span>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-end gap-2">
-                                    <span className="text-4xl font-black text-gray-900">{stats.matchedProducts}</span>
-                                    <span className="text-xs text-gray-400 font-bold mb-1">Products Synced</span>
-                                </div>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Bidirectional sync active for these items</p>
-                            </div>
-                        </div>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black text-gray-900 tracking-tight">{stats.shopifyProductCount}</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Products</span>
                     </div>
                 </div>
 
-                {/* Instant Inventory Alerts replacing Store Connections */}
-                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 flex flex-col">
-                    <h3 className="text-lg font-black text-gray-900 mb-6">Instant Inventory</h3>
-                    
-                    <div className="space-y-4 flex-1">
-                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Mismatched Stock</span>
-                                <span className="text-base font-black text-amber-900">{stats.mismatchCount}</span>
-                            </div>
-                            <p className="text-[10px] text-amber-700/60 font-bold">Items with differing stock levels across platforms.</p>
+                {/* Etsy Stat */}
+                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 group hover:shadow-2xl hover:shadow-gray-300/30 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Store className="w-6 h-6" />
                         </div>
-
-                        <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">Action Required</span>
-                                <span className="text-base font-black text-red-900">{stats.actionRequiredCount}</span>
-                            </div>
-                            <p className="text-[10px] text-red-700/60 font-bold">Items requiring manual mapping or fix.</p>
+                        <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Etsy Items</p>
+                            <h3 className="text-sm font-black text-gray-900">Total Available</h3>
                         </div>
                     </div>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black text-gray-900 tracking-tight">{stats.etsyProductCount}</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Listings</span>
+                    </div>
+                </div>
 
-                    <button 
-                        onClick={handlePushMismatch}
-                        disabled={isPushingMismatch || stats.mismatchCount === 0}
-                        className="mt-6 flex items-center justify-center gap-3 py-4 bg-indigo-600 disabled:bg-gray-100 text-white disabled:text-gray-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 active:scale-95 group"
-                    >
-                        {isPushingMismatch ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        Push All Mismatches
-                    </button>
-                    <Link href="/dashboard/inventory" className="mt-3 text-center text-[10px] font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors">
-                        Go to full inventory <ArrowRight className="inline w-2.5 h-2.5 ml-1" />
-                    </Link>
+                {/* Matched Stat */}
+                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 group hover:shadow-2xl hover:shadow-gray-300/30 transition-all duration-300">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <Link2 className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sync Active</p>
+                            <h3 className="text-sm font-black text-gray-900">Matched Products</h3>
+                        </div>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-4xl font-black text-gray-900 tracking-tight">{stats.matchedProducts}</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Connected</span>
+                    </div>
                 </div>
             </section>
 
             {/* ═══ Health Status Area ═══ */}
-            {(stats.mismatchCount > 0 || stats.actionRequiredCount > 0) ? (
+            {stats.mismatchCount > 0 || stats.actionRequiredCount > 0 ? (
                 <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
                     <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h3 className="text-xl font-black text-gray-900">Inventory Health Alerts</h3>
-                            <p className="text-xs text-red-500 font-bold uppercase tracking-widest mt-1">Manual intervention required for {stats.mismatchCount + stats.actionRequiredCount} items</p>
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-red-50 text-red-600 rounded-xl">
+                                <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-gray-900">Inventory Health Alerts</h3>
+                                <p className="text-xs text-red-500 font-bold uppercase tracking-widest mt-1">Manual intervention required for {stats.mismatchCount + stats.actionRequiredCount} items</p>
+                            </div>
                         </div>
                         <div className="flex gap-3">
                             {stats.mismatchCount > 0 && (
@@ -371,18 +338,18 @@ export default function Dashboard() {
                     </div>
                 </section>
             ) : (
-                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shadow-inner">
-                            <CheckCircle2 className="w-6 h-6" />
+                <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shadow-inner scale-110">
+                            <CheckCircle2 className="w-8 h-8" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-black text-gray-900">System Healthy</h3>
-                            <p className="text-xs text-gray-400 font-bold">All matched products are currently in sync across platforms.</p>
+                            <h3 className="text-xl font-black text-gray-900">Store Connection Healthy</h3>
+                            <p className="text-sm text-gray-400 font-bold">All matched items are currently in sync across your Shopify and Etsy stores.</p>
                         </div>
                     </div>
-                    <Link href="/dashboard/inventory" className="text-[10px] font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest flex items-center gap-2 transition-colors">
-                        View Inventory <ArrowRight className="w-3 h-3" />
+                    <Link href="/dashboard/inventory" className="flex items-center gap-3 px-8 py-4 bg-gray-50 hover:bg-gray-900 text-gray-500 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all group">
+                        Manage Inventory <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                     </Link>
                 </section>
             )}
