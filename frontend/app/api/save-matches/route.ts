@@ -85,11 +85,17 @@ export async function POST(req: NextRequest) {
                     .eq('id', targetId);
             } else {
                 // Create new inventory item
-                // We'll try to pull some detail from staging to give it a name
+                // Pull details from both staging tables to seed the inventory item correctly
                 const { data: sProd } = await supabase
                     .from('staging_shopify_products')
-                    .select('name, sku')
+                    .select('name, sku, stock_quantity, location_inventory_map, selected_location_ids, image_url, shopify_inventory_item_id')
                     .eq('shopify_variant_id', shopify_variant_id)
+                    .maybeSingle();
+                    
+                const { data: eProd } = await supabase
+                    .from('staging_etsy_products')
+                    .select('stock_quantity, image_url')
+                    .eq('etsy_variant_id', etsy_variant_id)
                     .maybeSingle();
 
                 await supabase
@@ -103,6 +109,13 @@ export async function POST(req: NextRequest) {
                         etsy_variant_id,
                         shopify_product_id,
                         etsy_listing_id,
+                        shopify_inventory_item_id: sProd?.shopify_inventory_item_id,
+                        shopify_stock_snapshot: sProd?.stock_quantity || 0,
+                        etsy_stock_snapshot: eProd?.stock_quantity || 0,
+                        location_inventory_map: sProd?.location_inventory_map || [],
+                        selected_location_ids: sProd?.selected_location_ids || [],
+                        image_url: sProd?.image_url || eProd?.image_url || null,
+                        status: 'Matching',
                         updated_at: new Date().toISOString()
                     });
             }

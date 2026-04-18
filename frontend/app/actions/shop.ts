@@ -408,7 +408,7 @@ export async function saveShopifyLocations(
             })
         })
 
-        // 6. Update staging_shopify_products with aggregated stock
+        // 6. Update staging_shopify_products with aggregated stock and location map
         const aggregatedItems = Object.keys(stockMap)
         const chunkSize = 50
 
@@ -416,10 +416,12 @@ export async function saveShopifyLocations(
             const chunk = aggregatedItems.slice(i, i + chunkSize)
             await Promise.all(chunk.map(async (itemId: string) => {
                 const totalStock = stockMap[itemId]
+                const locMap = locationMapByItem[itemId] || []
                 await adminSupabase
                     .from('staging_shopify_products')
                     .update({
                         stock_quantity: totalStock,
+                        location_inventory_map: locMap,
                         selected_location_ids: locationIds,
                         updated_at: new Date().toISOString()
                     })

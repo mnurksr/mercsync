@@ -211,6 +211,8 @@ export async function unmatchProduct(
                                 image_url: shopifyRow.image_url,
                                 status: 'Matching',
                                 shopify_stock_snapshot: shopifyRow.stock_quantity || 0,
+                                location_inventory_map: shopifyRow.location_inventory_map || [],
+                                selected_location_ids: shopifyRow.selected_location_ids || [],
                                 updated_at: new Date().toISOString()
                             }, { onConflict: 'shop_id,shopify_variant_id' })
                     }
