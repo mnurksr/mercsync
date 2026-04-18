@@ -391,15 +391,24 @@ export async function saveShopifyLocations(
         const levelsData = await res.json()
         const levels = levelsData.inventory_levels || []
 
-        // 5. Aggregate stock by inventory_item_id
+        // 5. Build per-item location map AND aggregate stock
         const stockMap: Record<string, number> = {}
+        const locationMapByItem: Record<string, { location_id: string, available: number, updated_at: string }[]> = {}
+        
         levels.forEach((level: any) => {
             const itemId = level.inventory_item_id.toString()
             const available = level.available || 0
             stockMap[itemId] = (stockMap[itemId] || 0) + available
+            
+            if (!locationMapByItem[itemId]) locationMapByItem[itemId] = []
+            locationMapByItem[itemId].push({
+                location_id: level.location_id.toString(),
+                available: available,
+                updated_at: new Date().toISOString()
+            })
         })
 
-        // 6. Update staging_shopify_products with aggregated stock and location IDs (idempotent)
+        // 6. Update staging_shopify_products with aggregated stock
         const aggregatedItems = Object.keys(stockMap)
         const chunkSize = 50
 
@@ -414,6 +423,32 @@ export async function saveShopifyLocations(
                         selected_location_ids: locationIds,
                         updated_at: new Date().toISOString()
                     })
+                    .eq('shopify_inventory_item_id', itemId)
+            }))
+        }
+
+        // 7. Update inventory_items with location_inventory_map + shopify_stock_snapshot
+        for (let i = 0; i < aggregatedItems.length; i += chunkSize) {
+            const chunk = aggregatedItems.slice(i, i + chunkSize)
+            await Promise.all(chunk.map(async (itemId: string) => {
+                const locMap = locationMapByItem[itemId] || []
+                // Calculate stock from selected locations only
+                let shopifyTotal = 0
+                for (const loc of locMap) {
+                    if (locationIds.includes(loc.location_id)) {
+                        shopifyTotal += loc.available
+                    }
+                }
+                
+                await adminSupabase
+                    .from('inventory_items')
+                    .update({
+                        location_inventory_map: locMap,
+                        shopify_stock_snapshot: shopifyTotal,
+                        shopify_updated_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('shop_id', shop.id)
                     .eq('shopify_inventory_item_id', itemId)
             }))
         }
