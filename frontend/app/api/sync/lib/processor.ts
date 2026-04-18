@@ -472,6 +472,19 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             }
 
             // [FIX] Fragmentation Cleanup: If we have an existing item but its IDs are swapped or partial, merge them.
+            const resolvedMap = metadata?.location_inventory_map || existingItem?.location_inventory_map || [];
+            const resolvedLocIds: string[] = (existingItem && existingItem.selected_location_ids?.length > 0) ? existingItem.selected_location_ids : (metadata?.selected_location_ids || []);
+
+            // Calculate shopify_stock_snapshot from map + selected locations (mirrors DB trigger)
+            let calcShopifySnapshot = 0;
+            if (Array.isArray(resolvedMap) && resolvedLocIds.length > 0) {
+                for (const loc of resolvedMap) {
+                    if (loc && resolvedLocIds.includes(String(loc.location_id))) {
+                        calcShopifySnapshot += (loc.available ?? loc.stock ?? 0);
+                    }
+                }
+            }
+
             const payload: any = {
                 shop_id: shop.id,
                 sku,
@@ -484,13 +497,13 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
                 status: metadata?.is_digital ? 'Digital' : (metadata?.status || 'Matching'),
                 is_digital: metadata?.is_digital || false,
                 shopify_inventory_item_id: metadata?.shopify_inventory_item_id || existingItem?.shopify_inventory_item_id,
-                // Use explicit null checks — 0 is a valid value, not "missing"
-                shopify_stock_snapshot: metadata?.shopify_stock_snapshot ?? existingItem?.shopify_stock_snapshot ?? 0,
+                // Calculate from location map — don't rely solely on DB trigger
+                shopify_stock_snapshot: calcShopifySnapshot > 0 ? calcShopifySnapshot : (metadata?.shopify_stock_snapshot ?? existingItem?.shopify_stock_snapshot ?? 0),
                 etsy_stock_snapshot: metadata?.etsy_stock_snapshot ?? existingItem?.etsy_stock_snapshot ?? 0,
                 shopify_updated_at: metadata?.shopify_updated_at || existingItem?.shopify_updated_at,
                 etsy_updated_at: metadata?.etsy_updated_at || existingItem?.etsy_updated_at,
-                location_inventory_map: metadata?.location_inventory_map || existingItem?.location_inventory_map || {},
-                selected_location_ids: (existingItem && existingItem.selected_location_ids?.length > 0) ? existingItem.selected_location_ids : (metadata?.selected_location_ids || []),
+                location_inventory_map: resolvedMap,
+                selected_location_ids: resolvedLocIds,
                 updated_at: new Date().toISOString()
             };
 

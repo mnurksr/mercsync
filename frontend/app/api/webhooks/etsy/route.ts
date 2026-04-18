@@ -86,42 +86,68 @@ export async function POST(req: NextRequest) {
 /**
  * Process an Etsy order.paid webhook event.
  * Uses the same cascade deduction logic as the cron job.
+ * 
+ * Etsy webhook payload format:
+ * { "event_type": "order.paid", "resource_url": "https://openapi.etsy.com/v3/application/shops/{shop_id}/receipts/{receipt_id}", "shop_id": 12345 }
  */
 async function handleOrderPaid(payload: any, supabase: any, logPrefix: string) {
-    const receiptId = payload.receipt_id?.toString();
-    const shopId = payload.shop_id?.toString() || payload.seller_user_id?.toString();
+    // Extract receipt_id — may be directly in payload OR embedded in resource_url
+    let receiptId = payload.receipt_id?.toString();
+    const resourceUrl = payload.resource_url || '';
+    const etsyShopId = payload.shop_id?.toString() || '';
+
+    // Parse receipt_id from resource_url if not directly available
+    if (!receiptId && resourceUrl) {
+        const receiptMatch = resourceUrl.match(/receipts\/(\d+)/);
+        if (receiptMatch) {
+            receiptId = receiptMatch[1];
+        }
+    }
 
     if (!receiptId) {
-        console.log(`${logPrefix} No receipt_id in payload. Skipping.`);
+        console.log(`${logPrefix} No receipt_id found in payload or resource_url. Skipping.`);
+        console.log(`${logPrefix} Payload keys: ${Object.keys(payload).join(', ')}`);
         return;
     }
 
-    console.log(`${logPrefix} Processing order.paid for receipt ${receiptId}`);
+    // Parse shop_id from resource_url if not in payload
+    let parsedShopId = etsyShopId;
+    if (!parsedShopId && resourceUrl) {
+        const shopMatch = resourceUrl.match(/shops\/(\d+)/);
+        if (shopMatch) {
+            parsedShopId = shopMatch[1];
+        }
+    }
 
-    // 1. Find the shop by etsy_shop_id
-    const { data: shop } = await supabase
-        .from('shops')
-        .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
-        .eq('etsy_shop_id', shopId)
-        .eq('is_active', true)
-        .maybeSingle();
+    console.log(`${logPrefix} Processing order.paid for receipt ${receiptId} (shop: ${parsedShopId})`);
+
+    // 1. Find the shop
+    let shop = null;
+    
+    if (parsedShopId) {
+        const { data } = await supabase
+            .from('shops')
+            .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
+            .eq('etsy_shop_id', parsedShopId)
+            .eq('is_active', true)
+            .maybeSingle();
+        shop = data;
+    }
 
     if (!shop) {
-        // Try to find by any active shop with Etsy (single-tenant fallback)
+        // Fallback: find any active Etsy-connected shop
         const { data: shops } = await supabase
             .from('shops')
             .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
             .eq('is_active', true)
-            .eq('etsy_connected', true)
-            .not('etsy_shop_id', 'is', null);
+            .not('etsy_shop_id', 'is', null)
+            .not('etsy_access_token', 'is', null);
 
         if (!shops || shops.length === 0) {
-            console.log(`${logPrefix} No matching shop found for Etsy shop_id ${shopId}`);
+            console.log(`${logPrefix} No matching shop found for Etsy shop_id ${parsedShopId}`);
             return;
         }
-
-        // Use first matching shop (most users have one shop)
-        return processReceipt(shops[0], receiptId, supabase, logPrefix);
+        shop = shops[0];
     }
 
     return processReceipt(shop, receiptId, supabase, logPrefix);
