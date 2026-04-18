@@ -26,6 +26,8 @@ export default function Dashboard() {
 
     const [stats, setStats] = useState<DashboardStats>({
         totalProducts: 0,
+        shopifyProductCount: 0,
+        etsyProductCount: 0,
         matchedProducts: 0,
         mismatchCount: 0,
         actionRequiredCount: 0,
@@ -214,67 +216,80 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
                             <div className="flex items-center gap-4 mb-4">
                                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <Package className="w-6 h-6" />
                                 </div>
-                                <span className="text-sm font-bold text-gray-500">Total Products</span>
+                                <span className="text-sm font-bold text-gray-500">Inventory Overview</span>
                             </div>
-                            <div className="flex items-end gap-2">
-                                <span className="text-4xl font-black text-gray-900">{stats.totalProducts}</span>
-                                <span className="text-xs text-gray-400 font-bold mb-1">Unique Items</span>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-end gap-2">
+                                    <span className="text-4xl font-black text-gray-900">{stats.totalProducts}</span>
+                                    <span className="text-xs text-gray-400 font-bold mb-1">Total Unique Items</span>
+                                </div>
+                                <div className="flex items-center gap-4 mt-2">
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-[10px] font-black uppercase">
+                                        <ShoppingBag className="w-3 h-3" /> Shopify: {stats.shopifyProductCount}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-lg text-[10px] font-black uppercase">
+                                        <Store className="w-3 h-3" /> Etsy: {stats.etsyProductCount}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="bg-gray-50/50 border border-gray-100 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
+                        <div className="bg-emerald-50/30 border border-emerald-100/50 p-6 rounded-3xl group hover:bg-white hover:shadow-xl hover:shadow-gray-200/50 transition-all duration-300">
                             <div className="flex items-center gap-4 mb-4">
                                 <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <Link2 className="w-6 h-6" />
                                 </div>
-                                <span className="text-sm font-bold text-gray-500">Matched Sync</span>
+                                <span className="text-sm font-bold text-gray-500">Cross-Store Linking</span>
                             </div>
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-1">
                                 <div className="flex items-end gap-2">
                                     <span className="text-4xl font-black text-gray-900">{stats.matchedProducts}</span>
-                                    <span className="text-xs text-gray-400 font-bold mb-1">/ {stats.totalProducts} matched</span>
+                                    <span className="text-xs text-gray-400 font-bold mb-1">Products Synced</span>
                                 </div>
-                                <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                                    <div 
-                                        className="bg-emerald-500 h-1.5 rounded-full" 
-                                        style={{ width: `${stats.totalProducts > 0 ? (stats.matchedProducts / stats.totalProducts) * 100 : 0}%` }}
-                                    />
-                                </div>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Bidirectional sync active for these items</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Platform Status */}
+                {/* Instant Inventory Alerts replacing Store Connections */}
                 <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 flex flex-col">
-                    <h3 className="text-lg font-black text-gray-900 mb-6">Store Connections</h3>
+                    <h3 className="text-lg font-black text-gray-900 mb-6">Instant Inventory</h3>
+                    
                     <div className="space-y-4 flex-1">
-                        <PlatformRow
-                            name="Shopify"
-                            icon={<ShoppingBag className="w-4 h-4 text-white" />}
-                            color="#95BF47"
-                            connected={stores.shopify.connected}
-                            domain={stores.shopify.name}
-                        />
-                        <PlatformRow
-                            name="Etsy"
-                            icon={<Store className="w-4 h-4 text-white" />}
-                            color="#F56400"
-                            connected={stores.etsy.connected}
-                            domain={stores.etsy.name}
-                        />
+                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Mismatched Stock</span>
+                                <span className="text-base font-black text-amber-900">{stats.mismatchCount}</span>
+                            </div>
+                            <p className="text-[10px] text-amber-700/60 font-bold">Items with differing stock levels across platforms.</p>
+                        </div>
+
+                        <div className="p-4 bg-red-50 rounded-2xl border border-red-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">Action Required</span>
+                                <span className="text-base font-black text-red-900">{stats.actionRequiredCount}</span>
+                            </div>
+                            <p className="text-[10px] text-red-700/60 font-bold">Items requiring manual mapping or fix.</p>
+                        </div>
                     </div>
-                    <Link 
-                        href="/dashboard/settings" 
-                        className="mt-6 flex items-center justify-center gap-2 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-900 hover:text-white transition-all group"
+
+                    <button 
+                        onClick={handlePushMismatch}
+                        disabled={isPushingMismatch || stats.mismatchCount === 0}
+                        className="mt-6 flex items-center justify-center gap-3 py-4 bg-indigo-600 disabled:bg-gray-100 text-white disabled:text-gray-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20 active:scale-95 group"
                     >
-                        Store Settings <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                        {isPushingMismatch ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        Push All Mismatches
+                    </button>
+                    <Link href="/dashboard/inventory" className="mt-3 text-center text-[10px] font-black text-gray-400 hover:text-gray-900 uppercase tracking-widest transition-colors">
+                        Go to full inventory <ArrowRight className="inline w-2.5 h-2.5 ml-1" />
                     </Link>
                 </div>
             </section>

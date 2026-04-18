@@ -5,6 +5,8 @@ import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/adm
 
 export type DashboardStats = {
     totalProducts: number
+    shopifyProductCount: number
+    etsyProductCount: number
     matchedProducts: number
     mismatchCount: number
     actionRequiredCount: number
@@ -48,7 +50,18 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
     const storeCount = shopIds.length
 
     if (shopIds.length === 0) {
-        return { totalProducts: 0, matchedProducts: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
+        return { 
+            totalProducts: 0, 
+            shopifyProductCount: 0,
+            etsyProductCount: 0,
+            matchedProducts: 0, 
+            mismatchCount: 0, 
+            actionRequiredCount: 0, 
+            connectedStores: 0, 
+            lastSync: '--', 
+            mismatchItems: [], 
+            actionRequiredItems: [] 
+        }
     }
 
     // 2. Count Unique Products and Collect Alerts
@@ -58,6 +71,8 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         .in('shop_id', shopIds)
 
     let uniqueProducts = new Set<string>()
+    let shopifyProducts = new Set<string>()
+    let etsyProducts = new Set<string>()
     let matchedProductsSet = new Set<string>()
     let mismatchItems: any[] = []
     let actionRequiredItems: any[] = []
@@ -66,6 +81,9 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         productStats.forEach((item: any) => {
             const productKey = item.shopify_product_id || item.etsy_listing_id
             if (productKey) uniqueProducts.add(productKey)
+
+            if (item.shopify_product_id) shopifyProducts.add(item.shopify_product_id)
+            if (item.etsy_listing_id) etsyProducts.add(item.etsy_listing_id)
 
             if (item.shopify_product_id && item.etsy_listing_id) {
                 matchedProductsSet.add(productKey!)
@@ -104,6 +122,8 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
 
     return {
         totalProducts: uniqueProducts.size,
+        shopifyProductCount: shopifyProducts.size,
+        etsyProductCount: etsyProducts.size,
         matchedProducts: matchedProductsSet.size,
         mismatchCount: mismatchItems.length,
         actionRequiredCount: actionRequiredItems.length,
