@@ -216,8 +216,10 @@ export async function handleInventoryUpdate(
 
         // --- Notification Triggers ---
         const lowStockThreshold = settings.low_stock_threshold || 0;
+        console.log(`${logPrefix} Threshold Check: effective=${effectiveStock}, old=${oldStock}, threshold=${lowStockThreshold}`);
 
         if (effectiveStock === 0) {
+            console.log(`${logPrefix} Triggering stock_zero`);
             await createNotification(
                 supabase,
                 shop.id,
@@ -226,7 +228,8 @@ export async function handleInventoryUpdate(
                 `Product (Item ID: ${inventoryItemId}) is now out of stock on all platforms.`,
                 `/dashboard/inventory`
             );
-        } else if (lowStockThreshold > 0 && effectiveStock <= lowStockThreshold && oldStock > lowStockThreshold) {
+        } else if (lowStockThreshold > 0 && effectiveStock <= lowStockThreshold && (oldStock > lowStockThreshold || oldStock === null)) {
+            console.log(`${logPrefix} Triggering low_stock (oversell_risk)`);
             await createNotification(
                 supabase,
                 shop.id,
@@ -235,6 +238,8 @@ export async function handleInventoryUpdate(
                 `Product (Item ID: ${inventoryItemId}) dropped to ${effectiveStock} units — below your alert threshold of ${lowStockThreshold}.`,
                 `/dashboard/inventory`
             );
+        } else {
+            console.log(`${logPrefix} No notification needed.`);
         }
 
         // ── 7. Push to Etsy if matched ──

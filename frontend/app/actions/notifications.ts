@@ -97,16 +97,18 @@ export async function createNotification(
     
     // Critical events should be ENABLED by default if settings are null or true.
     // Only explicitly 'false' should block them.
+    // 1. Check if event is enabled in settings
     const isCritical = ['stock_zero', 'sync_failed', 'oversell_risk'].includes(type)
     const eventEnabled = events?.[type] ?? isCritical
     
+    console.log(`[createNotification] Type: ${type}, Enabled: ${eventEnabled}, Critical: ${isCritical}`);
     if (!eventEnabled) return
 
     // 2. In-App Notification
-    // Channels should also default to TRUE for critical events if null/undefined
     const inAppEnabled = channels?.in_app ?? isCritical
+    console.log(`[createNotification] In-App: ${inAppEnabled}`);
     if (inAppEnabled) {
-        await supabase.from('notifications').insert({
+        const { error: insertError } = await supabase.from('notifications').insert({
             shop_id: shopId,
             type: type,
             title: title,
@@ -114,27 +116,34 @@ export async function createNotification(
             action_url: actionUrl,
             is_read: false
         })
+        if (insertError) console.error('[createNotification] DB Insert Error:', insertError);
+        else console.log('[createNotification] In-App Notification inserted successfully');
     }
 
-    // 3. Email Notification (Resend) — build Shopify embedded app URL
+    // 3. Email Notification (Resend)
     const emailEnabled = channels?.email ?? isCritical
+    console.log(`[createNotification] Email: ${emailEnabled}, Target: ${settings.notification_email}`);
     if (emailEnabled && settings.notification_email) {
-        let absoluteUrl: string | null = null;
-        if (actionUrl) {
-            // Fetch shop_domain for building the embedded URL
-            const { data: shop } = await supabase
-                .from('shops')
-                .select('shop_domain')
-                .eq('id', shopId)
-                .maybeSingle();
-            
-            if (shop?.shop_domain && !actionUrl.startsWith('http')) {
-                absoluteUrl = buildEmbeddedAppUrl(shop.shop_domain, actionUrl);
-            } else {
-                absoluteUrl = actionUrl;
+        try {
+            let absoluteUrl: string | null = null;
+            if (actionUrl) {
+                const { data: shop } = await supabase
+                    .from('shops')
+                    .select('shop_domain')
+                    .eq('id', shopId)
+                    .maybeSingle();
+                
+                if (shop?.shop_domain && !actionUrl.startsWith('http')) {
+                    absoluteUrl = buildEmbeddedAppUrl(shop.shop_domain, actionUrl);
+                } else {
+                    absoluteUrl = actionUrl;
+                }
             }
+            const html = buildNotificationHtml(title, message, absoluteUrl, type)
+            await sendNotificationEmail(settings.notification_email, `[MercSync] ${title}`, html)
+            console.log(`[createNotification] Email sent to ${settings.notification_email}`);
+        } catch (emailErr) {
+            console.error('[createNotification] Email Error:', emailErr);
         }
-        const html = buildNotificationHtml(title, message, absoluteUrl, type)
-        await sendNotificationEmail(settings.notification_email, `[MercSync] ${title}`, html)
     }
 }

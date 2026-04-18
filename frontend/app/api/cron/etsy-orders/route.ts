@@ -198,7 +198,10 @@ export async function GET(req: NextRequest) {
 
                         // --- 8a. Notification Triggers (Bidirectional) ---
                         const threshold = settings?.low_stock_threshold || 0;
+                        console.log(`${logPrefix} Threshold Check: new=${newStock}, old=${oldStock}, threshold=${threshold}`);
+
                         if (newStock === 0) {
+                            console.log(`${logPrefix} Triggering stock_zero`);
                             await createNotification(
                                 supabase,
                                 shop.id,
@@ -207,7 +210,8 @@ export async function GET(req: NextRequest) {
                                 `Product (Item ID: ${item.shopify_inventory_item_id}) is out of stock after an Etsy order.`,
                                 `/dashboard/inventory`
                             );
-                        } else if (threshold > 0 && newStock <= threshold && oldStock > threshold) {
+                        } else if (threshold > 0 && newStock <= threshold && (oldStock > threshold || oldStock === null)) {
+                            console.log(`${logPrefix} Triggering low_stock (oversell_risk)`);
                             await createNotification(
                                 supabase,
                                 shop.id,
@@ -216,6 +220,8 @@ export async function GET(req: NextRequest) {
                                 `Product (Item ID: ${item.shopify_inventory_item_id}) dropped to ${newStock} units after an Etsy order.`,
                                 `/dashboard/inventory`
                             );
+                        } else {
+                            console.log(`${logPrefix} No notification needed.`);
                         }
 
                         totalItemsSynced++;
