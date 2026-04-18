@@ -36,7 +36,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         supabase = context.supabase
         resolvedOwnerId = context.ownerId
 
-        if (!resolvedOwnerId) return { totalProducts: 0, matchedProducts: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
+        if (!resolvedOwnerId) return { totalProducts: 0, shopifyProductCount: 0, etsyProductCount: 0, matchedProducts: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
     }
 
     // 1. Get user's shops
