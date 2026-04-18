@@ -294,9 +294,6 @@ export default function Dashboard() {
                 </div>
             </section>
 
-            {/* ═══ Alerts Row (Mismatches & Action Required) ═══ */}
-            {(stats.mismatchCount > 0 || stats.actionRequiredCount > 0) && (
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* ═══ Health Status Area ═══ */}
             {(stats.mismatchCount > 0 || stats.actionRequiredCount > 0) ? (
                 <section className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50">
@@ -388,7 +385,6 @@ export default function Dashboard() {
                         View Inventory <ArrowRight className="w-3 h-3" />
                     </Link>
                 </section>
-            )}
             )}
 
             {/* ═══ Activity & Notifications ═══ */}

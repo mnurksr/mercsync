@@ -159,7 +159,7 @@ export async function handlePriceUpdate(
         
         const { data: variantMappings } = await supabase
             .from('inventory_items')
-            .select('id, shop_id, etsy_listing_id, etsy_variant_id, shopify_product_id, shopify_variant_id, last_synced_shopify_price')
+            .select('id, shop_id, etsy_listing_id, etsy_variant_id, shopify_product_id, shopify_variant_id, last_synced_shopify_price, last_synced_etsy_price')
             .eq('shop_id', shop.id)
             .eq('shopify_product_id', shopifyProductId)
             .not('etsy_listing_id', 'is', null);
