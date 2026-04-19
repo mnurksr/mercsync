@@ -11,8 +11,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as etsyApi from '../../sync/lib/etsy';
+import { createNotification } from '../../../actions/notifications';
 
 const REFRESH_THRESHOLD_MS = 30 * 60 * 1000; // Refresh if expires within 30 minutes
+
+function getErrorMessage(err: unknown) {
+    return err instanceof Error ? err.message : String(err);
+}
 
 export async function GET(req: NextRequest) {
     const logPrefix = '[Token Refresh]';
@@ -55,6 +60,15 @@ export async function GET(req: NextRequest) {
                 continue; // Token still valid, skip
             }
 
+            await createNotification(
+                supabase,
+                shop.id,
+                'token_expiring',
+                'Etsy Connection Refreshing',
+                'Your Etsy connection token is expiring soon. MercSync is refreshing it automatically.',
+                '/dashboard/settings'
+            );
+
             console.log(`${logPrefix} Refreshing token for shop ${shop.id} (expires: ${shop.etsy_token_expires_at || 'unknown'})`);
 
             try {
@@ -79,8 +93,9 @@ export async function GET(req: NextRequest) {
                     console.log(`${logPrefix} ✅ Token refreshed for shop ${shop.id}. New expiry: ${newExpiresAt}`);
                     refreshed++;
                 }
-            } catch (err: any) {
-                console.error(`${logPrefix} ❌ Token refresh failed for shop ${shop.id}:`, err.message);
+            } catch (err: unknown) {
+                const errorMessage = getErrorMessage(err);
+                console.error(`${logPrefix} ❌ Token refresh failed for shop ${shop.id}:`, errorMessage);
                 failed++;
 
                 // Log the failure
@@ -89,13 +104,22 @@ export async function GET(req: NextRequest) {
                     source: 'system',
                     event_type: 'webhook', // using as "system event"
                     status: 'failed',
-                    error_message: `Token refresh failed: ${err.message}`,
+                    error_message: `Token refresh failed: ${errorMessage}`,
                     metadata: {
                         type: 'token_refresh',
                         expires_at: shop.etsy_token_expires_at
                     },
                     created_at: new Date().toISOString()
                 });
+
+                await createNotification(
+                    supabase,
+                    shop.id,
+                    'sync_failed',
+                    'Etsy Token Refresh Failed',
+                    `MercSync could not refresh your Etsy connection. Please reconnect Etsy. Error: ${errorMessage}`,
+                    '/dashboard/settings'
+                );
             }
         }
 
@@ -108,8 +132,9 @@ export async function GET(req: NextRequest) {
             failed
         });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const errorMessage = getErrorMessage(err);
         console.error(`${logPrefix} Fatal error:`, err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
 }

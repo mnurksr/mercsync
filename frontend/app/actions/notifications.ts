@@ -2,6 +2,7 @@
 
 import { getValidatedUserContext } from '@/utils/supabase/admin'
 import { sendNotificationEmail, buildNotificationHtml } from '../api/sync/lib/resend'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type NotificationItem = {
     id: string
@@ -77,7 +78,7 @@ function buildEmbeddedAppUrl(shopDomain: string, relativePath: string): string {
  * Handles both in-app alerts and email (via Resend if configured).
  */
 export async function createNotification(
-    supabase: any,
+    supabase: SupabaseClient,
     shopId: string,
     type: 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'token_expiring',
     title: string,
@@ -140,8 +141,12 @@ export async function createNotification(
                 }
             }
             const html = buildNotificationHtml(title, message, absoluteUrl, type)
-            await sendNotificationEmail(settings.notification_email, `[MercSync] ${title}`, html)
-            console.log(`[createNotification] Email sent to ${settings.notification_email}`);
+            const emailResult = await sendNotificationEmail(settings.notification_email, `[MercSync] ${title}`, html)
+            if (emailResult?.success) {
+                console.log(`[createNotification] Email sent to ${settings.notification_email}`);
+            } else {
+                console.error('[createNotification] Email send failed:', emailResult?.error);
+            }
         } catch (emailErr) {
             console.error('[createNotification] Email Error:', emailErr);
         }

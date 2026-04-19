@@ -14,17 +14,17 @@ function getResend(): Resend | null {
 export async function sendNotificationEmail(to: string, subject: string, body: string) {
     if (!process.env.RESEND_API_KEY) {
         console.warn('[Resend] Skipping email send: RESEND_API_KEY is not defined');
-        return;
+        return { success: false, error: 'RESEND_API_KEY is not defined' };
     }
 
     try {
         const resend = getResend();
         if (!resend) {
             console.warn('[Resend] Skipping email send: RESEND_API_KEY is not defined');
-            return;
+            return { success: false, error: 'RESEND_API_KEY is not defined' };
         }
         const { data, error } = await resend.emails.send({
-            from: 'MercSync <notifications@mercsync.com>', // User needs to verify domain in Resend
+            from: process.env.NOTIFICATION_FROM_EMAIL || 'MercSync <notifications@mercsync.com>',
             to: [to],
             subject: subject,
             html: body,

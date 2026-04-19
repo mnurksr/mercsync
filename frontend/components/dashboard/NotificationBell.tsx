@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Bell, Check, Clock, AlertTriangle, AlertCircle, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Bell, Clock, AlertTriangle, AlertCircle, RefreshCw, PackageX, KeyRound, TrendingDown } from 'lucide-react';
 import { getNotifications, markAsRead, markAllAsRead, type NotificationItem } from '@/app/actions/notifications';
 import { useRouter } from 'next/navigation';
 
@@ -14,8 +14,17 @@ export default function NotificationBell() {
 
     const unreadCount = notifications.filter(n => !n.is_read).length;
 
+    const loadNotifications = useCallback(async () => {
+        try {
+            const data = await getNotifications();
+            setNotifications(data);
+        } catch (error) {
+            console.error('Failed to load notifications:', error);
+        }
+    }, []);
+
     useEffect(() => {
-        loadNotifications();
+        const initialLoad = setTimeout(loadNotifications, 0);
         
         // Polling every 1 minute for new notifications
         const interval = setInterval(loadNotifications, 60000);
@@ -29,19 +38,11 @@ export default function NotificationBell() {
         document.addEventListener('mousedown', handleClickOutside);
         
         return () => {
+            clearTimeout(initialLoad);
             clearInterval(interval);
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, []);
-
-    const loadNotifications = async () => {
-        try {
-            const data = await getNotifications();
-            setNotifications(data);
-        } catch (error) {
-            console.error('Failed to load notifications:', error);
-        }
-    };
+    }, [loadNotifications]);
 
     const handleOpen = () => {
         if (!isOpen) { // Opening
@@ -59,7 +60,7 @@ export default function NotificationBell() {
                 setIsOpen(false);
                 router.push(url);
             }
-        } catch (e) {}
+        } catch {}
     };
 
     const handleReadAll = async () => {
@@ -68,7 +69,7 @@ export default function NotificationBell() {
         try {
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
             await markAllAsRead();
-        } catch (e) {}
+        } catch {}
         setIsLoading(false);
     };
 
@@ -87,7 +88,10 @@ export default function NotificationBell() {
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'sync_error': return <AlertTriangle className="w-5 h-5 text-red-500" />;
+            case 'stock_zero': return <PackageX className="w-5 h-5 text-red-500" />;
+            case 'sync_failed': return <AlertTriangle className="w-5 h-5 text-red-500" />;
+            case 'oversell_risk': return <TrendingDown className="w-5 h-5 text-amber-500" />;
+            case 'token_expiring': return <KeyRound className="w-5 h-5 text-violet-500" />;
             case 'system_alert': return <AlertCircle className="w-5 h-5 text-blue-500" />;
             default: return <Bell className="w-5 h-5 text-gray-500" />;
         }
@@ -131,7 +135,7 @@ export default function NotificationBell() {
                         {notifications.length === 0 ? (
                             <div className="p-8 text-center">
                                 <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                                <p className="text-sm font-medium text-gray-400">You're all caught up!</p>
+                                <p className="text-sm font-medium text-gray-400">You&apos;re all caught up!</p>
                             </div>
                         ) : (
                             notifications.map((item) => (
