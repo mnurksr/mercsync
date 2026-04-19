@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { decodeState, validateHMAC } from '../utils';
 import * as shopifyApi from '@/app/api/sync/lib/shopify';
@@ -107,7 +108,16 @@ export async function GET(req: NextRequest) {
 
         console.log(`[Shopify Callback] Success for shop ${shop}. Redirecting to ${finalRedirect}`);
 
-        return NextResponse.redirect(finalRedirect);
+        const response = NextResponse.redirect(finalRedirect);
+        response.cookies.set('mercsync_shop', shop, {
+            path: '/',
+            maxAge: 60 * 60 * 24 * 30,
+            sameSite: 'none',
+            secure: true,
+            httpOnly: true
+        });
+
+        return response;
 
 
     } catch (err: any) {

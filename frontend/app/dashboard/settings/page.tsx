@@ -60,7 +60,7 @@ export default function SettingsPage() {
     const [settings, setSettings] = useState<ShopSettings>({
         sync_direction: 'bidirectional',
         auto_sync_enabled: false,
-        low_stock_threshold: 0,
+        low_stock_threshold: 5,
         auto_create_products: false,
         auto_update_products: false,
         auto_delete_products: false,
@@ -68,7 +68,7 @@ export default function SettingsPage() {
         price_sync_enabled: false,
         price_rules: [],
         notification_channels: { in_app: true, email: false, slack_webhook_url: null },
-        notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, token_expiring: true },
+        notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true },
         notification_frequency: 'instant',
         notification_email: null
     });
@@ -815,6 +815,9 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
     };
 
     const updateEvent = (key: keyof NotificationEvents, value: boolean) => {
+        if (key === 'oversell_risk' && value && (!settings.low_stock_threshold || settings.low_stock_threshold < 1)) {
+            updateField('low_stock_threshold', 5);
+        }
         updateField('notification_events', { ...settings.notification_events, [key]: value });
     };
 
@@ -890,9 +893,6 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                         )}
                         <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
                     </div>
-                </SettingRow>
-                <SettingRow label="Token expiring" description="When a platform connection is about to expire">
-                    <ToggleSwitch enabled={settings.notification_events.token_expiring} onChange={(v) => updateEvent('token_expiring', v)} />
                 </SettingRow>
             </div>
         </div>

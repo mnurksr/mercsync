@@ -43,7 +43,7 @@ export async function sendNotificationEmail(to: string, subject: string, body: s
 }
 
 // ─── Notification Type Config ──────────────────
-type NotificationType = 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'token_expiring';
+type NotificationType = 'stock_zero' | 'sync_failed' | 'oversell_risk';
 
 const NOTIFICATION_CONFIG: Record<NotificationType, {
     emoji: string;
@@ -76,14 +76,6 @@ const NOTIFICATION_CONFIG: Record<NotificationType, {
         iconBg: '#dbeafe',
         ctaColor: '#2563eb',
         ctaText: 'View Inventory'
-    },
-    token_expiring: {
-        emoji: '🔑',
-        accentColor: '#7c3aed',
-        accentBg: '#f5f3ff',
-        iconBg: '#ede9fe',
-        ctaColor: '#7c3aed',
-        ctaText: 'Reconnect'
     }
 };
 

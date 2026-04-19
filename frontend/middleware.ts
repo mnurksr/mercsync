@@ -69,18 +69,10 @@ export async function middleware(request: NextRequest) {
     // NATIVE SESSIONLESS AUTHENTICATION BRIDGE
     // Store the shop domain in a secure cookie to allow embedded users to browse the dashboard 
     // seamlessly without requiring a Supabase Auth session.
-    let mercsyncShopCookie = request.cookies.get('mercsync_shop')?.value;
+    const mercsyncShopCookie = request.cookies.get('mercsync_shop')?.value;
 
-    if (shopParam) {
-        // Shopify iframe always provides ?shop=xyz
-        mercsyncShopCookie = shopParam;
-        response.cookies.set('mercsync_shop', shopParam, {
-            path: '/',
-            maxAge: 60 * 60 * 24 * 30, // 30 days
-            sameSite: 'none',
-            secure: true
-        });
-    }
+    // Do not trust ?shop= by itself for sessionless auth. The mercsync_shop
+    // cookie is only set after Shopify OAuth callback HMAC validation.
 
     // Determine if user has ANY form of access: either a traditional Supabase session, OR our Shopify cookie
     const hasAccess = !!(session || mercsyncShopCookie);

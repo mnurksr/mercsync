@@ -24,7 +24,6 @@ export type NotificationEvents = {
     stock_zero: boolean
     sync_failed: boolean
     oversell_risk: boolean
-    token_expiring: boolean
 }
 
 export type ShopSettings = {
@@ -57,7 +56,7 @@ export type ShopSettings = {
 const DEFAULT_SETTINGS: ShopSettings = {
     sync_direction: 'bidirectional',
     auto_sync_enabled: false,
-    low_stock_threshold: 0,
+    low_stock_threshold: 5,
     auto_create_products: false,
     auto_update_products: false,
     auto_delete_products: false,
@@ -65,7 +64,7 @@ const DEFAULT_SETTINGS: ShopSettings = {
     price_sync_enabled: false,
     price_rules: [],
     notification_channels: { in_app: true, email: false, slack_webhook_url: null },
-    notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true, token_expiring: true },
+    notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true },
     notification_frequency: 'instant',
     notification_email: null
 }
@@ -128,23 +127,31 @@ export async function updateSettings(
 
     if (!shop) return { success: false, message: 'Shop not found' }
 
+    const normalizedUpdates = { ...updates }
+    if (
+        normalizedUpdates.notification_events?.oversell_risk &&
+        (!normalizedUpdates.low_stock_threshold || normalizedUpdates.low_stock_threshold < 1)
+    ) {
+        normalizedUpdates.low_stock_threshold = DEFAULT_SETTINGS.low_stock_threshold
+    }
+
     // Build the update payload — only include provided fields
     const payload: any = { updated_at: new Date().toISOString() }
 
-    if (updates.sync_direction !== undefined) payload.sync_direction = updates.sync_direction
-    if (updates.auto_sync_enabled !== undefined) payload.auto_sync_enabled = updates.auto_sync_enabled
-    if (updates.low_stock_threshold !== undefined) payload.low_stock_threshold = updates.low_stock_threshold
-    if (updates.price_sync_enabled !== undefined) payload.price_sync_enabled = updates.price_sync_enabled
-    if (updates.price_rules !== undefined) payload.price_rules = updates.price_rules
-    if (updates.notification_channels !== undefined) payload.notification_channels = updates.notification_channels
-    if (updates.notification_events !== undefined) payload.notification_events = updates.notification_events
-    if (updates.notification_frequency !== undefined) payload.notification_frequency = updates.notification_frequency
-    if (updates.notification_email !== undefined) payload.notification_email = updates.notification_email
+    if (normalizedUpdates.sync_direction !== undefined) payload.sync_direction = normalizedUpdates.sync_direction
+    if (normalizedUpdates.auto_sync_enabled !== undefined) payload.auto_sync_enabled = normalizedUpdates.auto_sync_enabled
+    if (normalizedUpdates.low_stock_threshold !== undefined) payload.low_stock_threshold = normalizedUpdates.low_stock_threshold
+    if (normalizedUpdates.price_sync_enabled !== undefined) payload.price_sync_enabled = normalizedUpdates.price_sync_enabled
+    if (normalizedUpdates.price_rules !== undefined) payload.price_rules = normalizedUpdates.price_rules
+    if (normalizedUpdates.notification_channels !== undefined) payload.notification_channels = normalizedUpdates.notification_channels
+    if (normalizedUpdates.notification_events !== undefined) payload.notification_events = normalizedUpdates.notification_events
+    if (normalizedUpdates.notification_frequency !== undefined) payload.notification_frequency = normalizedUpdates.notification_frequency
+    if (normalizedUpdates.notification_email !== undefined) payload.notification_email = normalizedUpdates.notification_email
     
-    if (updates.auto_create_products !== undefined) payload.auto_create_products = updates.auto_create_products
-    if (updates.auto_update_products !== undefined) payload.auto_update_products = updates.auto_update_products
-    if (updates.auto_delete_products !== undefined) payload.auto_delete_products = updates.auto_delete_products
-    if (updates.location_deduction_order !== undefined) payload.location_deduction_order = updates.location_deduction_order
+    if (normalizedUpdates.auto_create_products !== undefined) payload.auto_create_products = normalizedUpdates.auto_create_products
+    if (normalizedUpdates.auto_update_products !== undefined) payload.auto_update_products = normalizedUpdates.auto_update_products
+    if (normalizedUpdates.auto_delete_products !== undefined) payload.auto_delete_products = normalizedUpdates.auto_delete_products
+    if (normalizedUpdates.location_deduction_order !== undefined) payload.location_deduction_order = normalizedUpdates.location_deduction_order
 
     // Upsert: insert if not exists, update if exists
     const { error } = await supabase

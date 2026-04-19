@@ -80,7 +80,7 @@ function buildEmbeddedAppUrl(shopDomain: string, relativePath: string): string {
 export async function createNotification(
     supabase: SupabaseClient,
     shopId: string,
-    type: 'stock_zero' | 'sync_failed' | 'oversell_risk' | 'token_expiring',
+    type: 'stock_zero' | 'sync_failed' | 'oversell_risk',
     title: string,
     message: string,
     actionUrl: string | null = null

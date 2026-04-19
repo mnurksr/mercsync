@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { handleInventoryUpdate } from '../inventory-sync';
 import { handlePriceUpdate } from '../../../sync/price-sync';
+import { scrubShopAfterUninstall } from '../cleanup';
 
 export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
@@ -36,38 +38,7 @@ export async function POST(req: NextRequest) {
         switch (topic) {
             case 'app/uninstalled':
                 console.log(`[Shopify Webhook] App uninstalled for ${shop}`);
-                // Immediate Deactivation & Token Scrubbing
-                const { data: dbShop } = await supabase
-                    .from('shops')
-                    .update({ 
-                        is_active: false, 
-                        shopify_connected: false,
-                        access_token: null,
-                        etsy_connected: false,
-                        etsy_access_token: null,
-                        etsy_refresh_token: null
-                    })
-                    .eq('shop_domain', shop)
-                    .select('id')
-                    .single();
-
-                if (dbShop) {
-                    console.log(`[Shopify Webhook] Executing immediate Deep Wipe for shop ${dbShop.id}`);
-                    
-                    // Delete staging data
-                    await supabase.from('staging_products').delete().eq('shop_id', dbShop.id);
-                    await supabase.from('staging_etsy_products').delete().eq('shop_id', dbShop.id);
-                    
-                    // Delete inventory mapping
-                    await supabase.from('inventory_items').delete().eq('shop_id', dbShop.id);
-
-                    // Delete history/logs
-                    await supabase.from('inventory_ledger').delete().eq('shop_id', dbShop.id);
-                    await supabase.from('sync_jobs').delete().eq('shop_id', dbShop.id);
-                    
-                    // Note: 'shops' record is kept (but scrubbed) so user ID isn't completely lost for billing history 
-                    // shop/redact GDPR webhook will fully delete the 'shops' record 48 hours later.
-                }
+                await scrubShopAfterUninstall(supabase, shop, '[Shopify Webhook]');
                 break;
 
             case 'shop/update':
@@ -88,8 +59,6 @@ export async function POST(req: NextRequest) {
                 // Update staging table and inventory names
                 const { data: theShopData } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
                 if (theShopData && payload.id) {
-                    const productId = payload.id.toString();
-                    
                     // (Status and product_title have been moved into the variant loop below for guaranteed targeting)
                     
                     // Update inventory_items name/image/sku at variant level

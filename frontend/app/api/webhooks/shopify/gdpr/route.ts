@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { redactShopData } from '../cleanup';
 
 /**
  * Shopify Mandatory GDPR Webhooks
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
 
         if (!valid) {
             console.warn('[GDPR Webhook] HMAC validation failed or missing secret');
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ error: 'Bad Request' }, { status: 400 });
         }
 
         const shopDomain = payload?.shop_domain || '';
@@ -93,37 +95,12 @@ export async function POST(req: NextRequest) {
             case 'shop/redact': {
                 console.log(`[GDPR] Shop redact for shop=${shopDomain}. Deleting all associated data.`);
 
-
-                // Find the shop record
-                const { data: shop } = await supabase
-                    .from('shops')
-                    .select('id')
-                    .eq('shop_domain', shopDomain)
-                    .maybeSingle();
-
-                if (shop) {
-                    const shopId = shop.id;
-
-                    // Delete in dependency order (children first)
-                    // 1. Inventory ledger entries
-                    await supabase.from('inventory_ledger').delete().eq('shop_id', shopId);
-                    
-                    // 2. Inventory items  
-                    await supabase.from('inventory_items').delete().eq('shop_id', shopId);
-                    
-                    // 3. Staging tables
-                    await supabase.from('staging_shopify_products').delete().eq('shop_id', shopId);
-                    await supabase.from('staging_etsy_products').delete().eq('shop_id', shopId);
-                    
-                    // 4. Sync logs
-                    await supabase.from('sync_logs').delete().eq('shop_id', shopId);
-
-                    // 5. Shop record itself
-                    await supabase.from('shops').delete().eq('id', shopId);
-
-                    console.log(`[GDPR] All data deleted for shop=${shopDomain} (id=${shopId})`);
-                } else {
-                    console.log(`[GDPR] No shop record found for ${shopDomain}, nothing to delete.`);
+                const result = await redactShopData(supabase, shopDomain, '[GDPR]');
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { error: 'Shop data redaction failed', details: result.errors },
+                        { status: 500 }
+                    );
                 }
 
                 return NextResponse.json({ 

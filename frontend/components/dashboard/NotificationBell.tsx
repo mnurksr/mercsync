@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Clock, AlertTriangle, AlertCircle, RefreshCw, PackageX, KeyRound, TrendingDown } from 'lucide-react';
+import { Bell, Clock, AlertTriangle, AlertCircle, RefreshCw, PackageX, TrendingDown } from 'lucide-react';
 import { getNotifications, markAsRead, markAllAsRead, type NotificationItem } from '@/app/actions/notifications';
 import { useRouter } from 'next/navigation';
 
@@ -91,7 +91,6 @@ export default function NotificationBell() {
             case 'stock_zero': return <PackageX className="w-5 h-5 text-red-500" />;
             case 'sync_failed': return <AlertTriangle className="w-5 h-5 text-red-500" />;
             case 'oversell_risk': return <TrendingDown className="w-5 h-5 text-amber-500" />;
-            case 'token_expiring': return <KeyRound className="w-5 h-5 text-violet-500" />;
             case 'system_alert': return <AlertCircle className="w-5 h-5 text-blue-500" />;
             default: return <Bell className="w-5 h-5 text-gray-500" />;
         }

@@ -1,0 +1,44 @@
+# Copy this file to shopify.app.toml and replace client_id before running
+# `shopify app deploy`.
+#
+# Keep mandatory compliance webhooks in the app configuration file. Shopify's
+# app review checks for these as app-specific webhooks, not only runtime
+# registrations after install.
+
+client_id = "REPLACE_WITH_NEXT_PUBLIC_SHOPIFY_API_KEY"
+name = "MercSync"
+application_url = "https://mercsync.com"
+embedded = true
+
+[auth]
+redirect_urls = [
+  "https://mercsync.com/api/auth/shopify/callback/",
+  "https://mercsync.com/api/auth/shopify/callback"
+]
+
+[webhooks]
+api_version = "2025-10"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://mercsync.com/api/webhooks/shopify/gdpr"
+
+# Runtime webhooks are currently also registered after OAuth install by
+# frontend/app/api/sync/lib/shopify.ts. Keeping them here as app-specific
+# subscriptions makes production behavior easier to audit before review.
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "https://mercsync.com/api/webhooks/shopify/main"
+
+[[webhooks.subscriptions]]
+topics = ["inventory_levels/update"]
+uri = "https://mercsync.com/api/webhooks/shopify/main"
+
+[[webhooks.subscriptions]]
+topics = ["products/create", "products/update", "products/delete"]
+uri = "https://mercsync.com/api/webhooks/shopify/main"
+
+[[webhooks.subscriptions]]
+topics = ["orders/create", "orders/updated"]
+uri = "https://mercsync.com/api/webhooks/shopify/main"
+

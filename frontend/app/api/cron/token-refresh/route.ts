@@ -60,15 +60,6 @@ export async function GET(req: NextRequest) {
                 continue; // Token still valid, skip
             }
 
-            await createNotification(
-                supabase,
-                shop.id,
-                'token_expiring',
-                'Etsy Connection Refreshing',
-                'Your Etsy connection token is expiring soon. MercSync is refreshing it automatically.',
-                '/dashboard/settings'
-            );
-
             console.log(`${logPrefix} Refreshing token for shop ${shop.id} (expires: ${shop.etsy_token_expires_at || 'unknown'})`);
 
             try {
