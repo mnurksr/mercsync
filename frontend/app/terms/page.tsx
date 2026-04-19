@@ -28,6 +28,7 @@ export default function TermsPage() {
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. COMPLIANCE WITH PLATFORM RULES</h2>
                     <p className="mb-4">You agree to use MercSync in full compliance with Etsy’s Terms of Use, House Rules, and Prohibited Items Policy. You are solely responsible for the content and products you list on your connected shops.</p>
+                    <p className="mb-4">You are responsible for reviewing any products, descriptions, prices, images, shipping settings, and inventory changes before publishing or syncing them to your connected platforms.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">5. LICENSE & RESTRICTIONS</h2>
                     <p className="mb-4">We grant you a limited, non-exclusive, non-transferable right to use the Service for your internal business operations. You shall not:</p>

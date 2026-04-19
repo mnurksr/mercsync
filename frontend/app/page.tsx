@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
-import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
 import { getSetupStatus } from '@/app/actions/staging';
@@ -118,7 +117,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-green-500" />
-                14-day free trial
+                7-day free trial
               </div>
               <div className="hidden sm:flex items-center gap-2">
                 <Check className="w-4 h-4 text-green-500" />
@@ -305,7 +304,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               © {new Date().getFullYear()} MercSync. All rights reserved.
             </p>
             <p className="text-xs text-gray-400 text-center mt-2">
-              The term 'Etsy' is a trademark of Etsy, Inc. This application uses Etsy's API but is not endorsed or certified by Etsy.
+              The term &apos;Etsy&apos; is a trademark of Etsy, Inc. This application uses Etsy&apos;s API but is not endorsed or certified by Etsy.
             </p>
           </div>
         </div>

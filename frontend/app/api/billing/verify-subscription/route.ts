@@ -7,8 +7,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { normalizePlanId } from '@/config/plans';
 
-const SHOPIFY_API_VERSION = '2024-01';
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-10';
+
+type ShopifySubscription = {
+    name: string;
+    status: string;
+    createdAt: string;
+};
 
 export async function POST(req: NextRequest) {
     try {
@@ -71,19 +78,20 @@ export async function POST(req: NextRequest) {
         }
 
         const result = await response.json();
-        const subscriptions = result.data?.currentAppInstallation?.activeSubscriptions || [];
+        const subscriptions: ShopifySubscription[] = result.data?.currentAppInstallation?.activeSubscriptions || [];
 
         // Check if there is an active subscription, sort by newest first
         const activeSub = subscriptions
-            .filter((sub: any) => sub.status === 'ACTIVE')
-            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            .filter((sub) => sub.status === 'ACTIVE')
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
         if (activeSub) {
-            // e.g. "MercSync Professional" -> "professional"
-            let planType = activeSub.name.toLowerCase();
-            if (planType.includes('starter')) planType = 'starter';
-            else if (planType.includes('professional')) planType = 'professional';
-            else if (planType.includes('enterprise')) planType = 'enterprise';
+            // e.g. "MercSync Growth" -> "growth"
+            const planType = normalizePlanId(activeSub.name);
+
+            if (!planType) {
+                return NextResponse.json({ success: false, status: 'unknown_plan', planName: activeSub.name }, { status: 400 });
+            }
 
             // Update local database to active plan
             await supabase
@@ -96,10 +104,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, status: 'inactive' });
         }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Internal server error';
         console.error('[Billing Verify] Error:', err);
         return NextResponse.json(
-            { error: err.message || 'Internal server error' },
+            { error: message },
             { status: 500 }
         );
     }

@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
-const PLANS: Record<string, { name: string; price: number }> = {
-    starter: { name: 'Starter', price: 29 },
-    professional: { name: 'Professional', price: 79 },
-    enterprise: { name: 'Enterprise', price: 199 }
-};
-
-const SHOPIFY_API_VERSION = '2024-01';
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-10';
 
 /**
  * POST /api/create-payment
@@ -25,7 +20,7 @@ export async function POST(req: NextRequest) {
         }
 
         const planKey = (product_id || 'starter').toLowerCase();
-        const planConfig = PLANS[planKey] || PLANS.starter;
+        const planConfig = getPlanConfig(planKey) || PLAN_CONFIG.starter;
 
         const supabase = createAdminClient();
 
@@ -47,11 +42,12 @@ export async function POST(req: NextRequest) {
         const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop.shop_domain}`;
 
         const mutation = `
-            mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
+            mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
                 appSubscriptionCreate(
                     name: $name,
                     returnUrl: $returnUrl,
                     test: $test,
+                    trialDays: $trialDays,
                     lineItems: $lineItems
                 ) {
                     confirmationUrl
@@ -67,6 +63,7 @@ export async function POST(req: NextRequest) {
             name: `MercSync ${planConfig.name}`,
             returnUrl,
             test: process.env.NODE_ENV !== 'production', // Use test mode outside production
+            trialDays: planConfig.trialDays,
             lineItems: [
                 {
                     plan: {
@@ -112,8 +109,9 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ url: confirmationUrl });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
         console.error('[API/create-payment] Internal Error:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { useState, useEffect } from 'react';
 import {
     Link2, Settings, Bell, DollarSign, MapPin, Shield,
@@ -22,6 +24,7 @@ import {
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
 import { wipeAllAppData } from '../../actions/advanced';
+import { getPlanConfig, PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
 
 // ─── Tab definitions ─────────────────────────
 
@@ -104,7 +107,7 @@ export default function SettingsPage() {
                 getDashboardStats()
             ]);
 
-            setProductsCount(dashStats.totalProducts || 0);
+            setProductsCount(dashStats.matchedProducts || 0);
 
             setStores({
                 shopify: { 
@@ -901,42 +904,27 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
 
 // ─── Billing Tab (with inline plan cards) ──
 
-const PLAN_TIERS = [
-    {
-        id: 'starter',
-        name: 'Starter',
-        price: 29,
-        color: 'from-blue-500 to-indigo-600',
-        description: 'Mükemmel bir başlangıç',
-        features: ['500 Ürüne kadar senkronizasyon', '1 Etsy mağazası bağlantısı', 'Saatlik stok senkronizasyonu', 'Temel otomatik eşleştirme (Auto-match)', 'E-posta desteği']
-    },
-    {
-        id: 'professional',
-        name: 'Growth',
-        price: 79,
-        color: 'from-violet-500 to-purple-600',
-        popular: true,
-        description: 'Büyüyen işletmeler için',
-        features: ['5,000 Ürüne kadar senkronizasyon', '1 Etsy mağazası bağlantısı', 'Gerçek zamanlı (Real-time) stok senkronu', 'Fiyat kuralı (Price margin) eşitleme', 'Öncelikli destek', 'AI destekli akıllı eşleştirme']
-    },
-    {
-        id: 'enterprise',
-        name: 'Unlimited',
-        price: 199,
-        color: 'from-gray-800 to-gray-900',
-        description: 'Yüksek hacimli satıcılar',
-        features: ['Sınırsız ürün senkronizasyonu', '1 Etsy mağazası bağlantısı', 'Gerçek zamanlı (Real-time) stok senkronu', 'Fiyat kuralı (Price margin) eşitleme', 'Özel müşteri temsilcisi', 'SLA Garantisi']
-    }
-];
+const PLAN_STYLE: Record<PlanId, { color: string; popular?: boolean }> = {
+    starter: { color: 'from-blue-500 to-indigo-600' },
+    growth: { color: 'from-violet-500 to-purple-600', popular: true },
+    pro: { color: 'from-gray-800 to-gray-900' },
+};
+
+const PLAN_TIERS = PLAN_ORDER.map(id => ({
+    ...PLAN_CONFIG[id],
+    ...PLAN_STYLE[id],
+}));
 
 function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?: number }) {
     const toast = useToast();
+    const { user } = useAuth();
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
     const planType = stores.shopify?.plan_type || 'guest';
-    const planLabel = planType === 'guest' ? 'Free' : planType.charAt(0).toUpperCase() + planType.slice(1);
-    const isPaid = planType && !['guest', 'none', 'pending', 'basic'].includes(planType.toLowerCase());
-    const currentPlanId = isPaid ? planType.toLowerCase() : null;
+    const currentPlan = getPlanConfig(planType);
+    const planLabel = currentPlan?.name || 'Free';
+    const isPaid = !!currentPlan;
+    const currentPlanId = currentPlan?.id || null;
 
     const handleSelectPlan = async (planId: string) => {
         if (planId === currentPlanId) return;
@@ -945,32 +933,30 @@ function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?
             const res = await fetch('/api/billing/create-subscription', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ plan: planId })
+                body: JSON.stringify({
+                    plan: planId,
+                    user_id: user?.id || undefined,
+                    shop_domain: stores.shopify?.domain || undefined
+                })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to create subscription');
             if (data.confirmationUrl) {
-                window.top ? window.top.location.href = data.confirmationUrl : window.location.href = data.confirmationUrl;
+                const targetWindow = window.top || window;
+                targetWindow.location.href = data.confirmationUrl;
             } else {
                 throw new Error('No confirmation URL received');
             }
-        } catch (err: any) {
-            toast.error(err.message || 'Failed to start billing.');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to start billing.';
+            toast.error(message);
         } finally {
             setLoadingPlan(null);
         }
     };
 
-    // Calculate limit based on current plan
-    const getLimit = () => {
-        if (planType.toLowerCase() === 'starter') return 500;
-        if (planType.toLowerCase() === 'professional' || planType.toLowerCase() === 'growth') return 5000;
-        if (planType.toLowerCase() === 'enterprise' || planType.toLowerCase() === 'unlimited') return 'Unlimited';
-        return 0; // free/guest
-    };
-
-    const limit = getLimit();
-    const widthPercent = (limit === 'Unlimited' || limit === 0) ? 0 : Math.min(100, Math.round((productsCount / (limit as number)) * 100));
+    const limit = currentPlan?.limits.matchedItems || 0;
+    const widthPercent = limit === 0 ? 0 : Math.min(100, Math.round((productsCount / limit) * 100));
 
     return (
         <div className="space-y-4">
@@ -1010,7 +996,7 @@ function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?
             {/* Plan Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {PLAN_TIERS.map((plan) => {
-                    const isCurrent = plan.id === currentPlanId || (plan.name === 'Growth' && currentPlanId === 'professional') || (plan.name === 'Unlimited' && currentPlanId === 'enterprise');
+                    const isCurrent = plan.id === currentPlanId;
                     const isLoading = loadingPlan === plan.id;
 
                     return (
@@ -1098,15 +1084,15 @@ function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?
                     <div className="space-y-4">
                         <div>
                             <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-sm text-gray-600">Senkronize Edilen Ürün</span>
+                                <span className="text-sm text-gray-600">Matched products</span>
                                 <span className="text-sm font-medium text-gray-900">
-                                    {limit === 'Unlimited' ? 'Sınırsız' : `${productsCount} / ${limit}`}
+                                    {`${productsCount} / ${limit}`}
                                 </span>
                             </div>
                             <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div 
                                     className={`h-2 rounded-full transition-all ${widthPercent > 90 ? 'bg-red-500' : widthPercent > 75 ? 'bg-yellow-500' : 'bg-green-500'}`} 
-                                    style={{ width: `${limit === 'Unlimited' ? 100 : widthPercent}%` }} 
+                                    style={{ width: `${widthPercent}%` }} 
                                 />
                             </div>
                         </div>

@@ -8,8 +8,9 @@
 const ETSY_BASE = 'https://openapi.etsy.com/v3/application';
 
 function getApiKey(): string {
-    // For x-api-key headers, Etsy often requires the full "Key:Secret" string.
-    return process.env.ETSY_API_KEY || '0y4c7v5r8ijsp7zvvtrg8fbu:cs8c7xrvx6';
+    const apiKey = process.env.ETSY_API_KEY || process.env.ETSY_CLIENT_ID;
+    if (!apiKey) throw new Error('ETSY_API_KEY is not configured');
+    return apiKey;
 }
 
 async function etsyFetch(endpoint: string, accessToken: string, options: RequestInit = {}) {
@@ -48,7 +49,7 @@ async function etsyFetch(endpoint: string, accessToken: string, options: Request
  */
 export async function exchangeToken(code: string, verifier: string, redirectUri: string) {
     const rawId = process.env.ETSY_CLIENT_ID || process.env.ETSY_API_KEY;
-    if (!rawId) throw new Error('ETSY_CLIENT_ID is not configured');
+    if (!rawId) throw new Error('ETSY_API_KEY is not configured');
 
     // For OAuth exchange, client_id MUST be the Key only (no secret).
     const clientId = rawId.split(':')[0].trim();
@@ -81,7 +82,7 @@ export async function exchangeToken(code: string, verifier: string, redirectUri:
  */
 export async function refreshToken(refreshToken: string) {
     const rawId = process.env.ETSY_CLIENT_ID || process.env.ETSY_API_KEY;
-    if (!rawId) throw new Error('ETSY_CLIENT_ID is not configured');
+    if (!rawId) throw new Error('ETSY_API_KEY is not configured');
 
     // For OAuth refresh, client_id MUST be the Key only (no secret).
     const clientId = rawId.split(':')[0].trim();

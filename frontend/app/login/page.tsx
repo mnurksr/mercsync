@@ -12,6 +12,21 @@ export default function AuthPage() {
     const toast = useToast();
     const searchParams = useSearchParams();
 
+    const redirectToShopifyAuth = (cleanShopName: string) => {
+        const shop = encodeURIComponent(cleanShopName);
+        const returnUrl = encodeURIComponent(`${window.location.origin}/dashboard`);
+        const authPath = `/api/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+
+        try {
+            if (window.top && window.top !== window.self) {
+                window.top.location.href = authPath;
+                return;
+            }
+        } catch {}
+
+        window.location.href = authPath;
+    };
+
     useEffect(() => {
         const shopParam = searchParams.get('shop');
         if (!shopParam) return;
@@ -24,9 +39,7 @@ export default function AuthPage() {
 
         if (!cleanShopName.endsWith('.myshopify.com')) return;
 
-        const shop = encodeURIComponent(cleanShopName);
-        const returnUrl = encodeURIComponent(`${window.location.origin}/dashboard`);
-        window.location.href = `/api/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+        redirectToShopifyAuth(cleanShopName);
     }, [searchParams]);
 
     const handleConnect = (e: React.FormEvent) => {
@@ -55,11 +68,7 @@ export default function AuthPage() {
             // For now, let's assume valid shopify domain.
         }
 
-        const shop = encodeURIComponent(cleanShopName);
-        const returnUrl = encodeURIComponent(`${window.location.origin}/dashboard`); // Or wherever you want them to land after auth
-
-        // Redirect to authentication webhook
-        window.location.href = `/api/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+        redirectToShopifyAuth(cleanShopName);
     };
 
     return (

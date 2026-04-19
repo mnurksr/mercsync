@@ -9,14 +9,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { getPlanConfig, PLAN_ORDER } from '@/config/plans';
 
-const PLANS: Record<string, { name: string; price: number }> = {
-    starter: { name: 'Starter', price: 29 },
-    professional: { name: 'Professional', price: 79 },
-    enterprise: { name: 'Enterprise', price: 199 }
-};
-
-const SHOPIFY_API_VERSION = '2024-01';
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-10';
 
 export async function POST(req: NextRequest) {
     try {
@@ -29,10 +24,10 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const planConfig = PLANS[plan];
+        const planConfig = getPlanConfig(plan);
         if (!planConfig) {
             return NextResponse.json(
-                { error: `Invalid plan: ${plan}. Must be one of: starter, professional, enterprise` },
+                { error: `Invalid plan: ${plan}. Must be one of: ${PLAN_ORDER.join(', ')}` },
                 { status: 400 }
             );
         }
@@ -56,15 +51,16 @@ export async function POST(req: NextRequest) {
 
         // We use the App Handle for the return URL since Shopify uses the handle in its admin routing path.
         const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || "mercsync-1";
-        const shopifyAppUrl = `https://admin.shopify.com/store/${shop_domain.replace('.myshopify.com', '')}/apps/${appHandle}`;
-        const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop_domain}`;
+        const shopifyAppUrl = `https://admin.shopify.com/store/${shop.shop_domain.replace('.myshopify.com', '')}/apps/${appHandle}`;
+        const returnUrl = `${shopifyAppUrl}/dashboard?shop=${shop.shop_domain}`;
 
         const mutation = `
-            mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
+            mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean, $trialDays: Int) {
                 appSubscriptionCreate(
                     name: $name,
                     returnUrl: $returnUrl,
                     test: $test,
+                    trialDays: $trialDays,
                     lineItems: $lineItems
                 ) {
                     appSubscription {
@@ -83,7 +79,8 @@ export async function POST(req: NextRequest) {
         const variables = {
             name: `MercSync ${planConfig.name}`,
             returnUrl,
-            test: true, // Development mode — remove for production
+            test: process.env.NODE_ENV !== 'production',
+            trialDays: planConfig.trialDays,
             lineItems: [
                 {
                     plan: {
@@ -126,7 +123,7 @@ export async function POST(req: NextRequest) {
         if (subscriptionData?.userErrors?.length > 0) {
             console.error('[Billing] User errors:', subscriptionData.userErrors);
             return NextResponse.json(
-                { error: subscriptionData.userErrors.map((e: any) => e.message).join(', ') },
+                { error: subscriptionData.userErrors.map((e: { message: string }) => e.message).join(', ') },
                 { status: 400 }
             );
         }
@@ -150,10 +147,11 @@ export async function POST(req: NextRequest) {
             price: planConfig.price
         });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Internal server error';
         console.error('[Billing] Error:', err);
         return NextResponse.json(
-            { error: err.message || 'Internal server error' },
+            { error: message },
             { status: 500 }
         );
     }

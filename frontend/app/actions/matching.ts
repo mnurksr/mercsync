@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
+import { checkMatchedItemLimit } from '@/utils/planLimits'
 
 // ─── Similarity helpers (shared with auto-match) ───
 
@@ -324,6 +325,36 @@ export async function matchProducts(
 
         if (variantMatches.length === 0) {
             return { success: false, message: 'No matching variants found between products' }
+        }
+
+        const existingMatchedVariants = await adminSupabase
+            .from('inventory_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('shop_id', shop.id)
+            .not('shopify_variant_id', 'is', null)
+            .not('etsy_variant_id', 'is', null)
+
+        if (existingMatchedVariants.error) {
+            return { success: false, message: existingMatchedVariants.error.message }
+        }
+
+        let additionalMatchedItems = 0
+        for (const match of variantMatches) {
+            const { data: alreadyMatched } = await adminSupabase
+                .from('inventory_items')
+                .select('id')
+                .eq('shop_id', shop.id)
+                .eq('shopify_variant_id', match.shopifyVariantId)
+                .eq('etsy_variant_id', match.etsyVariantId)
+                .maybeSingle()
+
+            if (!alreadyMatched) additionalMatchedItems += 1
+        }
+
+        const proposedMatchedItems = (existingMatchedVariants.count || 0) + additionalMatchedItems
+        const planLimit = await checkMatchedItemLimit(adminSupabase, shop.id, proposedMatchedItems)
+        if (!planLimit.ok) {
+            return { success: false, message: planLimit.message || 'Plan limit reached' }
         }
 
         // Write matches to staging tables + merge inventory_items

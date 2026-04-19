@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { processSync } from '../lib/processor';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 export async function POST(req: NextRequest) {
     try {
@@ -23,6 +24,24 @@ export async function POST(req: NextRequest) {
 
         // 1. Create (or update) sync_jobs record
         const supabase = createAdminClient();
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('plan_type')
+            .eq('owner_id', user_id)
+            .maybeSingle();
+
+        const plan = getPlanConfig(shop?.plan_type) || PLAN_CONFIG.starter;
+        const queuedClones = payload?.final_state?.queued_clones;
+        const cloneCount = (queuedClones?.to_shopify?.length || 0) + (queuedClones?.to_etsy?.length || 0);
+
+        if (cloneCount > 0 && !plan.capabilities.productCloning) {
+            return NextResponse.json({
+                error: `${plan.name} plan does not include product cloning. Please choose Growth or Pro to clone products between Shopify and Etsy.`,
+                code: 'PLAN_PRODUCT_CLONING_REQUIRED',
+                plan: plan.name
+            }, { status: 402 });
+        }
+
         await supabase
             .from('sync_jobs')
             .upsert({
@@ -48,10 +67,11 @@ export async function POST(req: NextRequest) {
 
         return response;
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Internal server error';
         console.error('[Sync API] Error:', err);
         return NextResponse.json(
-            { error: err.message || 'Internal server error' },
+            { error: message },
             { status: 500 }
         );
     }

@@ -40,12 +40,13 @@ export default function PrivacyPage() {
                         <li><strong>Compliance:</strong> To comply with legal obligations and platform (Shopify/Etsy) policies.</li>
                     </ul>
 
-                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. ETSY API DATA RETENTION (COMPLIANCE NOTICE)</h2>
-                    <p className="mb-4">In strict compliance with Etsy’s API Terms of Use, MercSync adheres to the following data retention rules:</p>
+                    <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. ETSY API DATA USE & RETENTION</h2>
+                    <p className="mb-4">MercSync uses Etsy API data only to provide the inventory synchronization, product matching, product cloning, pricing, and order-processing features selected by the merchant.</p>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
-                        <li><strong>24-Hour Limit:</strong> We do not retain Etsy listing content (such as descriptions, titles, or tags) or pricing data for longer than 24 hours. We refresh this data regularly to ensure accuracy.</li>
-                        <li><strong>Data Minimization:</strong> We only cache the minimum amount of data (e.g., Inventory IDs and Quantities) necessary to perform the synchronization service.</li>
-                        <li><strong>No Unauthorized Use:</strong> We do not use Etsy Member data for marketing or any purpose other than providing the MercSync service to you.</li>
+                        <li><strong>Operational Data:</strong> We store product identifiers, listing identifiers, SKUs, titles, prices, quantities, images, and related sync metadata while your Etsy shop remains connected, as needed to operate the Service.</li>
+                        <li><strong>Order Data:</strong> We process Etsy receipt and transaction identifiers and item quantities to synchronize inventory. We do not request or store buyer email addresses for this purpose.</li>
+                        <li><strong>Data Minimization:</strong> We only store Etsy data needed to provide the features you use and troubleshoot synchronization issues.</li>
+                        <li><strong>No Unauthorized Use:</strong> We do not sell Etsy data or use it for unrelated advertising or marketing.</li>
                     </ul>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">5. SHARING INFORMATION</h2>
@@ -62,7 +63,8 @@ export default function PrivacyPage() {
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. YOUR RIGHTS & DELETION</h2>
                     <p className="mb-4">You have the right to access, modify, or delete your personal information.</p>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
-                        <li><strong>Uninstall:</strong> When you uninstall MercSync from your Shopify store, your personal data and access tokens are automatically removed from our systems within 30 days.</li>
+                        <li><strong>Uninstall:</strong> When you uninstall MercSync from your Shopify store, access tokens are revoked or removed and shop-scoped operational sync data is removed from active use.</li>
+                        <li><strong>Platform Deletion Requests:</strong> When Shopify or Etsy sends an applicable deletion or redaction request, we delete the related shop-scoped records according to that platform request.</li>
                         <li><strong>Request:</strong> You may contact us at any time to request immediate deletion of your data.</li>
                     </ul>
 

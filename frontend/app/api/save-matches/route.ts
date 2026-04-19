@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { checkMatchedItemLimit } from '@/utils/planLimits';
 
 export async function POST(req: NextRequest) {
     try {
@@ -27,6 +28,43 @@ export async function POST(req: NextRequest) {
         }
 
         const shopId = shop.id;
+
+        const { count: existingMatchedCount, error: countError } = await supabase
+            .from('inventory_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('shop_id', shopId)
+            .not('shopify_variant_id', 'is', null)
+            .not('etsy_variant_id', 'is', null);
+
+        if (countError) {
+            return NextResponse.json({ error: countError.message }, { status: 500 });
+        }
+
+        let additionalMatchedItems = 0;
+        for (const match of matches) {
+            if (!match.shopify_variant_id || !match.etsy_variant_id) continue;
+
+            const { data: alreadyMatched } = await supabase
+                .from('inventory_items')
+                .select('id')
+                .eq('shop_id', shopId)
+                .eq('shopify_variant_id', match.shopify_variant_id)
+                .eq('etsy_variant_id', match.etsy_variant_id)
+                .maybeSingle();
+
+            if (!alreadyMatched) additionalMatchedItems += 1;
+        }
+
+        const planLimit = await checkMatchedItemLimit(supabase, shopId, (existingMatchedCount || 0) + additionalMatchedItems);
+        if (!planLimit.ok) {
+            return NextResponse.json({
+                error: planLimit.message,
+                code: 'PLAN_MATCHED_ITEM_LIMIT',
+                plan: planLimit.planName,
+                limit: planLimit.limit,
+                current: planLimit.current
+            }, { status: 402 });
+        }
 
         // 2. Process Matches
         const results = [];
@@ -69,9 +107,10 @@ export async function POST(req: NextRequest) {
 
             if (existingItems && existingItems.length > 0) {
                 // Update the first found record
-                const targetId = existingItems[0].id;
-                const existingSId = (existingItems[0] as any).shopify_product_id;
-                const existingEId = (existingItems[0] as any).etsy_listing_id;
+                const existingItem = existingItems[0];
+                const targetId = existingItem.id;
+                const existingSId = existingItem.shopify_product_id;
+                const existingEId = existingItem.etsy_listing_id;
 
                 await supabase
                     .from('inventory_items')
@@ -130,8 +169,9 @@ export async function POST(req: NextRequest) {
             message: 'Matches saved successfully'
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal Server Error';
         console.error('[API/save-matches] Internal Error:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

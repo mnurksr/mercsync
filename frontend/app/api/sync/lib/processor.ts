@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as shopifyApi from './shopify';
 import * as etsyApi from './etsy';
 import { sendLog, sendStockSync, sendProductClone, markCompleted, markFailed } from './progress';
 import { calculatePrice } from '../price-sync';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 const supabase = createAdminClient();
 
@@ -81,6 +83,12 @@ export async function processSync(payload: SyncPayload) {
 
         if (!shop) {
             await markFailed(job_id, 'Shop not found');
+            return;
+        }
+
+        const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter;
+        if ((parsed.toShopify.length > 0 || parsed.toEtsy.length > 0) && !plan.capabilities.productCloning) {
+            await markFailed(job_id, `${plan.name} plan does not include product cloning. Please choose Growth or Pro.`);
             return;
         }
 
@@ -634,7 +642,7 @@ async function finalizeInventory(shop: any, payload: SyncPayload) {
             // it means the Shopify item might be missing from staging or filtered.
             // We should still link them if the info is there!
             let sId = null;
-            let sVarId = ep.shopify_variant_id;
+            const sVarId = ep.shopify_variant_id;
             if (sVarId) {
                 const spMatch = sProds.find(s => s.shopify_variant_id === sVarId);
                 if (spMatch) {
@@ -1176,7 +1184,7 @@ async function cloneToEtsy(
             }
 
             // Find if this was one of the newly added variants to link the shopify_variant_id
-            let matchedNewVariant = (variantsToAdd || []).find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
+            const matchedNewVariant = (variantsToAdd || []).find((va: any) => va.title === variantTitle || va.sku === etsyProduct.sku);
 
             // [ID SANITIZATION] Extremely robust check: If the received ID is a 49... (Inventory ID), 
             // look up the correct 47... (Variant ID) from staging_shopify_products directly.

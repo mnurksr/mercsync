@@ -23,7 +23,7 @@ Kullanici akisi:
 
 Mevcut sorun:
 - `notifications.type` DB constraint'i yalnizca `sync_error`, `system_alert`, `billing` kabul ediyor.
-- Kod ise `stock_zero`, `sync_failed`, `oversell_risk`, `token_expiring` insert etmeye calisiyor.
+- Kod ise `stock_zero`, `sync_failed`, `oversell_risk` insert etmeye calisiyor.
 - Bu nedenle in-app notification insert islemleri constraint hatasiyla dusuyor.
 - SQL trigger `sync_logs` failure durumunda notification yaziyor ama kullanici notification tercihlerini ve email kanalini dikkate almiyor.
 
@@ -33,7 +33,6 @@ Uygulama:
      - `stock_zero`
      - `sync_failed`
      - `oversell_risk`
-     - `token_expiring`
      - `system_alert`
      - `billing`
    - Geriye uyumluluk icin eski `sync_error` ya migrate edilmeli ya da constraint icinde gecici kabul edilmeli.
@@ -48,7 +47,6 @@ Uygulama:
    - `stock_zero`: critical
    - `oversell_risk`: warning
    - `sync_failed`: error
-   - `token_expiring`: key/reconnect
 
 Kontrol senaryolari:
 - Stock 0 olunca bell'e notification dusmeli.
@@ -62,15 +60,14 @@ Kontrol senaryolari:
 
 Eksik tetikler:
 - Etsy webhook stok dusuruyor ama notification tetiklemiyor.
-- Token expiring ayari UI'da var ama backend event'i yok.
 - Token refresh fail sadece `sync_logs` yaziyor.
 
 Uygulama:
 1. `frontend/app/api/webhooks/etsy/route.ts`
    - Cron'daki stock_zero / oversell_risk mantigi webhook'a da eklenmeli.
 2. `frontend/app/api/cron/token-refresh/route.ts`
-   - Token refresh basarisiz olursa `sync_failed` veya `token_expiring` notification olustur.
-   - Token su kadar sure icinde expire olacaksa `token_expiring` notification olustur.
+   - Token refresh basarisiz olursa kullanicinin anlayacagi sekilde `sync_failed` notification olustur.
+   - Token expiring teknik bir detay oldugu icin kullanici ayari ve kullanici bildirimi olarak kaldirildi.
    - Ayni token icin spam olmamasi icin metadata veya son bildirim zamani kontrolu ekle.
 3. Product sync failure ve price sync failure olaylari `sync_failed` notification'a baglanmali.
 
@@ -84,11 +81,13 @@ Mevcut durum:
 Uygulama:
 1. `.env.example` guncelle:
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `SHOPIFY_CLIENT_ID`
+   - `NEXT_PUBLIC_SHOPIFY_API_KEY`
    - `SHOPIFY_CLIENT_SECRET`
+   - `SHOPIFY_API_VERSION`
+   - `NEXT_PUBLIC_SHOPIFY_APP_HANDLE`
    - `SHOPIFY_APP_SLUG`
-   - `SHOPIFY_APP_URL`
-   - `ETSY_CLIENT_ID`
+   - `NEXT_PUBLIC_APP_URL`
+   - `ETSY_API_KEY`
    - `ETSY_CLIENT_SECRET`
    - `ETSY_WEBHOOK_SECRET`
    - `CRON_SECRET`
@@ -292,4 +291,3 @@ Support email: info@mercsync.com
 ### Kisa app aciklamasi
 
 MercSync helps merchants keep matched Shopify and Etsy product inventory in sync. Merchants can import products, match or clone listings, track master stock, apply pricing rules, and receive inventory/sync notifications.
-

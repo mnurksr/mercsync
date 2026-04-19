@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Etsy Order Polling Cron
  * 
@@ -13,6 +14,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
 import { createNotification } from '../../../actions/notifications';
+import { canProcessMonthlyOrderSync } from '@/utils/planLimits';
 
 const POLL_WINDOW_MS = 20 * 60 * 1000; // 20 minutes overlap to avoid missing orders
 
@@ -99,14 +101,41 @@ export async function GET(req: NextRequest) {
                     // Skip if already processed (check sync_logs)
                     const { data: existing } = await supabase
                         .from('sync_logs')
-                        .select('id')
+                        .select('id, status')
                         .eq('shop_id', shop.id)
                         .eq('event_type', 'order')
                         .eq('metadata->>etsy_receipt_id', receiptId.toString())
+                        .order('created_at', { ascending: false })
+                        .limit(1)
                         .maybeSingle();
 
-                    if (existing) {
+                    if (existing?.status === 'success') {
                         continue; // Already processed this receipt
+                    }
+
+                    const orderLimit = await canProcessMonthlyOrderSync(supabase, shop.id);
+                    if (!orderLimit.ok) {
+                        if (existing?.status === 'skipped') {
+                            continue;
+                        }
+
+                        console.warn(`${logPrefix} Monthly order sync limit reached for shop ${shop.id}: ${orderLimit.current}/${orderLimit.limit}`);
+                        await supabase.from('sync_logs').insert({
+                            shop_id: shop.id,
+                            source: 'etsy',
+                            event_type: 'order',
+                            direction: 'etsy_to_shopify',
+                            status: 'skipped',
+                            error_message: orderLimit.message,
+                            metadata: {
+                                etsy_receipt_id: receiptId.toString(),
+                                plan: orderLimit.planName,
+                                monthly_order_sync_count: orderLimit.current,
+                                monthly_order_sync_limit: orderLimit.limit
+                            },
+                            created_at: new Date().toISOString()
+                        });
+                        continue;
                     }
 
                     // Get transactions (line items) for this receipt
@@ -116,8 +145,6 @@ export async function GET(req: NextRequest) {
                     for (const tx of transactions) {
                         const listingId = tx.listing_id?.toString();
                         const quantity = tx.quantity || 1;
-                        const variationData = tx.variations || [];
-
                         if (!listingId) continue;
 
                         // 6. Find matching inventory_item
@@ -236,8 +263,7 @@ export async function GET(req: NextRequest) {
                         status: 'success',
                         metadata: {
                             etsy_receipt_id: receiptId.toString(),
-                            transaction_count: transactions.length,
-                            buyer_email: receipt.buyer_email || null
+                            transaction_count: transactions.length
                         },
                         created_at: new Date().toISOString()
                     });

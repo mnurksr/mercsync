@@ -1,70 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/useToast';
 import { getShopDomain } from '@/utils/shopDomain';
+import { PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
 
-const PLANS = [
-    {
-        id: 'starter',
-        name: 'Starter',
-        price: 29,
-        icon: Zap,
-        color: 'from-blue-500 to-indigo-600',
-        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
-        description: 'Mükemmel bir başlangıç',
-        features: [
-            '500 Ürüne kadar senkronizasyon',
-            '1 Etsy mağazası bağlantısı',
-            'Saatlik stok senkronizasyonu',
-            'Temel otomatik eşleştirme (Auto-match)',
-            'E-posta desteği'
-        ]
-    },
-    {
-        id: 'professional',
-        name: 'Growth',
-        price: 79,
-        icon: Crown,
-        color: 'from-violet-500 to-purple-600',
-        badgeColor: 'bg-violet-50 text-violet-700 border-violet-200',
-        popular: true,
-        description: 'Büyüyen işletmeler için',
-        features: [
-            '5,000 Ürüne kadar senkronizasyon',
-            '1 Etsy mağazası bağlantısı',
-            'Gerçek zamanlı (Real-time) stok senkronu',
-            'Fiyat kuralı (Price margin) eşitleme',
-            'Öncelikli destek',
-            'AI destekli akıllı eşleştirme'
-        ]
-    },
-    {
-        id: 'enterprise',
-        name: 'Unlimited',
-        price: 199,
-        icon: Shield,
-        color: 'from-gray-800 to-gray-900',
-        badgeColor: 'bg-gray-100 text-gray-700 border-gray-200',
-        description: 'Yüksek hacimli satıcılar',
-        features: [
-            'Sınırsız ürün senkronizasyonu',
-            '1 Etsy mağazası bağlantısı',
-            'Gerçek zamanlı (Real-time) stok senkronu',
-            'Fiyat kuralı (Price margin) eşitleme',
-            'Özel müşteri temsilcisi',
-            'SLA Garantisi'
-        ]
-    }
-];
+const PLAN_STYLE: Record<PlanId, { icon: typeof Zap; color: string; popular?: boolean }> = {
+    starter: { icon: Zap, color: 'from-blue-500 to-indigo-600' },
+    growth: { icon: Crown, color: 'from-violet-500 to-purple-600', popular: true },
+    pro: { icon: Shield, color: 'from-gray-800 to-gray-900' },
+};
+
+const PLANS = PLAN_ORDER.map(id => ({
+    ...PLAN_CONFIG[id],
+    ...PLAN_STYLE[id],
+}));
 
 export default function PlansPage() {
     const { user } = useAuth();
-    const router = useRouter();
     const toast = useToast();
     const searchParams = useSearchParams();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -101,13 +58,15 @@ export default function PlansPage() {
 
             if (data.confirmationUrl) {
                 // Redirect to Shopify's secure billing page
-                window.top ? window.top.location.href = data.confirmationUrl : window.location.href = data.confirmationUrl;
+                const targetWindow = window.top || window;
+                targetWindow.location.href = data.confirmationUrl;
             } else {
                 throw new Error('No confirmation URL received');
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to start billing. Please try again.';
             console.error('Billing error:', err);
-            toast.error(err.message || 'Failed to start billing. Please try again.');
+            toast.error(message);
             setSelectedPlan(null);
         } finally {
             setIsLoading(false);

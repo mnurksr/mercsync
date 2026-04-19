@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { checkMatchedItemLimit } from '@/utils/planLimits';
 
 export async function POST(req: Request) {
     try {
@@ -58,6 +59,20 @@ export async function POST(req: Request) {
 
         sStaging?.forEach(s => shopifyMap.set(s.shopify_variant_id, s));
         eStaging?.forEach(e => etsyMap.set(e.etsy_variant_id, e));
+
+        const proposedMatchedItems = (sStaging || []).filter(s => {
+            return !!s.etsy_variant_id && !!etsyMap.get(s.etsy_variant_id);
+        }).length;
+        const planLimit = await checkMatchedItemLimit(supabase, realShopId, proposedMatchedItems);
+        if (!planLimit.ok) {
+            return NextResponse.json({
+                error: planLimit.message,
+                code: 'PLAN_MATCHED_ITEM_LIMIT',
+                plan: planLimit.planName,
+                limit: planLimit.limit,
+                current: planLimit.current
+            }, { status: 402 });
+        }
 
         const processedShopifyVariants = new Set();
         const processedEtsyVariants = new Set();
@@ -185,8 +200,9 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ success: true });
 
-    } catch (e: any) {
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Server error';
         console.error('Match save API error:', e);
-        return NextResponse.json({ error: e.message || 'Server error' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

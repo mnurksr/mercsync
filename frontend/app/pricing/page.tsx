@@ -8,65 +8,19 @@ import { useToast } from '@/components/ui/useToast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getShopDomain } from '@/utils/shopDomain';
+import { PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
 
-const plans = [
-    {
-        name: 'Starter',
-        price: 29,
-        description: 'Perfect for small sellers just getting started',
-        features: [
-            'Up to 500 products synced',
-            '2 connected stores',
-            'Real-time inventory sync',
-            'Basic overselling protection',
-            'Email support',
-            '24-hour sync frequency'
-        ],
-        cta: 'Start Free Trial',
-        action: 'starter_payment',
-        popular: false,
-        icon: Zap
-    },
-    {
-        name: 'Professional',
-        price: 79,
-        description: 'For growing businesses with multiple channels',
-        features: [
-            'Up to 5,000 products synced',
-            '5 connected stores',
-            'Instant inventory sync',
-            'Advanced overselling protection',
-            'Priority email & chat support',
-            'Real-time sync (< 1 second)',
-            'Order synchronization',
-            'Analytics dashboard',
-            'API access'
-        ],
-        cta: 'Start Free Trial',
-        popular: true,
-        icon: Crown
-    },
-    {
-        name: 'Enterprise',
-        price: 199,
-        description: 'For high-volume sellers who need the best',
-        features: [
-            'Unlimited products synced',
-            'Unlimited connected stores',
-            'Instant inventory sync',
-            'AI-powered stock predictions',
-            'Dedicated account manager',
-            '24/7 phone & chat support',
-            'Custom integrations',
-            'White-label options',
-            'SLA guarantee (99.9% uptime)',
-            'Advanced reporting & exports'
-        ],
-        cta: 'Contact Sales',
-        popular: false,
-        icon: Shield
-    }
-];
+const PLAN_STYLE: Record<PlanId, { icon: typeof Zap; popular?: boolean }> = {
+    starter: { icon: Zap },
+    growth: { icon: Crown, popular: true },
+    pro: { icon: Shield },
+};
+
+const plans = PLAN_ORDER.map(id => ({
+    ...PLAN_CONFIG[id],
+    ...PLAN_STYLE[id],
+    cta: 'Start Free Trial',
+}));
 
 export default function PricingPage() {
     const { user } = useAuth();
@@ -106,13 +60,15 @@ export default function PricingPage() {
 
             if (data.confirmationUrl) {
                 // Redirect to Shopify's secure billing page (iframe-safe)
-                window.top ? window.top.location.href = data.confirmationUrl : window.location.href = data.confirmationUrl;
+                const targetWindow = window.top || window;
+                targetWindow.location.href = data.confirmationUrl;
             } else {
                 throw new Error('No confirmation URL received');
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'An error occurred. Please try again.';
             console.error('Billing error:', error);
-            toast.error(error.message || 'An error occurred. Please try again.');
+            toast.error(message);
         } finally {
             setIsLoading(null);
         }
@@ -128,8 +84,7 @@ export default function PricingPage() {
 
     const handlePlanClick = (plan: typeof plans[0]) => {
         if (isLoading) return;
-        const planId = plan.name.toLowerCase();
-        initiateSubscription(planId);
+        initiateSubscription(plan.id);
     };
 
     return (
@@ -170,7 +125,7 @@ export default function PricingPage() {
                     >
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-sm font-semibold mb-6 border border-blue-100">
                             <Sparkles className="w-4 h-4" />
-                            14-day free trial • No credit card required
+                            7-day free trial • Shopify Billing
                         </div>
 
                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-gray-900 mb-6">
@@ -246,7 +201,7 @@ export default function PricingPage() {
                                         ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}
                                     `}
                                 >
-                                    {isLoading === plan.name.toLowerCase() ? (
+                                    {isLoading === plan.id ? (
                                         <>
                                             <Loader2 className="w-4 h-4 animate-spin" />
                                             Processing...
@@ -270,7 +225,7 @@ export default function PricingPage() {
                             🛡️ 100% Money-Back Guarantee
                         </h3>
                         <p className="text-gray-300 max-w-xl mx-auto leading-relaxed">
-                            If MercSync doesn't save you at least 10x the subscription cost in prevented overselling losses within 30 days, we'll refund your entire payment. No questions asked.
+                            If MercSync doesn&apos;t save you at least 10x the subscription cost in prevented overselling losses within 30 days, we&apos;ll refund your entire payment. No questions asked.
                         </p>
                     </div>
                 </div>
@@ -285,7 +240,7 @@ export default function PricingPage() {
                         {[
                             {
                                 q: 'How does the free trial work?',
-                                a: 'Start your 14-day free trial with full access to all Professional features. No credit card required. Cancel anytime.'
+                                a: 'Each plan starts with a 7-day Shopify Billing trial. You can change or cancel from Shopify admin.'
                             },
                             {
                                 q: 'Can I change plans later?',

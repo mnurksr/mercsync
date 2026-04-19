@@ -12,22 +12,12 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Optionally remove X-Frame-Options to prevent conflict
-      {
-        source: "/(.*)",
-        headers: [
-          {
-            key: "x-frame-options",
-            value: "ALLOWALL",
-          },
-        ],
-      },
     ];
   },
   typescript: {
     ignoreBuildErrors: true,
   },
-  // @ts-ignore
+  // @ts-expect-error NextConfig typing in this setup does not include the eslint build flag.
   eslint: {
     ignoreDuringBuilds: true,
   },
