@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ShoppingBag, ArrowRight } from 'lucide-react';
 import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
@@ -10,6 +10,24 @@ export default function AuthPage() {
     const [shopName, setShopName] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const toast = useToast();
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        const shopParam = searchParams.get('shop');
+        if (!shopParam) return;
+
+        const cleanShopName = shopParam
+            .replace(/^https?:\/\//, '')
+            .replace(/\/$/, '')
+            .trim()
+            .toLowerCase();
+
+        if (!cleanShopName.endsWith('.myshopify.com')) return;
+
+        const shop = encodeURIComponent(cleanShopName);
+        const returnUrl = encodeURIComponent(`${window.location.origin}/dashboard`);
+        window.location.href = `/api/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+    }, [searchParams]);
 
     const handleConnect = (e: React.FormEvent) => {
         e.preventDefault();
