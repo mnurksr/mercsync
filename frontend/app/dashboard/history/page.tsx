@@ -10,6 +10,7 @@ import {
 
 export default function HistoryPage() {
     const [filterStatus, setFilterStatus] = useState('all');
+    const [filterEventType, setFilterEventType] = useState<'all' | 'order' | 'price'>('all');
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -99,14 +100,25 @@ export default function HistoryPage() {
         { key: 'skipped', label: 'Skipped' }
     ];
 
+    const eventFilters = [
+        { key: 'all', label: 'All Types' },
+        { key: 'order', label: 'Orders' },
+        { key: 'price', label: 'Prices' }
+    ] as const;
+
     // Stats calculated from ALL loaded items
     const successCount = history.filter(h => h.status === 'success').length;
     const failedCount = history.filter(h => h.status === 'failed').length;
 
     // Items to display based on selected filter
-    const displayedHistory = filterStatus === 'all' 
-        ? history 
-        : history.filter(h => h.status === filterStatus);
+    const displayedHistory = history.filter(h => {
+        const statusMatch = filterStatus === 'all' || h.status === filterStatus;
+        const eventMatch = filterEventType === 'all'
+            || (filterEventType === 'order' && h.eventType === 'order')
+            || (filterEventType === 'price' && h.eventType === 'price_update');
+
+        return statusMatch && eventMatch;
+    });
 
     const getPriceSummary = (item: HistoryItem) => {
         const oldPrice = item.metadata?.old_price;
@@ -169,20 +181,37 @@ export default function HistoryPage() {
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-1.5 mb-8 flex items-center gap-1">
-                {filters.map(f => (
-                    <button
-                        key={f.key}
-                        onClick={() => setFilterStatus(f.key)}
-                        className={`px-5 py-3 rounded-2xl text-sm font-bold transition-all ${
-                            filterStatus === f.key
-                                ? 'bg-gray-900 text-white shadow-lg'
-                                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                        }`}
-                    >
-                        {f.label}
-                    </button>
-                ))}
+            <div className="space-y-3 mb-8">
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-1.5 flex items-center gap-1">
+                    {filters.map(f => (
+                        <button
+                            key={f.key}
+                            onClick={() => setFilterStatus(f.key)}
+                            className={`px-5 py-3 rounded-2xl text-sm font-bold transition-all ${
+                                filterStatus === f.key
+                                    ? 'bg-gray-900 text-white shadow-lg'
+                                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-1.5 flex items-center gap-1">
+                    {eventFilters.map(f => (
+                        <button
+                            key={f.key}
+                            onClick={() => setFilterEventType(f.key)}
+                            className={`px-5 py-3 rounded-2xl text-sm font-bold transition-all ${
+                                filterEventType === f.key
+                                    ? 'bg-indigo-600 text-white shadow-lg'
+                                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Timeline */}

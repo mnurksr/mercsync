@@ -191,23 +191,35 @@ export async function GET(req: NextRequest) {
 
                                         await supabase.from('sync_logs').insert({
                                             shop_id: shop.id,
+                                            inventory_item_id: matched.id,
                                             source: 'etsy',
                                             direction: 'etsy_to_shopify',
                                             event_type: 'price_update',
                                             status: 'success',
-                                            metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id, old_price: etsyBasePrice, new_price: newPrice },
+                                            metadata: {
+                                                product_name: listing.title || null,
+                                                etsy_listing_id: listingId,
+                                                shopify_variant_id: matched.shopify_variant_id,
+                                                old_price: etsyBasePrice,
+                                                new_price: newPrice
+                                            },
                                             created_at: new Date().toISOString()
                                         });
                                     } catch (e: any) {
                                         console.error(`[Etsy Products Cron] Failed to update Shopify variant price ${matched.shopify_variant_id}:`, e);
                                         await supabase.from('sync_logs').insert({
                                             shop_id: shop.id,
+                                            inventory_item_id: matched.id,
                                             source: 'etsy',
                                             direction: 'etsy_to_shopify',
                                             event_type: 'price_update',
                                             status: 'failed',
                                             error_message: e.message,
-                                            metadata: { etsy_listing_id: listingId, shopify_variant_id: matched.shopify_variant_id },
+                                            metadata: {
+                                                product_name: listing.title || null,
+                                                etsy_listing_id: listingId,
+                                                shopify_variant_id: matched.shopify_variant_id
+                                            },
                                             created_at: new Date().toISOString()
                                         });
                                     }

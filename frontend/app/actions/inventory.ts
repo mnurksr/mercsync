@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 import { getPlanConfig, PLAN_CONFIG } from '@/config/plans'
+import { classifyInventoryState } from '@/utils/inventoryStatus'
 
 export type PlatformVariant = {
     id: string
@@ -646,11 +647,18 @@ export async function pushMismatchStock(): Promise<{ success: boolean; message: 
         // Skip digital products
         const physicalItems = items.filter(item => item.is_digital !== true);
 
-        // Filter to only items where at least one platform snapshot differs from master_stock
-        const mismatchedItems = physicalItems.filter(item =>
-            item.shopify_stock_snapshot !== item.master_stock ||
-            item.etsy_stock_snapshot !== item.master_stock
-        )
+        // Only true mismatches are pushable:
+        // master_stock > 0 and exactly one platform matches master while the other does not.
+        const mismatchedItems = physicalItems.filter(item => {
+            return classifyInventoryState({
+                isDigital: item.is_digital,
+                shopifyVariantId: item.shopify_variant_id,
+                etsyVariantId: item.etsy_variant_id,
+                masterStock: item.master_stock,
+                shopifyStock: item.shopify_stock_snapshot,
+                etsyStock: item.etsy_stock_snapshot,
+            }) === 'mismatch'
+        })
 
         if (mismatchedItems.length === 0) return { success: true, message: 'All items are already in sync.', pushed: 0 }
 

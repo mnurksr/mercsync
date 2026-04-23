@@ -52,7 +52,7 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
         id: item.id,
         eventType: item.event_type,
         action: mapEventToAction(item.event_type, item.source),
-        product: item.inventory_items?.name || null,
+        product: item.inventory_items?.name || item.metadata?.product_name || null,
         imageUrl: item.inventory_items?.image_url || null,
         source: item.source,
         direction: item.direction,

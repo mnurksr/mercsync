@@ -160,11 +160,9 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
     const etsyProductCount = etsyCount.count || 0
     const inventoryMappedCount = inventoryCount.count || 0
 
-    const hasStartedPlan = shop.plan_type && !['guest', 'none', 'basic'].includes(shop.plan_type.toLowerCase());
-
-    const isComplete = hasStartedPlan || (shopifyConnected && etsyConnected &&
+    const isComplete = shopifyConnected && etsyConnected &&
         shopifyProductCount > 0 && etsyProductCount > 0 &&
-        inventoryMappedCount > 0)
+        inventoryMappedCount > 0
 
     console.log(`[getSetupStatus] Debug Result for shopId ${shopId}:`, {
         shopifyConnected,
@@ -172,7 +170,6 @@ export async function getSetupStatus(testShopDomain?: string): Promise<SetupStat
         shopifyProductCount,
         etsyProductCount,
         inventoryMappedCount,
-        hasStartedPlan,
         plan_type: shop.plan_type,
         isComplete
     });

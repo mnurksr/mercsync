@@ -1,21 +1,30 @@
 import { redirect } from 'next/navigation';
+import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
 
 export default async function SetupLayout({ children }: { children: React.ReactNode }) {
     // RUNS ON THE SERVER = NO FLASHING OR JANK IN THE UI
+    let wizardStatus;
+    let shopify;
+
     try {
-        const wizardStatus = await getSetupStatus();
-
-        // Security / Routing Guard: If setup is already finished, do not let them linger in setup.
-        // Send them to the Billing step immediately.
-        if (wizardStatus.isComplete) {
-            redirect('/billing');
-        }
-
-        return <>{children}</>;
-
+        [wizardStatus, shopify] = await Promise.all([
+            getSetupStatus(),
+            getConnectedShop('shopify')
+        ]);
     } catch (e) {
         console.error('SERVER GUARD: Error checking setup state:', e);
         redirect('/login');
     }
+
+    if (!shopify.plan_type || ['guest', 'none', 'pending', 'basic'].includes(shopify.plan_type.toLowerCase())) {
+        redirect('/billing');
+    }
+
+    // Security / Routing Guard: If setup is already finished, do not let them linger in setup.
+    if (wizardStatus.isComplete) {
+        redirect('/dashboard');
+    }
+
+    return <>{children}</>;
 }

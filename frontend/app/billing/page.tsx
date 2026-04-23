@@ -61,7 +61,7 @@ export default function PlansPage() {
                 }
 
                 toast.success('Subscription activated.');
-                router.replace(`/dashboard?shop=${shopDomain}`);
+                router.replace(`/setup?shop=${shopDomain}`);
             } catch (error: unknown) {
                 if (cancelled) {
                     return;

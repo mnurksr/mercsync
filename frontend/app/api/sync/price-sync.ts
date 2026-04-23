@@ -279,6 +279,7 @@ export async function handlePriceUpdate(
                 status: status as any,
                 error_message: errorLog,
                 metadata: {
+                    product_name: shopifyPayload.title || null,
                     duration_ms: duration,
                     old_prices_base: oldPrices,
                     new_prices_calculated: newPrices

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
+import { classifyInventoryState } from '@/utils/inventoryStatus'
 
 export type DashboardStats = {
     totalProducts: number
@@ -80,7 +81,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
     // 2. Count Unique Products and Collect Alerts
     const { data: productStats } = await supabase
         .from('inventory_items')
-        .select('id, name, sku, image_url, shopify_product_id, etsy_listing_id, status, shopify_stock_snapshot, etsy_stock_snapshot')
+        .select('id, name, sku, image_url, shopify_product_id, etsy_listing_id, status, master_stock, shopify_stock_snapshot, etsy_stock_snapshot')
         .in('shop_id', shopIds)
 
     let uniqueProducts = new Set<string>()
@@ -102,15 +103,15 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
                 matchedProductsSet.add(productKey!)
             }
 
-            // Variant level checks
-            if (item.status === 'Action Required') {
-                actionRequiredItems.push(item)
-            } else if (item.status === 'MISMATCH' || item.status === 'Mismatch' || item.shopify_stock_snapshot !== item.etsy_stock_snapshot) {
-                // Only count mismatch if both IDs are present (it's a linked item)
-                if (item.shopify_product_id && item.etsy_listing_id) {
-                    mismatchItems.push(item)
-                }
-            }
+            const itemState = classifyInventoryState({
+                shopifyVariantId: item.shopify_product_id,
+                etsyVariantId: item.etsy_listing_id,
+                masterStock: item.master_stock,
+                shopifyStock: item.shopify_stock_snapshot,
+                etsyStock: item.etsy_stock_snapshot,
+            })
+            if (itemState === 'action_required') actionRequiredItems.push(item)
+            if (itemState === 'mismatch') mismatchItems.push(item)
         })
     }
 

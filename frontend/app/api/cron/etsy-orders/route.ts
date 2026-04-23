@@ -15,6 +15,7 @@ import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
 import { createNotification } from '../../../actions/notifications';
 import { canProcessMonthlyOrderSync } from '@/utils/planLimits';
+import { classifyInventoryState } from '@/utils/inventoryStatus';
 
 const POLL_WINDOW_MS = 20 * 60 * 1000; // 20 minutes overlap to avoid missing orders
 
@@ -150,7 +151,7 @@ export async function GET(req: NextRequest) {
                         // 6. Find matching inventory_item
                         const { data: item } = await supabase
                             .from('inventory_items')
-                            .select('id, master_stock, shopify_inventory_item_id, selected_location_ids, location_inventory_map')
+                            .select('id, master_stock, shopify_stock_snapshot, etsy_stock_snapshot, shopify_variant_id, shopify_inventory_item_id, selected_location_ids, location_inventory_map')
                             .eq('shop_id', shop.id)
                             .eq('etsy_listing_id', listingId)
                             .maybeSingle();
@@ -159,6 +160,14 @@ export async function GET(req: NextRequest) {
                             console.log(`${logPrefix} No Shopify match for Etsy listing ${listingId}. Skipping.`);
                             continue;
                         }
+
+                        const itemStateBeforeOrder = classifyInventoryState({
+                            shopifyVariantId: item.shopify_variant_id,
+                            etsyVariantId: listingId,
+                            masterStock: item.master_stock,
+                            shopifyStock: item.shopify_stock_snapshot,
+                            etsyStock: item.etsy_stock_snapshot,
+                        });
 
                         // 7. Decrease Shopify stock using Cascade Deduction
                         const newStock = Math.max(0, (item.master_stock || 0) - quantity);
@@ -173,7 +182,7 @@ export async function GET(req: NextRequest) {
                             }
                         }
 
-                        if (deductionOrder.length > 0 && shop.access_token) {
+                        if (itemStateBeforeOrder !== 'action_required' && deductionOrder.length > 0 && shop.access_token) {
                             try {
                                 const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
                                 

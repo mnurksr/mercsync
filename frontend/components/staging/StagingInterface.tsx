@@ -15,6 +15,7 @@ import ConfirmModal from '@/components/ui/ConfirmModal';
 import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/components/dashboard/CloneModal';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 // Types
 type MatchedPair = {
@@ -679,13 +680,15 @@ interface StagingInterfaceProps {
     onComplete?: () => void;
     onBack?: () => void;
     userId?: string;
+    shopPlanType?: string | null;
 }
 
-export default function StagingInterface({ isSetupMode = false, onComplete, onBack, userId: propUserId }: StagingInterfaceProps) {
+export default function StagingInterface({ isSetupMode = false, onComplete, onBack, userId: propUserId, shopPlanType }: StagingInterfaceProps) {
     const { user: authUser } = useAuth();
     const toast = useToast();
     const router = useRouter();
     const cache = getCache();
+    const currentPlan = useMemo(() => getPlanConfig(shopPlanType) || PLAN_CONFIG.starter, [shopPlanType]);
 
     // Confirm Modal State
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void; variant?: 'danger' | 'default' }>({ isOpen: false, title: '', message: '', onConfirm: () => { } });
@@ -774,6 +777,14 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [draggedGroup, setDraggedGroup] = useState<{ group: ProductGroup, from: 'shopify' | 'etsy' } | null>(null);
     const [dropTargetGroup, setDropTargetGroup] = useState<string | null>(null);
     const [centerHover, setCenterHover] = useState(false);
+    const linkedMatchLimit = currentPlan.limits.matchedItems;
+    const linkedCount = useMemo(() => matches.filter(m => m.shopify && m.etsy).length, [matches]);
+
+    const hasLinkedMatchCapacity = (additionalMatches: number = 1) => linkedCount + additionalMatches <= linkedMatchLimit;
+
+    const showMatchLimitWarning = () => {
+        toast.warning(`${currentPlan.name} plan allows up to ${linkedMatchLimit} matched products. Upgrade to continue matching more items.`);
+    };
 
     const handleGoBack = async () => {
         setConfirmModal({
@@ -866,10 +877,17 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 setLocations(res.data);
                 if (res.data.length > 0) {
                     const mappedLocs = res.data;
-                    const activeLocs = mappedLocs.filter(l => l.active).map(l => l.id.toString());
+                    const activeLocs = mappedLocs
+                        .filter(l => l.active)
+                        .map(l => l.id.toString())
+                        .slice(0, currentPlan.limits.maxTrackedLocations);
+                    const fallbackLoc = mappedLocs[0].id.toString();
+                    const normalizedSelection = activeLocs.length > 0
+                        ? activeLocs
+                        : [fallbackLoc].slice(0, currentPlan.limits.maxTrackedLocations);
 
-                    setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : [mappedLocs[0].id.toString()]);
-                    setPrimaryLocationId(activeLocs.length > 0 ? activeLocs[0] : mappedLocs[0].id.toString());
+                    setSelectedLocationIds(normalizedSelection);
+                    setPrimaryLocationId(normalizedSelection[0] || fallbackLoc);
                 }
             } else {
                 toast.error(res.message || 'Failed to load locations.');
@@ -994,6 +1012,14 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     console.error('Error orchestrating match payload:', e);
                 }
                 // ----------------------------------------------
+
+                if (!currentPlan.capabilities.productCloning) {
+                    await startSyncWithState({
+                        baseMatches: refreshedMatches,
+                        queuedClones: { to_shopify: [], to_etsy: [] }
+                    });
+                    return;
+                }
 
                 openReconciliation(refreshedMatches);
             } else {
@@ -1293,6 +1319,12 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         const s = selectedGroup.side === 'shopify' ? sourceGroup : group;
         const e = selectedGroup.side === 'etsy' ? sourceGroup : group;
 
+        if (!hasLinkedMatchCapacity()) {
+            showMatchLimitWarning();
+            setSelectedGroup(null);
+            return;
+        }
+
         // Perform Match - USER REQUEST: Do NOT auto-match variants. All start as unmatched.
         // const { matches: vm, unmatchedShopify, unmatchedEtsy } = matchVariants(s, e);
 
@@ -1333,6 +1365,12 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
         const s = draggedGroup.from === 'shopify' ? draggedGroup.group : target;
         const e = draggedGroup.from === 'etsy' ? draggedGroup.group : target;
+
+        if (!hasLinkedMatchCapacity()) {
+            showMatchLimitWarning();
+            handleDragEnd();
+            return;
+        }
 
         // USER REQUEST: Do NOT auto-match variants. All start as unmatched.
         // const { matches: vm, unmatchedShopify, unmatchedEtsy } = matchVariants(s, e);
@@ -1449,6 +1487,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                 const newMatches: MatchedGroup[] = [];
                 const processedShopifyIds = new Set<string>();
                 const processedEtsyIds = new Set<string>();
+                let remainingLinkedCapacity = Math.max(0, linkedMatchLimit - linkedCount);
 
                 // 1. Process LINKED Products (Center Column) with Variants
                 if (data.linked_products && Array.isArray(data.linked_products)) {
@@ -1460,7 +1499,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         const sGroup = shopifyGroups.find(p => p.id === sId);
                         const eGroup = etsyGroups.find(p => p.id === eId);
 
-                        if (sGroup && eGroup) {
+                        if (sGroup && eGroup && remainingLinkedCapacity > 0) {
                             const variantMatches: VariantMatch[] = [];
                             const usedShopifyVarIds = new Set<string>();
                             const usedEtsyVarIds = new Set<string>();
@@ -1499,6 +1538,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                             });
                             processedShopifyIds.add(sGroup.id);
                             processedEtsyIds.add(eGroup.id);
+                            remainingLinkedCapacity -= 1;
                         }
                     });
                 }
@@ -1569,6 +1609,10 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     // Filter out processed groups from the side columns?
                     // The main UI renders `shopifyGroups.filter(g => !matches.some(m => m.shopify?.id === g.id))`
                     // So we just need to ensure matches state is updated.
+                }
+
+                if (data.linked_products?.length > 0 && remainingLinkedCapacity === 0) {
+                    toast.warning(`${currentPlan.name} plan match limit reached. Extra auto-matched products stayed in the Shopify and Etsy lists.`);
                 }
             }
         } catch (err) {
@@ -1685,16 +1729,18 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         setCrossListing({ to_shopify: [], to_etsy: [] });
     };
 
-    // Save changes
-    const saveChanges = async () => {
+    const startSyncWithState = async (options?: { baseMatches?: MatchedGroup[]; queuedClones?: { to_shopify: CrossListingItem[]; to_etsy: CrossListingItem[] } }) => {
         if (!currentUserId) return;
         setSyncing(true);
 
         try {
+            const baseMatches = options?.baseMatches || matches;
+            const queuedClones = options?.queuedClones || crossListing;
+
             // Flatten items from all groups safely
             const allItems = showReconcile
                 ? (reconcileGroups.flatMap(g => g.items) as ReconcileItem[])
-                : (matches.map(m => ({
+                : (baseMatches.map(m => ({
                     id: m.id,
                     shopify: m.shopify,
                     etsy: m.etsy,
@@ -1749,8 +1795,8 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         sku: i.shopify?.sku || i.etsy?.sku
                     })),
                 queued_clones: {
-                    to_shopify: crossListing.to_shopify,
-                    to_etsy: crossListing.to_etsy
+                    to_shopify: queuedClones.to_shopify,
+                    to_etsy: queuedClones.to_etsy
                 }
             };
 
@@ -1789,7 +1835,11 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
         }
     };
 
-    const linkedCount = matches.filter(m => m.shopify && m.etsy).length;
+    // Save changes
+    const saveChanges = async () => {
+        await startSyncWithState();
+    };
+
     const singleCount = matches.filter(m => m.single).length;
 
     // === RECONCILIATION VIEW (2 TABS) ===
@@ -2700,7 +2750,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                         </div>
 
                         <p className="text-sm text-gray-500 mb-4">
-                            Select which Shopify locations MercSync should track for inventory sync with Etsy.
+                            Select which Shopify locations MercSync should track for inventory sync with Etsy. {currentPlan.limits.maxTrackedLocations === 1 ? 'Your current plan tracks 1 location.' : `Your current plan tracks up to ${currentPlan.limits.maxTrackedLocations} locations.`}
                         </p>
 
                         <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 mb-5 space-y-1.5">
@@ -2742,11 +2792,23 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                             alert("Cannot unselect the Main Fulfillment Location. Please assign a new Main Location first.");
                                                             return;
                                                         }
-                                                        setSelectedLocationIds(prev =>
-                                                            isSelected
-                                                                ? prev.filter(id => id !== loc.id.toString())
-                                                                : [...prev, loc.id.toString()]
-                                                        );
+                                                        setSelectedLocationIds(prev => {
+                                                            if (isSelected) {
+                                                                return prev.filter(id => id !== loc.id.toString());
+                                                            }
+
+                                                            if (currentPlan.limits.maxTrackedLocations === 1) {
+                                                                setPrimaryLocationId(loc.id.toString());
+                                                                return [loc.id.toString()];
+                                                            }
+
+                                                            if (prev.length >= currentPlan.limits.maxTrackedLocations) {
+                                                                toast.warning(`${currentPlan.name} plan allows up to ${currentPlan.limits.maxTrackedLocations} tracked Shopify location${currentPlan.limits.maxTrackedLocations > 1 ? 's' : ''}.`);
+                                                                return prev;
+                                                            }
+
+                                                            return [...prev, loc.id.toString()];
+                                                        });
                                                     }}
                                                 >
                                                     <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600' : 'bg-white border border-gray-300'

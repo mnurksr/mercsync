@@ -40,6 +40,7 @@ export default function SetupPage() {
     const [shopifyFilters, setShopifyFilters] = useState<string[]>(['active']);
     const [etsyFilters, setEtsyFilters] = useState<string[]>(['active']);
     const [ownerId, setOwnerId] = useState<string | null>(null);
+    const [shopPlanType, setShopPlanType] = useState<string | null>(null);
 
     const [isMatching, setIsMatching] = useState(false);
     const [isMatched, setIsMatched] = useState(false);
@@ -86,6 +87,7 @@ export default function SetupPage() {
 
             const resolvedOwnerId = shopify.owner_id || etsy.owner_id || null;
             if (resolvedOwnerId) setOwnerId(resolvedOwnerId);
+            setShopPlanType(shopify.plan_type || null);
 
             const sCounts = setupStatus?.initialProductCounts?.shopify || {};
             const eCounts = setupStatus?.initialProductCounts?.etsy || {};
@@ -240,6 +242,7 @@ export default function SetupPage() {
         return <StagingInterface
             isSetupMode={true}
             userId={activeUserId}
+            shopPlanType={shopPlanType}
             onBack={() => setShowMatchingInterface(false)}
         />;
     }

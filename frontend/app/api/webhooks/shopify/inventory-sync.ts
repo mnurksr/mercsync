@@ -12,6 +12,7 @@ import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
 import { createNotification } from '../../../actions/notifications';
 import { canProcessMonthlyOrderSync } from '@/utils/planLimits';
+import { classifyInventoryState } from '@/utils/inventoryStatus';
 
 type SyncResult = {
     status: 'success' | 'failed' | 'skipped';
@@ -278,7 +279,7 @@ export async function handleShopifyOrder(
         for (const [variantId, quantity] of variantQuantities.entries()) {
             const { data: item } = await supabase
                 .from('inventory_items')
-                .select('id, name, master_stock, shopify_stock_snapshot, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
+                .select('id, name, master_stock, shopify_stock_snapshot, etsy_stock_snapshot, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
                 .eq('shop_id', shop.id)
                 .eq('shopify_variant_id', variantId)
                 .maybeSingle();
@@ -287,6 +288,14 @@ export async function handleShopifyOrder(
                 skippedItems++;
                 continue;
             }
+
+            const itemStateBeforeOrder = classifyInventoryState({
+                shopifyVariantId: variantId,
+                etsyVariantId: item.etsy_variant_id,
+                masterStock: item.master_stock,
+                shopifyStock: item.shopify_stock_snapshot,
+                etsyStock: item.etsy_stock_snapshot,
+            });
 
             let currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0));
 
@@ -321,7 +330,9 @@ export async function handleShopifyOrder(
 
             let pushedToEtsy = false;
 
-            if (canPushToEtsy && canUseOrderQuota && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
+            if (itemStateBeforeOrder === 'action_required') {
+                skippedItems++;
+            } else if (canPushToEtsy && canUseOrderQuota && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
                 try {
                     const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
                     const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
@@ -420,6 +431,7 @@ export async function handleShopifyOrder(
                 synced_items: syncedItems,
                 failed_items: failedItems,
                 skipped_items: skippedItems,
+                action_required_blocked: skippedItems > 0,
                 quota_limited: !canUseOrderQuota
             }
         });

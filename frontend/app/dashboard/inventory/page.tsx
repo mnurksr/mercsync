@@ -25,6 +25,38 @@ import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
 import { SymmetricSyncModal } from './SymmetricSyncModal';
 import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 import { getConnectedShop } from '../../actions/shop';
+import { classifyInventoryState } from '@/utils/inventoryStatus';
+
+function formatInventoryDisplayName(name?: string | null) {
+    const raw = (name || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return 'Unnamed Product';
+
+    const parts = raw.split(' - ').map(part => part.trim()).filter(Boolean);
+    if (parts.length <= 1) return raw;
+
+    const deduped: string[] = [];
+
+    for (const part of parts) {
+        const lowerPart = part.toLowerCase();
+
+        if (deduped.some(existing => existing.toLowerCase() === lowerPart)) {
+            continue;
+        }
+
+        const repeatedPrefix = deduped.find(existing => lowerPart.startsWith(`${existing.toLowerCase()} `));
+        if (repeatedPrefix) {
+            const remainder = part.slice(repeatedPrefix.length).trim();
+            if (remainder) {
+                deduped.push(remainder);
+            }
+            continue;
+        }
+
+        deduped.push(part);
+    }
+
+    return deduped.join(' - ');
+}
 
 
 // --- Main InventoryPage Component ---
@@ -98,18 +130,18 @@ export default function InventoryPage() {
         { key: 'digital', label: 'Digital', color: 'bg-purple-100 text-purple-700' },
     ], []);
 
+    const getStockState = useCallback((item: InventoryItem) => classifyInventoryState({
+        isDigital: item.is_digital,
+        shopifyVariantId: item.shopify_variant_id,
+        etsyVariantId: item.etsy_variant_id,
+        masterStock: item.master_stock,
+        shopifyStock: item.shopify_stock_snapshot,
+        etsyStock: item.etsy_stock_snapshot,
+    }), []);
+
     const getItemStatusKey = useCallback((item: InventoryItem): string => {
-        if (item.is_digital) return 'digital';
-        if (!item.shopify_variant_id || !item.etsy_variant_id) {
-            if (item.shopify_variant_id && !item.etsy_variant_id) return 'shopify_only';
-            if (item.etsy_variant_id && !item.shopify_variant_id) return 'etsy_only';
-            return 'unlinked';
-        }
-        if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) return 'mismatch';
-        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return 'mismatch';
-        if (item.status === 'Action Required') return 'action_required';
-        return 'in_sync';
-    }, []);
+        return getStockState(item);
+    }, [getStockState]);
 
     // --- Filter & Sort Logic ---
     const filteredAndSortedItems = useMemo(() => {
@@ -220,15 +252,13 @@ export default function InventoryPage() {
     };
 
     const getStockStatus = (item: InventoryItem) => {
-        if (item.is_digital) return { label: 'Digital', color: 'bg-purple-50 text-purple-600 ring-purple-500/20' };
-        if (!item.shopify_variant_id || !item.etsy_variant_id) {
-            if (item.shopify_variant_id && !item.etsy_variant_id) return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
-            if (item.etsy_variant_id && !item.shopify_variant_id) return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
-            return { label: 'Unlinked', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
-        }
-        if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
-        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
-        if (item.status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
+        const state = getStockState(item);
+        if (state === 'digital') return { label: 'Digital', color: 'bg-purple-50 text-purple-600 ring-purple-500/20' };
+        if (state === 'shopify_only') return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
+        if (state === 'etsy_only') return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
+        if (state === 'unlinked') return { label: 'Unlinked', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
+        if (state === 'mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        if (state === 'action_required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
         return { label: 'In Sync', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
     };
 
@@ -440,7 +470,7 @@ export default function InventoryPage() {
                                                         {entry.item.image_url ? <img src={entry.item.image_url} alt="" className="w-full h-full object-cover" /> : <Package className="w-4 h-4 text-gray-300" />}
                                                     </div>
                                                     <div className="min-w-0 max-w-[250px]">
-                                                        <p className="text-xs font-black text-gray-900 truncate">{entry.item.name}</p>
+                                                        <p className="text-xs font-black text-gray-900 truncate">{formatInventoryDisplayName(entry.item.name)}</p>
                                                         <p className="text-[10px] text-gray-400 font-bold">{entry.item.sku}</p>
                                                     </div>
                                                 </div>
@@ -742,7 +772,7 @@ export default function InventoryPage() {
                                                         {item.image_url ? <img src={item.image_url} alt="" className="w-full h-full object-cover" /> : <Package className="w-5 h-5" />}
                                                     </div>
                                                     <div className="min-w-0 max-w-[300px]">
-                                                        <p className="text-sm font-black text-gray-900 line-clamp-2 whitespace-normal leading-tight">{item.name || 'Unnamed Product'}</p>
+                                                        <p className="text-sm font-black text-gray-900 line-clamp-2 whitespace-normal leading-tight">{formatInventoryDisplayName(item.name)}</p>
                                                         <div className="flex items-center gap-2 mt-1.5 opacity-70">
                                                             {item.shopify_variant_id && <ShoppingBag className="w-2.5 h-2.5 text-blue-600" />}
                                                             {item.etsy_variant_id && <Store className="w-2.5 h-2.5 text-orange-600" />}
@@ -774,7 +804,7 @@ export default function InventoryPage() {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4 text-center">
-                                                <span className="text-base font-black text-gray-900">{item.is_digital ? '∞' : (item.status === 'Action Required' ? '-' : item.master_stock)}</span>
+                                                <span className="text-base font-black text-gray-900">{item.is_digital ? '∞' : (getItemStatusKey(item) === 'action_required' ? '-' : item.master_stock)}</span>
                                             </td>
                                             <td className="px-2 py-4">
                                                 <div className="flex flex-col items-center justify-center">
@@ -801,7 +831,15 @@ export default function InventoryPage() {
                                                         onClick={() => { setTargetItem(item); setSyncModalOpen(true); }}
                                                         className="px-4 py-2.5 bg-gray-900 text-white font-black text-[10px] rounded-xl shadow-lg shadow-gray-200 hover:bg-black transition-all flex items-center gap-2 active:scale-95 ml-auto uppercase tracking-widest"
                                                     >
-                                                        <Zap className="w-3.5 h-3.5" /> Sync
+                                                        {getItemStatusKey(item) === 'action_required' ? (
+                                                            <>
+                                                                <AlertTriangle className="w-3.5 h-3.5" /> Manage
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Zap className="w-3.5 h-3.5" /> Manage
+                                                            </>
+                                                        )}
                                                     </button>
                                                 ) : (
                                                     <button disabled className="px-4 py-2.5 bg-gray-50 text-gray-300 font-bold text-[10px] rounded-xl border border-gray-100 ml-auto uppercase tracking-widest cursor-not-allowed flex items-center gap-2">
