@@ -8,6 +8,7 @@ export type DashboardStats = {
     shopifyProductCount: number
     etsyProductCount: number
     matchedProducts: number
+    monthlyOrderSyncCount: number
     mismatchCount: number
     actionRequiredCount: number
     connectedStores: number
@@ -36,7 +37,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         supabase = context.supabase
         resolvedOwnerId = context.ownerId
 
-        if (!resolvedOwnerId) return { totalProducts: 0, shopifyProductCount: 0, etsyProductCount: 0, matchedProducts: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
+        if (!resolvedOwnerId) return { totalProducts: 0, shopifyProductCount: 0, etsyProductCount: 0, matchedProducts: 0, monthlyOrderSyncCount: 0, mismatchCount: 0, actionRequiredCount: 0, connectedStores: 0, lastSync: '--', mismatchItems: [], actionRequiredItems: [] }
     }
 
     // 1. Get user's shops
@@ -55,6 +56,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
             shopifyProductCount: 0,
             etsyProductCount: 0,
             matchedProducts: 0, 
+            monthlyOrderSyncCount: 0,
             mismatchCount: 0, 
             actionRequiredCount: 0, 
             connectedStores: 0, 
@@ -63,6 +65,17 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
             actionRequiredItems: [] 
         }
     }
+
+    const monthStart = new Date()
+    monthStart.setUTCDate(1)
+    monthStart.setUTCHours(0, 0, 0, 0)
+
+    const { count: monthlyOrderSyncCount } = await supabase
+        .from('sync_logs')
+        .select('id', { count: 'exact', head: true })
+        .in('shop_id', shopIds)
+        .eq('event_type', 'order')
+        .gte('created_at', monthStart.toISOString())
 
     // 2. Count Unique Products and Collect Alerts
     const { data: productStats } = await supabase
@@ -125,6 +138,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         shopifyProductCount: shopifyProducts.size,
         etsyProductCount: etsyProducts.size,
         matchedProducts: matchedProductsSet.size,
+        monthlyOrderSyncCount: monthlyOrderSyncCount || 0,
         mismatchCount: mismatchItems.length,
         actionRequiredCount: actionRequiredItems.length,
         connectedStores: storeCount,

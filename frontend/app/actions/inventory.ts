@@ -304,8 +304,20 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return []
 
-    const { data: shop } = await supabase.from('shops').select('id, shop_domain').eq('owner_id', ownerId).single()
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id, shop_domain, selected_location_ids, main_location_id, plan_type')
+        .eq('owner_id', ownerId)
+        .single()
     if (!shop) return []
+
+    const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
+    const shopSelectedLocationIds = Array.isArray(shop.selected_location_ids)
+        ? shop.selected_location_ids.map((id: any) => id.toString()).slice(0, plan.limits.maxTrackedLocations)
+        : []
+    const fallbackLocationIds = shopSelectedLocationIds.length > 0
+        ? shopSelectedLocationIds
+        : (shop.main_location_id ? [shop.main_location_id.toString()] : [])
 
     let baseQuery = supabase
         .from('inventory_items')
@@ -352,7 +364,11 @@ export async function getInventoryItems(query?: string): Promise<InventoryItem[]
         shopify_product_id: item.shopify_product_id,
         etsy_listing_id: item.etsy_listing_id,
         location_inventory_map: item.location_inventory_map || {},
-        selected_location_ids: item.selected_location_ids || null,
+        selected_location_ids: (
+            Array.isArray(item.selected_location_ids)
+                ? item.selected_location_ids.map((id: any) => id.toString()).slice(0, plan.limits.maxTrackedLocations)
+                : fallbackLocationIds
+        ) || null,
         shop: item.shop || undefined,
         shop_id: shop.id,
         shop_domain: shop.shop_domain
@@ -894,14 +910,42 @@ export async function updateInventoryConfig(itemId: string, selectedLocationIds:
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return { success: false, error: 'Unauthorized' }
 
+    const { data: itemData, error: itemError } = await supabase
+        .from('inventory_items')
+        .select('shop_id')
+        .eq('id', itemId)
+        .single()
+
+    if (itemError || !itemData?.shop_id) {
+        return { success: false, error: 'Inventory item not found' }
+    }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id, main_location_id, plan_type')
+        .eq('id', itemData.shop_id)
+        .single()
+
+    const plan = getPlanConfig(shop?.plan_type) || PLAN_CONFIG.starter
+    const normalizedSelectedLocationIds = Array.from(
+        new Set((selectedLocationIds || []).map(id => id?.toString()).filter(Boolean))
+    ).slice(0, plan.limits.maxTrackedLocations)
+
+    if (normalizedSelectedLocationIds.length === 0) {
+        const fallbackLocationId = primaryLocationId?.toString() || shop?.main_location_id?.toString()
+        if (fallbackLocationId) normalizedSelectedLocationIds.push(fallbackLocationId)
+    }
+
+    if (normalizedSelectedLocationIds.length === 0) {
+        return { success: false, error: 'Please select at least one location' }
+    }
+
     // 0. Update Shop's Global Main Location if a new Primary Location was chosen
     if (primaryLocationId) {
-        // Fetch the shop id linked to this item
-        const { data: itemData } = await supabase.from('inventory_items').select('shop_id').eq('id', itemId).single();
         if (itemData?.shop_id) {
             // Guarantee selectedLocationIds includes primaryLocationId, and it's at the front
-            const cleanOtherIds = selectedLocationIds.filter(id => id !== primaryLocationId);
-            const orderedIds = [primaryLocationId, ...cleanOtherIds];
+            const cleanOtherIds = normalizedSelectedLocationIds.filter(id => id !== primaryLocationId);
+            const orderedIds = [primaryLocationId, ...cleanOtherIds].slice(0, plan.limits.maxTrackedLocations);
 
             // Override selectedLocationIds so they save consistently
             selectedLocationIds = orderedIds;
@@ -913,6 +957,8 @@ export async function updateInventoryConfig(itemId: string, selectedLocationIds:
 
             if (shopError) console.error('[Config] Failed to update global primary location', shopError);
         }
+    } else {
+        selectedLocationIds = normalizedSelectedLocationIds;
     }
 
     // 1. Update the inventory item location preference

@@ -22,13 +22,13 @@ import {
 } from 'lucide-react';
 import { useToast } from "@/components/ui/useToast";
 import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
-import { useAuth } from '@/components/AuthProvider';
 import { SymmetricSyncModal } from './SymmetricSyncModal';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
+import { getConnectedShop } from '../../actions/shop';
 
 
 // --- Main InventoryPage Component ---
 export default function InventoryPage() {
-    const { user } = useAuth();
     const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -37,6 +37,7 @@ export default function InventoryPage() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [shopLocations, setShopLocations] = useState<{ id: string, name: string, active: boolean }[]>([]);
     const [shopSelectedLocIds, setShopSelectedLocIds] = useState<string[]>([]);
+    const [shopPlanType, setShopPlanType] = useState<string | null>(null);
 
     // Selection State
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -104,9 +105,9 @@ export default function InventoryPage() {
             if (item.etsy_variant_id && !item.shopify_variant_id) return 'etsy_only';
             return 'unlinked';
         }
-        if (item.status === 'Action Required') return 'action_required';
-        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return 'mismatch';
         if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) return 'mismatch';
+        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return 'mismatch';
+        if (item.status === 'Action Required') return 'action_required';
         return 'in_sync';
     }, []);
 
@@ -147,6 +148,8 @@ export default function InventoryPage() {
         setShopLocations(locs);
         const selIds = await getShopSelectedLocationIds();
         setShopSelectedLocIds(selIds);
+        const shop = await getConnectedShop('shopify');
+        setShopPlanType(shop.plan_type || null);
     };
 
     const handleUpdateStock = async (newStock: number, platformsToSync: Array<'shopify' | 'etsy'> = ['shopify', 'etsy'], breakdown?: { locationId: string; allocation: number }[]) => {
@@ -223,9 +226,9 @@ export default function InventoryPage() {
             if (item.etsy_variant_id && !item.shopify_variant_id) return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
             return { label: 'Unlinked', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
         }
-        if (item.status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
-        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
         if (item.shopify_stock_snapshot !== item.etsy_stock_snapshot) return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        if (item.status === 'MISMATCH' || item.status === 'Mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
+        if (item.status === 'Action Required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
         return { label: 'In Sync', color: 'bg-emerald-50 text-emerald-600 ring-emerald-500/20' };
     };
 
@@ -620,7 +623,7 @@ export default function InventoryPage() {
                     ].map((btn) => (
                         <button
                             key={btn.id}
-                            onClick={() => setPlatformFilter(btn.id as any)}
+                            onClick={() => setPlatformFilter(btn.id as 'all' | 'shopify' | 'etsy')}
                             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
                                 platformFilter === btn.id
                                     ? 'bg-gray-900 text-white shadow-lg'
@@ -829,6 +832,8 @@ export default function InventoryPage() {
                 onSaveConfig={handleSaveConfig}
                 item={targetItem}
                 shopLocations={shopLocations}
+                allowedLocationIds={shopSelectedLocIds}
+                maxTrackedLocations={(getPlanConfig(shopPlanType) || PLAN_CONFIG.starter).limits.maxTrackedLocations}
             />
 
             {/* Click outside to close dropdown */}

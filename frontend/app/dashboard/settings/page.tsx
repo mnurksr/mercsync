@@ -58,6 +58,7 @@ export default function SettingsPage() {
     });
 
     const [productsCount, setProductsCount] = useState(0);
+    const [monthlyOrderSyncCount, setMonthlyOrderSyncCount] = useState(0);
 
     // Settings state
     const [settings, setSettings] = useState<ShopSettings>({
@@ -109,6 +110,7 @@ export default function SettingsPage() {
             ]);
 
             setProductsCount(dashStats.totalProducts || 0);
+            setMonthlyOrderSyncCount(dashStats.monthlyOrderSyncCount || 0);
 
             setStores({
                 shopify: { 
@@ -376,7 +378,7 @@ export default function SettingsPage() {
                         />
                     )}
                     {activeTab === 'billing' && (
-                        <BillingTab stores={stores} productsCount={productsCount} />
+                        <BillingTab stores={stores} productsCount={productsCount} monthlyOrderSyncCount={monthlyOrderSyncCount} />
                     )}
                     {activeTab === 'advanced' && (
                         <AdvancedTab />
@@ -976,7 +978,15 @@ const PLAN_TIERS = PLAN_ORDER.map(id => ({
     ...PLAN_STYLE[id],
 }));
 
-function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?: number }) {
+function BillingTab({
+    stores,
+    productsCount = 0,
+    monthlyOrderSyncCount = 0
+}: {
+    stores: any,
+    productsCount?: number,
+    monthlyOrderSyncCount?: number
+}) {
     const toast = useToast();
     const { user } = useAuth();
     const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
@@ -1016,8 +1026,10 @@ function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?
         }
     };
 
-    const limit = currentPlan?.limits.matchedItems || 0;
-    const widthPercent = limit === 0 ? 0 : Math.min(100, Math.round((productsCount / limit) * 100));
+    const productLimit = currentPlan?.limits.matchedItems || 0;
+    const productWidthPercent = productLimit === 0 ? 0 : Math.min(100, Math.round((productsCount / productLimit) * 100));
+    const orderLimit = currentPlan?.limits.monthlyOrderSyncs || 0;
+    const orderWidthPercent = orderLimit === 0 ? 0 : Math.min(100, Math.round((monthlyOrderSyncCount / orderLimit) * 100));
 
     return (
         <div className="space-y-4">
@@ -1147,13 +1159,27 @@ function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?
                             <div className="flex items-center justify-between mb-1.5">
                                 <span className="text-sm text-gray-600">Tracked products</span>
                                 <span className="text-sm font-medium text-gray-900">
-                                    {`${productsCount} / ${limit}`}
+                                    {`${productsCount} / ${productLimit}`}
                                 </span>
                             </div>
                             <div className="w-full bg-gray-100 rounded-full h-2">
                                 <div 
-                                    className={`h-2 rounded-full transition-all ${widthPercent > 90 ? 'bg-red-500' : widthPercent > 75 ? 'bg-yellow-500' : 'bg-green-500'}`} 
-                                    style={{ width: `${widthPercent}%` }} 
+                                    className={`h-2 rounded-full transition-all ${productWidthPercent > 90 ? 'bg-red-500' : productWidthPercent > 75 ? 'bg-yellow-500' : 'bg-green-500'}`} 
+                                    style={{ width: `${productWidthPercent}%` }} 
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-sm text-gray-600">Synced orders</span>
+                                <span className="text-sm font-medium text-gray-900">
+                                    {`${monthlyOrderSyncCount} / ${orderLimit}`}
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2">
+                                <div 
+                                    className={`h-2 rounded-full transition-all ${orderWidthPercent > 90 ? 'bg-red-500' : orderWidthPercent > 75 ? 'bg-yellow-500' : 'bg-green-500'}`} 
+                                    style={{ width: `${orderWidthPercent}%` }} 
                                 />
                             </div>
                         </div>

@@ -1,16 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingBag, Store, Zap, Check, X, Database, SlidersHorizontal, History } from 'lucide-react';
+import { ShoppingBag, Store, Zap, Check, X, Database } from 'lucide-react';
 
 interface SymmetricSyncModalProps {
     isOpen: boolean;
     item: any | null;
     shopLocations: any[];
+    allowedLocationIds?: string[];
+    maxTrackedLocations?: number;
     onClose: () => void;
     onConfirm: (stock: number, platformsToSync: Array<'shopify' | 'etsy'>, breakdown?: { locationId: string, allocation: number }[]) => Promise<void>;
     onSaveConfig: (selectedLocations: string[], primaryLocId?: string) => Promise<void>;
 }
 
-export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onConfirm, onSaveConfig }: SymmetricSyncModalProps) {
+export function SymmetricSyncModal({
+    isOpen,
+    item,
+    shopLocations,
+    allowedLocationIds = [],
+    maxTrackedLocations = Infinity,
+    onClose,
+    onConfirm,
+    onSaveConfig
+}: SymmetricSyncModalProps) {
     const [syncSource, setSyncSource] = useState<'shopify' | 'etsy' | 'latest' | 'manual' | null>(null);
     const [manualStock, setManualStock] = useState<number | ''>(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,11 +37,23 @@ export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onCon
             setSyncSource(null);
             setManualStock(item.master_stock || 0);
 
-            // Fetch stored location preferences
-            const storedLocs = item.selected_location_ids || [];
-            if (storedLocs.length > 0) {
-                setSelectedLocations(storedLocs);
-                setPrimaryLocationId(storedLocs[0]);
+            const validLocationIds = shopLocations.map(loc => loc.id?.toString());
+            const normalizedAllowedLocationIds = allowedLocationIds
+                .map(id => id?.toString())
+                .filter(id => validLocationIds.includes(id));
+            const storedLocs = Array.isArray(item.selected_location_ids)
+                ? item.selected_location_ids.map((id: string) => id?.toString()).filter((id: string) => validLocationIds.includes(id))
+                : [];
+            const seededLocs = storedLocs.length > 0
+                ? storedLocs
+                : (normalizedAllowedLocationIds.length > 0
+                    ? normalizedAllowedLocationIds
+                    : []);
+            const normalizedSelected = seededLocs.slice(0, maxTrackedLocations);
+
+            if (normalizedSelected.length > 0) {
+                setSelectedLocations(normalizedSelected);
+                setPrimaryLocationId(normalizedSelected[0]);
             } else {
                 const mainLocId = shopLocations.find(l => l.active)?.id || shopLocations[0]?.id;
                 setSelectedLocations(mainLocId ? [mainLocId] : []);
@@ -38,25 +61,50 @@ export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onCon
             }
             setShowDistribution(false);
         }
-    }, [isOpen, item, shopLocations]);
+    }, [isOpen, item, shopLocations, allowedLocationIds, maxTrackedLocations]);
 
     // Format map
     const parsedMap = useMemo(() => {
         if (!item?.location_inventory_map) return {};
-        const map = item.location_inventory_map;
+        let map = item.location_inventory_map;
+        if (typeof map === 'string') {
+            try {
+                map = JSON.parse(map);
+            } catch {
+                return {};
+            }
+        }
         const res: Record<string, number> = {};
         if (Array.isArray(map)) {
-            map.forEach(l => { res[l.location_id?.toString()] = parseInt(l.stock, 10) || 0; });
+            map.forEach(l => {
+                const locationId = l?.location_id?.toString();
+                if (!locationId) return;
+                const value = l?.stock ?? l?.available ?? l?.quantity ?? 0;
+                res[locationId] = Number(value) || 0;
+            });
         } else if (typeof map === 'object') {
-            for (const [k, v] of Object.entries(map)) res[k] = parseInt(v as any, 10) || 0;
+            for (const [k, v] of Object.entries(map)) {
+                if (typeof v === 'number' || typeof v === 'string') {
+                    res[k] = Number(v) || 0;
+                    continue;
+                }
+                if (v && typeof v === 'object') {
+                    const stockValue = (v as any).stock ?? (v as any).available ?? (v as any).quantity ?? 0;
+                    res[k] = Number(stockValue) || 0;
+                }
+            }
         }
         return res;
     }, [item]);
 
     const liveShopifyStock = useMemo(() => {
-        if (selectedLocations.length === 0) return 0;
-        return selectedLocations.reduce((sum, locId) => sum + (parsedMap[locId] || 0), 0);
-    }, [parsedMap, selectedLocations]);
+        if (selectedLocations.length === 0) return item?.shopify_stock_snapshot || 0;
+        const total = selectedLocations.reduce((sum, locId) => sum + (parsedMap[locId] || 0), 0);
+        if (total === 0 && (item?.shopify_stock_snapshot || 0) > 0) {
+            return item.shopify_stock_snapshot;
+        }
+        return total;
+    }, [parsedMap, selectedLocations, item]);
 
     const isLatestShopify = useMemo(() => {
         if (!item) return true;
@@ -342,7 +390,26 @@ export function SymmetricSyncModal({ isOpen, item, shopLocations, onClose, onCon
                                     const locStock = parsedMap[loc.id] || 0;
                                     return (
                                         <div key={loc.id} className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${isSelected ? 'border-blue-200 bg-white shadow-sm' : 'border-transparent hover:border-gray-200'}`} onClick={() => {
-                                            setSelectedLocations(prev => prev.includes(loc.id) ? prev.filter(id => id !== loc.id) : [...prev, loc.id]);
+                                            setSelectedLocations(prev => {
+                                                if (maxTrackedLocations === 1) {
+                                                    setPrimaryLocationId(loc.id);
+                                                    return [loc.id];
+                                                }
+
+                                                if (prev.includes(loc.id)) {
+                                                    const next = prev.filter(id => id !== loc.id);
+                                                    if (primaryLocationId === loc.id) {
+                                                        setPrimaryLocationId(next[0] || null);
+                                                    }
+                                                    return next;
+                                                }
+
+                                                const next = [...prev, loc.id].slice(0, maxTrackedLocations);
+                                                if (!primaryLocationId) {
+                                                    setPrimaryLocationId(next[0] || null);
+                                                }
+                                                return next;
+                                            });
                                             setSyncSource('shopify');
                                         }}>
                                             <div className="flex items-center gap-2 overflow-hidden min-w-0 pr-2">
