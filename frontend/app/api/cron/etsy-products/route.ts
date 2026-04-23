@@ -86,6 +86,19 @@ export async function GET(req: NextRequest) {
                     // Extract base price from listing
                     const priceNode = listing.price;
                     const etsyBasePrice = priceNode?.amount ? (priceNode.amount / priceNode.divisor) : null;
+                    const { data: existingStagingRows } = await supabase
+                        .from('staging_etsy_products')
+                        .select('price')
+                        .eq('shop_id', shop.id)
+                        .eq('etsy_listing_id', listingId)
+                        .limit(1);
+
+                    const previousStagingPrice = existingStagingRows?.[0]?.price !== undefined && existingStagingRows?.[0]?.price !== null
+                        ? Number(existingStagingRows[0].price)
+                        : null;
+                    const hasActualEtsyPriceChange = etsyBasePrice !== null
+                        && previousStagingPrice !== null
+                        && Math.abs(previousStagingPrice - etsyBasePrice) > 0.009;
 
                     // ── 1. Update staging_etsy_products ──
                     // The staging table is keyed per-variant (etsy_variant_id), but we get listing-level data.
@@ -146,7 +159,7 @@ export async function GET(req: NextRequest) {
                                 .eq('id', matched.id);
 
                             // ── 3. Price Sync: Etsy → Shopify (with ping-pong protection) ──
-                            if (matched.shopify_variant_id && price_sync_enabled && etsyBasePrice !== null) {
+                            if (matched.shopify_variant_id && price_sync_enabled && etsyBasePrice !== null && hasActualEtsyPriceChange) {
                                 const lastSyncedPrice = matched.last_synced_etsy_price ? parseFloat(matched.last_synced_etsy_price) : null;
 
                                 // GUARD: If Etsy price matches what WE last pushed → skip

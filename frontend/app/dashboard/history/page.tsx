@@ -108,6 +108,31 @@ export default function HistoryPage() {
         ? history 
         : history.filter(h => h.status === filterStatus);
 
+    const getPriceSummary = (item: HistoryItem) => {
+        const oldPrice = item.metadata?.old_price;
+        const newPrice = item.metadata?.new_price;
+        if (typeof oldPrice === 'number' && typeof newPrice === 'number') {
+            return `$${oldPrice.toFixed(2)} -> $${newPrice.toFixed(2)}`;
+        }
+
+        const oldPrices = item.metadata?.old_prices_base;
+        const newPrices = item.metadata?.new_prices_calculated;
+        if (oldPrices && newPrices) {
+            const firstKey = Object.keys(newPrices)[0] || Object.keys(oldPrices)[0];
+            if (firstKey) {
+                const oldVal = Number(oldPrices[firstKey] || 0);
+                const newVal = Number(newPrices[firstKey] || 0);
+                return `$${oldVal.toFixed(2)} -> $${newVal.toFixed(2)}`;
+            }
+        }
+
+        if (item.oldStock !== null && item.newStock !== null) {
+            return `$${Number(item.oldStock).toFixed(2)} -> $${Number(item.newStock).toFixed(2)}`;
+        }
+
+        return null;
+    };
+
     return (
         <div className="w-full pb-16">
             {/* Header */}
@@ -227,9 +252,14 @@ export default function HistoryPage() {
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     {getDirectionIcons(item.direction, item.source)}
-                                                    {item.oldStock !== null && item.newStock !== null && (
+                                                    {item.eventType !== 'price_update' && item.oldStock !== null && item.newStock !== null && (
                                                         <span className="text-xs font-bold text-gray-400">
                                                             {item.oldStock} → {item.newStock}
+                                                        </span>
+                                                    )}
+                                                    {item.eventType === 'price_update' && getPriceSummary(item) && (
+                                                        <span className="text-xs font-bold text-gray-400">
+                                                            {getPriceSummary(item)}
                                                         </span>
                                                     )}
                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${statusConfig.labelColor}`}>
@@ -264,6 +294,30 @@ export default function HistoryPage() {
                                                     <div className="text-gray-600 space-y-2">
                                                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Sync Details</div>
                                                         <div className="grid grid-cols-2 gap-2 text-xs">
+                                                            {item.metadata.shopify_order_id && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Shopify Order</span>
+                                                                    <p className="font-bold text-gray-900">#{item.metadata.shopify_order_id}</p>
+                                                                </div>
+                                                            )}
+                                                            {item.metadata.line_items !== undefined && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Line Items</span>
+                                                                    <p className="font-bold text-gray-900">{item.metadata.line_items}</p>
+                                                                </div>
+                                                            )}
+                                                            {item.metadata.unique_variants !== undefined && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Unique Products</span>
+                                                                    <p className="font-bold text-gray-900">{item.metadata.unique_variants}</p>
+                                                                </div>
+                                                            )}
+                                                            {item.metadata.synced_items !== undefined && (
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100">
+                                                                    <span className="text-gray-400 font-medium">Synced Items</span>
+                                                                    <p className="font-bold text-gray-900">{item.metadata.synced_items}</p>
+                                                                </div>
+                                                            )}
                                                             {item.metadata.shopify_total !== undefined && (
                                                                 <div className="bg-white rounded-lg p-2 border border-gray-100">
                                                                     <span className="text-gray-400 font-medium">Shopify Total Stock</span>
@@ -291,6 +345,25 @@ export default function HistoryPage() {
                                                                 </div>
                                                             )}
                                                         </div>
+                                                        {item.eventType === 'price_update' && getPriceSummary(item) && (
+                                                            <div className="bg-white rounded-lg p-3 border border-gray-100 mt-1">
+                                                                <span className="text-gray-400 font-medium text-[10px] uppercase">Price Change</span>
+                                                                <p className="font-bold text-gray-900 mt-1">{getPriceSummary(item)}</p>
+                                                            </div>
+                                                        )}
+                                                        {item.metadata.order_items && Array.isArray(item.metadata.order_items) && item.metadata.order_items.length > 0 && (
+                                                            <div className="bg-white rounded-lg p-3 border border-gray-100 mt-1">
+                                                                <span className="text-gray-400 font-medium text-[10px] uppercase">Order Items</span>
+                                                                <div className="mt-2 space-y-2">
+                                                                    {item.metadata.order_items.map((orderItem: any, idx: number) => (
+                                                                        <div key={idx} className="flex items-center justify-between text-xs">
+                                                                            <span className="font-medium text-gray-700">{orderItem.name || 'Unnamed Product'}</span>
+                                                                            <span className="font-bold text-gray-900">x{orderItem.quantity}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         {item.metadata.location_breakdown && Array.isArray(item.metadata.location_breakdown) && (
                                                             <div className="bg-white rounded-lg p-2 border border-gray-100 mt-1">
                                                                 <span className="text-gray-400 font-medium text-[10px] uppercase">Location Breakdown</span>

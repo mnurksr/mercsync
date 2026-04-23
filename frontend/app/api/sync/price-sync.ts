@@ -270,12 +270,6 @@ export async function handlePriceUpdate(
         if (status !== 'skipped' && itemRecordId) { // Only log success/fails, not skips (too noisy)
             const duration = Date.now() - startTime;
             
-            // Format stock columns by just stringifying the price objects. 
-            // We use stock columns because the sync history page reads them, but we'll adapt the display if needed. 
-            // For now, storing average price in old_stock/new_stock or just 0 is fine.
-            const avgOldPrice = Object.values(oldPrices).length > 0 ? Object.values(oldPrices)[0] : 0;
-            const avgNewPrice = Object.values(newPrices).length > 0 ? Object.values(newPrices)[0] : 0;
-
             await supabase.from('sync_logs').insert({
                 shop_id: numericShopId,
                 inventory_item_id: itemRecordId,
@@ -289,8 +283,8 @@ export async function handlePriceUpdate(
                     old_prices_base: oldPrices,
                     new_prices_calculated: newPrices
                 },
-                old_stock: Math.round(avgOldPrice), // Use stock fields to hold rounded prices for History UI
-                new_stock: Math.round(avgNewPrice)
+                old_stock: null,
+                new_stock: null
             });
         }
     }

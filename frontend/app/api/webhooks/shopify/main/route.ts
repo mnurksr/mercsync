@@ -48,13 +48,6 @@ export async function POST(req: NextRequest) {
             case 'products/create':
             case 'products/update':
                 console.log(`[Shopify Webhook] Product ${topic} for ${shop}: ${payload.id}`);
-                
-                // Fire-and-forget: Sync price if enabled
-                handlePriceUpdate(payload, shop, supabase).then((result: any) => {
-                    console.log(`[Shopify Webhook] Price sync result: ${result.status} — ${result.message}`);
-                }).catch((err: any) => {
-                    console.error(`[Shopify Webhook] Price sync error:`, err);
-                });
 
                 // Update staging table and inventory names
                 const { data: theShopData } = await supabase.from('shops').select('id').eq('shop_domain', shop).maybeSingle();
@@ -64,6 +57,29 @@ export async function POST(req: NextRequest) {
                     // Update inventory_items name/image/sku at variant level
                     const variants = payload.variants || [];
                     const imageUrl = payload.images?.[0]?.src || null;
+                    let hasActualPriceChange = false;
+
+                    if (topic === 'products/update' && variants.length > 0) {
+                        const variantIds = variants.map((v: any) => v.id?.toString()).filter(Boolean);
+                        const { data: stagingVariants } = await supabase
+                            .from('staging_shopify_products')
+                            .select('shopify_variant_id, price')
+                            .eq('shop_id', theShopData.id)
+                            .in('shopify_variant_id', variantIds);
+
+                        const previousPriceMap = new Map<string, number>();
+                        for (const row of stagingVariants || []) {
+                            previousPriceMap.set(row.shopify_variant_id?.toString(), Number(row.price || 0));
+                        }
+
+                        hasActualPriceChange = variants.some((v: any) => {
+                            const variantId = v.id?.toString();
+                            if (!variantId || !previousPriceMap.has(variantId)) return false;
+                            const previousPrice = previousPriceMap.get(variantId) || 0;
+                            const incomingPrice = Number(v.price || 0);
+                            return Math.abs(previousPrice - incomingPrice) > 0.009;
+                        });
+                    }
                     
                     for (const v of variants) {
                         const variantTitlePart = v.title === 'Default Title' ? '' : ` - ${v.title}`;
@@ -95,6 +111,14 @@ export async function POST(req: NextRequest) {
                             })
                             .eq('shop_id', theShopData.id)
                             .eq('shopify_variant_id', v.id.toString());
+                    }
+
+                    if (topic === 'products/update' && hasActualPriceChange) {
+                        handlePriceUpdate(payload, shop, supabase).then((result: any) => {
+                            console.log(`[Shopify Webhook] Price sync result: ${result.status} — ${result.message}`);
+                        }).catch((err: any) => {
+                            console.error(`[Shopify Webhook] Price sync error:`, err);
+                        });
                     }
                 }
                 break;

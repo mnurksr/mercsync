@@ -278,7 +278,7 @@ export async function handleShopifyOrder(
         for (const [variantId, quantity] of variantQuantities.entries()) {
             const { data: item } = await supabase
                 .from('inventory_items')
-                .select('id, master_stock, shopify_stock_snapshot, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
+                .select('id, name, master_stock, shopify_stock_snapshot, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
                 .eq('shop_id', shop.id)
                 .eq('shopify_variant_id', variantId)
                 .maybeSingle();
@@ -378,6 +378,22 @@ export async function handleShopifyOrder(
             }
         }
 
+        const orderItems = Array.from(variantQuantities.entries()).map(([variantId, quantity]) => ({
+            variant_id: variantId,
+            quantity,
+        }));
+
+        const { data: loggedItems } = await supabase
+            .from('inventory_items')
+            .select('shopify_variant_id, name')
+            .eq('shop_id', shop.id)
+            .in('shopify_variant_id', orderItems.map(item => item.variant_id));
+
+        const itemNameMap = new Map<string, string>();
+        for (const entry of loggedItems || []) {
+            itemNameMap.set(entry.shopify_variant_id?.toString(), entry.name || 'Unnamed Product');
+        }
+
         const status = failedItems > 0 ? 'failed' : syncedItems > 0 ? 'success' : 'skipped';
         const errorMessage = !canUseOrderQuota && quota?.message
             ? quota.message
@@ -397,6 +413,10 @@ export async function handleShopifyOrder(
                 line_items: (payload.line_items || []).length,
                 unique_variants: variantQuantities.size,
                 touched_items: touchedItems,
+                order_items: orderItems.map(item => ({
+                    ...item,
+                    name: itemNameMap.get(item.variant_id) || 'Unnamed Product'
+                })),
                 synced_items: syncedItems,
                 failed_items: failedItems,
                 skipped_items: skippedItems,

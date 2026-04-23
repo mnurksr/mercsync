@@ -4,6 +4,7 @@ import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/adm
 
 export type HistoryItem = {
     id: string
+    eventType: string
     action: string
     product: string | null
     imageUrl: string | null
@@ -49,6 +50,7 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
 
     return data.map((item: any) => ({
         id: item.id,
+        eventType: item.event_type,
         action: mapEventToAction(item.event_type, item.source),
         product: item.inventory_items?.name || null,
         imageUrl: item.inventory_items?.image_url || null,
