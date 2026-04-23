@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { CheckCircle2, Loader2, Package, ShoppingBag, Store, AlertCircle, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { setShopPlanPending } from '@/app/actions/shop';
 import { getShopDomain } from '@/utils/shopDomain';
 
 type SyncStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -320,8 +319,7 @@ export default function SyncingDashboard() {
                             onClick={async () => {
                                 if (isComplete) {
                                     const shopDomain = getShopDomain(searchParams) || '';
-                                    if (shopDomain) await setShopPlanPending(shopDomain);
-                                    router.push('/billing');
+                                    router.push(shopDomain ? `/dashboard?shop=${shopDomain}` : '/dashboard');
                                 } else {
                                     router.push('/setup');
                                 }
@@ -329,7 +327,7 @@ export default function SyncingDashboard() {
                             className="w-full px-5 py-3.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors text-sm"
                         >
                             {isComplete ? (
-                                <><ArrowRight className="w-4 h-4" /> Choose a Plan</>
+                                <><ArrowRight className="w-4 h-4" /> Go to Dashboard</>
                             ) : (
                                 <><ArrowRight className="w-4 h-4" /> Back to Setup</>
                             )}
