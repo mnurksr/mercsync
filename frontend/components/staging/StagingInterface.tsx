@@ -733,6 +733,34 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
     const [showAddRuleModal, setShowAddRuleModal] = useState(false);
     const [isSavingRule, setIsSavingRule] = useState(false);
 
+    const getApiErrorMessage = async (response: Response, fallback: string) => {
+        try {
+            const data = await response.json();
+            return data?.error || fallback;
+        } catch {
+            return fallback;
+        }
+    };
+
+    const savePricingRules = async (nextRules: unknown[], successMessage?: string) => {
+        const response = await fetch('/api/sync/save-price-rule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                owner_id: currentUserId,
+                price_rules: nextRules
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(await getApiErrorMessage(response, 'Failed to save pricing rule'));
+        }
+
+        if (successMessage) {
+            toast.success(successMessage);
+        }
+    };
+
     // Derived Groups
     const shopifyGroups = useMemo(() => groupProducts(shopifyProducts, 'shopify'), [shopifyProducts]);
     const etsyGroups = useMemo(() => groupProducts(etsyProducts, 'etsy'), [etsyProducts]);
@@ -969,7 +997,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
                 openReconciliation(refreshedMatches);
             } else {
-                toast.error('Webhook request failed. Please try again.');
+                toast.error(await getApiErrorMessage(req, 'Failed to save location preferences.'));
             }
         } catch (error) {
             console.error('Webhook error:', error);
@@ -1385,23 +1413,9 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
 
             // Use direct API endpoint instead of server action to avoid 
             // session/cookie issues during setup mode (login redirect bug fix)
-            const res = await fetch('/api/sync/save-price-rule', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    owner_id: currentUserId,
-                    price_rules: updatedRules
-                })
-            });
-
-            if (res.ok) {
-                setPricingRules(updatedRules);
-                setShowAddRuleModal(false);
-                toast.success('New pricing rule added!');
-            } else {
-                const err = await res.json();
-                toast.error(err.error || 'Failed to save pricing rule');
-            }
+            await savePricingRules(updatedRules, 'New pricing rule added!');
+            setPricingRules(updatedRules);
+            setShowAddRuleModal(false);
         } catch (e: any) {
             toast.error(e.message);
         } finally {
@@ -2076,10 +2090,13 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                             <button
                                                                 onClick={async () => {
                                                                     const updated = pricingRules.filter(r => r.platform !== 'etsy');
-                                                                    setPricingRules(updated);
-                                                                    setApplyRuleToEtsy(false);
-                                                                    await fetch('/api/sync/save-price-rule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: currentUserId, price_rules: updated }) });
-                                                                    toast.success('Etsy pricing rule deleted.');
+                                                                    try {
+                                                                        await savePricingRules(updated, 'Etsy pricing rule deleted.');
+                                                                        setPricingRules(updated);
+                                                                        setApplyRuleToEtsy(false);
+                                                                    } catch (error: any) {
+                                                                        toast.error(error.message || 'Failed to delete Etsy pricing rule.');
+                                                                    }
                                                                 }}
                                                                 className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50"
                                                                 title="Delete rule"
@@ -2139,10 +2156,13 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                             <button
                                                                 onClick={async () => {
                                                                     const updated = pricingRules.filter(r => r.platform !== 'shopify');
-                                                                    setPricingRules(updated);
-                                                                    setApplyRuleToShopify(false);
-                                                                    await fetch('/api/sync/save-price-rule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: currentUserId, price_rules: updated }) });
-                                                                    toast.success('Shopify pricing rule deleted.');
+                                                                    try {
+                                                                        await savePricingRules(updated, 'Shopify pricing rule deleted.');
+                                                                        setPricingRules(updated);
+                                                                        setApplyRuleToShopify(false);
+                                                                    } catch (error: any) {
+                                                                        toast.error(error.message || 'Failed to delete Shopify pricing rule.');
+                                                                    }
                                                                 }}
                                                                 className="p-1 text-gray-400 hover:text-red-500 transition-colors rounded-md hover:bg-red-50"
                                                                 title="Delete rule"

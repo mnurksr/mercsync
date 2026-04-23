@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans'
 import { getShop } from '@/app/api/sync/lib/etsy'
 
 export type ShopConnection = {
@@ -372,12 +373,21 @@ export async function saveShopifyLocations(
         // 1. Get shop
         const { data: shop } = await supabase
             .from('shops')
-            .select('id, shop_domain, access_token')
+            .select('id, shop_domain, access_token, plan_type')
             .eq('owner_id', ownerId)
             .maybeSingle()
 
         if (!shop || !shop.shop_domain || !shop.access_token) {
             return { success: false, message: 'Shop not found or not fully connected' }
+        }
+
+        const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
+        const maxTrackedLocations = plan.limits.maxTrackedLocations
+        if (locationIds.length > maxTrackedLocations) {
+            return {
+                success: false,
+                message: `${plan.name} plan allows tracking up to ${maxTrackedLocations} Shopify location${maxTrackedLocations > 1 ? 's' : ''}. Upgrade to Growth or Pro for multi-location inventory sync.`
+            }
         }
 
         // 2. Save primary location and all selected IDs to shops table
@@ -505,7 +515,7 @@ export async function getShopLocationConfig(): Promise<{
 
     const { data: shop } = await supabase
         .from('shops')
-        .select('main_location_id, selected_location_ids')
+        .select('main_location_id, selected_location_ids, plan_type')
         .eq('owner_id', ownerId)
         .maybeSingle()
 
@@ -532,5 +542,7 @@ export async function getShopLocationConfig(): Promise<{
         }
     }
 
-    return { mainLocationId, selectedLocationIds: selectedIds }
+    const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
+    const maxTrackedLocations = plan.limits.maxTrackedLocations
+    return { mainLocationId, selectedLocationIds: selectedIds.slice(0, maxTrackedLocations) }
 }

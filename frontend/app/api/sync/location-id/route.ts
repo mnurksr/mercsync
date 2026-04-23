@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as shopifyApi from '../lib/shopify';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 /**
  * POST /api/sync/location-id
@@ -34,6 +35,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Shop not found' }, { status: 404 });
         }
 
+        const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter;
+        const maxTrackedLocations = plan.limits.maxTrackedLocations;
+        if (locationIds.length > maxTrackedLocations) {
+            return NextResponse.json({
+                error: `${plan.name} plan allows tracking up to ${maxTrackedLocations} Shopify location${maxTrackedLocations > 1 ? 's' : ''}. Upgrade to Growth or Pro for multi-location inventory sync.`,
+                code: 'PLAN_MULTI_LOCATION_REQUIRED'
+            }, { status: 402 });
+        }
+
         // Save PRIMARY location + all selected locations to shops table
         const primaryLocationId = locationIds[0];
         
@@ -61,7 +71,7 @@ export async function POST(req: NextRequest) {
 
         // 3. Aggregate stock by inventory_item_id
         const stockMap: Record<string, number> = {};
-        levels.forEach((level: any) => {
+        levels.forEach((level: { inventory_item_id: string | number; available?: number | null }) => {
             const itemId = level.inventory_item_id.toString();
             const available = level.available || 0;
             stockMap[itemId] = (stockMap[itemId] || 0) + available;
@@ -92,8 +102,9 @@ export async function POST(req: NextRequest) {
             message: `Updated stock levels for ${aggregatedItems.length} items across ${locationIds.length} locations.`
         });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Internal server error';
         console.error('[API/sync/location-id] Fatal Error:', err);
-        return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

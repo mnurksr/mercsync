@@ -10,11 +10,14 @@ export type PlanConfig = {
     limits: {
         matchedItems: number;
         monthlyOrderSyncs: number;
+        maxTrackedLocations: number;
     };
     capabilities: {
         productCloning: boolean;
         priceRules: boolean;
         multiLocationInventory: boolean;
+        merchantAlerts: boolean;
+        emailNotifications: boolean;
         prioritySupport: boolean;
     };
     features: string[];
@@ -33,11 +36,14 @@ export const PLAN_CONFIG: Record<PlanId, PlanConfig> = {
         limits: {
             matchedItems: 100,
             monthlyOrderSyncs: 100,
+            maxTrackedLocations: 1,
         },
         capabilities: {
             productCloning: false,
             priceRules: false,
             multiLocationInventory: false,
+            merchantAlerts: false,
+            emailNotifications: false,
             prioritySupport: false,
         },
         features: [
@@ -58,11 +64,14 @@ export const PLAN_CONFIG: Record<PlanId, PlanConfig> = {
         limits: {
             matchedItems: 1000,
             monthlyOrderSyncs: 500,
+            maxTrackedLocations: 99,
         },
         capabilities: {
             productCloning: true,
             priceRules: true,
             multiLocationInventory: true,
+            merchantAlerts: true,
+            emailNotifications: true,
             prioritySupport: false,
         },
         features: [
@@ -86,11 +95,14 @@ export const PLAN_CONFIG: Record<PlanId, PlanConfig> = {
         limits: {
             matchedItems: 5000,
             monthlyOrderSyncs: 2500,
+            maxTrackedLocations: 99,
         },
         capabilities: {
             productCloning: true,
             priceRules: true,
             multiLocationInventory: true,
+            merchantAlerts: true,
+            emailNotifications: true,
             prioritySupport: true,
         },
         features: [

@@ -24,7 +24,7 @@ import {
     type PriceRule, type NotificationChannels, type NotificationEvents
 } from '../../actions/settings';
 import { wipeAllAppData } from '../../actions/advanced';
-import { getPlanConfig, PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
+import { getPlanConfig, PLAN_CONFIG, PLAN_ORDER, type PlanId, type PlanConfig } from '@/config/plans';
 
 // ─── Tab definitions ─────────────────────────
 
@@ -93,6 +93,7 @@ export default function SettingsPage() {
 
     // Dirty tracking
     const [isDirty, setIsDirty] = useState(false);
+    const currentPlan = getPlanConfig(stores.shopify.plan_type) || PLAN_CONFIG.starter;
 
     useEffect(() => {
         loadData();
@@ -351,10 +352,11 @@ export default function SettingsPage() {
                             onSave={handleSaveLocations}
                             saving={savingLocations}
                             storesConnected={stores.shopify.connected}
+                            plan={currentPlan}
                         />
                     )}
                     {activeTab === 'pricing' && (
-                        <PricingTab settings={settings} updateField={updateField} stores={stores} />
+                        <PricingTab settings={settings} updateField={updateField} stores={stores} plan={currentPlan} />
                     )}
                     {activeTab === 'notifications' && (
                         <NotificationsTab
@@ -363,6 +365,7 @@ export default function SettingsPage() {
                             notificationEmail={notificationEmail}
                             setNotificationEmail={setNotificationEmail}
                             setIsDirty={setIsDirty}
+                            plan={currentPlan}
                         />
                     )}
                     {activeTab === 'billing' && (
@@ -557,7 +560,7 @@ function SyncTab({ settings, updateField, locations, storesConnected }: { settin
 
 // ─── Locations Tab (interactive, like setup wizard) ──
 
-function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, primaryLocationId, setPrimaryLocationId, onSave, saving, storesConnected }: {
+function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, primaryLocationId, setPrimaryLocationId, onSave, saving, storesConnected, plan }: {
     locations: { id: string; name: string; active: boolean; address1?: string }[];
     selectedLocationIds: string[];
     setSelectedLocationIds: (v: string[] | ((prev: string[]) => string[])) => void;
@@ -566,7 +569,12 @@ function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, 
     onSave: () => void;
     saving: boolean;
     storesConnected: boolean;
+    plan: PlanConfig;
 }) {
+    const toast = useToast();
+    const multiLocationLocked = !plan.capabilities.multiLocationInventory;
+    const maxTrackedLocations = plan.limits.maxTrackedLocations;
+
     return (
         <div className="space-y-4">
             <SectionHeader title="Inventory Locations" description="Select which Shopify locations supply your Etsy stock and set a primary fulfillment location" />
@@ -583,6 +591,12 @@ function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, 
                 </div>
             ) : (
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                    {multiLocationLocked && (
+                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                            {plan.name} plan tracks a single Shopify location. Upgrade to Growth or Pro to enable multi-location inventory sync.
+                        </div>
+                    )}
+
                     <p className="text-sm text-gray-500 mb-4">
                         Select the locations whose stock will be aggregated for Etsy. The <strong>primary</strong> location is used for fulfillment priority.
                     </p>
@@ -605,7 +619,11 @@ function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, 
                                         className="flex items-center gap-3 cursor-pointer select-none flex-1"
                                         onClick={() => {
                                             if (isPrimary) {
-                                                alert('Cannot unselect the primary location. Assign a new primary first.');
+                                                toast.warning('Cannot unselect the primary location. Assign a new primary first.');
+                                                return;
+                                            }
+                                            if (!isSelected && multiLocationLocked && selectedLocationIds.length >= maxTrackedLocations) {
+                                                toast.warning(`${plan.name} plan allows tracking 1 Shopify location. Upgrade to Growth or Pro for multi-location inventory sync.`);
                                                 return;
                                             }
                                             setSelectedLocationIds((prev: string[]) =>
@@ -665,8 +683,10 @@ function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, 
 
 // ─── Price Rules Tab (improved UX + currency) ─
 
-function PricingTab({ settings, updateField, stores }: { settings: ShopSettings; updateField: any; stores: any }) {
+function PricingTab({ settings, updateField, stores, plan }: { settings: ShopSettings; updateField: any; stores: any; plan: PlanConfig }) {
+    const locked = !plan.capabilities.priceRules;
     const addRule = () => {
+        if (locked) return;
         if (settings.price_rules.length >= 2) return;
         const hasEtsy = settings.price_rules.some((r: PriceRule) => r.platform === 'etsy');
         const newPlatform = hasEtsy ? 'shopify' : 'etsy';
@@ -675,10 +695,12 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
     };
 
     const removeRule = (index: number) => {
+        if (locked) return;
         updateField('price_rules', settings.price_rules.filter((_: any, i: number) => i !== index));
     };
 
     const updateRule = (index: number, field: keyof PriceRule, value: any) => {
+        if (locked) return;
         const updated = settings.price_rules.map((rule: PriceRule, i: number) =>
             i === index ? { ...rule, [field]: value } : rule
         );
@@ -689,6 +711,12 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
         <div className="space-y-4">
             <SectionHeader title="Price Sync Rules" description="Configure automatic price adjustments between platforms" />
 
+            {locked && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Price rules are available on Growth and Pro plans.
+                </div>
+            )}
+
 
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
                 <SettingRow
@@ -697,7 +725,8 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                 >
                     <ToggleSwitch
                         enabled={settings.price_sync_enabled}
-                        onChange={(v) => updateField('price_sync_enabled', v)}
+                        onChange={(v) => !locked && updateField('price_sync_enabled', v)}
+                        disabled={locked}
                     />
                 </SettingRow>
             </div>
@@ -710,7 +739,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                             <p className="text-xs text-gray-400 mt-0.5">Define one rule per target platform (Max 2)</p>
                         </div>
                         {settings.price_rules.length < 2 && (
-                            <button onClick={addRule} className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+                            <button onClick={addRule} disabled={locked} className={`text-sm font-medium flex items-center gap-1 ${locked ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-700'}`}>
                                 + Add Rule
                             </button>
                         )}
@@ -720,7 +749,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                         <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
                             <DollarSign className="w-6 h-6 text-gray-300 mx-auto mb-2" />
                             <p className="text-sm text-gray-400">No rules configured</p>
-                            <button onClick={addRule} className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-2">
+                            <button onClick={addRule} disabled={locked} className={`text-sm font-medium mt-2 ${locked ? 'text-gray-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-700'}`}>
                                 + Create your first rule
                             </button>
                         </div>
@@ -731,7 +760,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                                     <div className="flex items-center gap-2 mb-3">
                                         <span className="text-xs font-bold text-gray-400 uppercase">Rule {i + 1}</span>
                                         <div className="flex-1 h-px bg-gray-200" />
-                                        <button onClick={() => removeRule(i)} className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                        <button onClick={() => removeRule(i)} disabled={locked} className={`p-1 rounded-lg transition-colors ${locked ? 'text-gray-300 cursor-not-allowed' : 'text-red-400 hover:text-red-600 hover:bg-red-50'}`}>
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
@@ -740,6 +769,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                                         <select
                                             value={rule.platform}
                                             onChange={(e) => updateRule(i, 'platform', e.target.value)}
+                                            disabled={locked}
                                             className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white font-medium"
                                         >
                                             <option value="etsy" disabled={settings.price_rules.some((r: PriceRule, filterIndex: number) => r.platform === 'etsy' && filterIndex !== i)}>Etsy</option>
@@ -755,6 +785,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                                         <select
                                             value={rule.type}
                                             onChange={(e) => updateRule(i, 'type', e.target.value)}
+                                            disabled={locked}
                                             className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white"
                                         >
                                             <option value="percentage">+ Percentage (%)</option>
@@ -766,6 +797,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                                                 type="number"
                                                 value={rule.value}
                                                 onChange={(e) => updateRule(i, 'value', parseFloat(e.target.value) || 0)}
+                                                disabled={locked}
                                                 className="w-20 px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             />
                                             <span className="text-sm text-gray-400">{rule.type === 'percentage' ? '%' : '$'}</span>
@@ -774,6 +806,7 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
                                         <select
                                             value={rule.rounding}
                                             onChange={(e) => updateRule(i, 'rounding', e.target.value)}
+                                            disabled={locked}
                                             className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white"
                                         >
                                             <option value="none">No rounding</option>
@@ -810,14 +843,19 @@ function PricingTab({ settings, updateField, stores }: { settings: ShopSettings;
 
 // ─── Notifications Tab (simplified) ──────────
 
-function NotificationsTab({ settings, updateField, notificationEmail, setNotificationEmail, setIsDirty }: {
-    settings: ShopSettings; updateField: any; notificationEmail: string; setNotificationEmail: (v: string) => void; setIsDirty: (v: boolean) => void;
+function NotificationsTab({ settings, updateField, notificationEmail, setNotificationEmail, setIsDirty, plan }: {
+    settings: ShopSettings; updateField: any; notificationEmail: string; setNotificationEmail: (v: string) => void; setIsDirty: (v: boolean) => void; plan: PlanConfig;
 }) {
+    const emailLocked = !plan.capabilities.emailNotifications;
+    const alertLocked = !plan.capabilities.merchantAlerts;
+
     const updateChannel = (key: keyof NotificationChannels, value: any) => {
+        if (key === 'email' && emailLocked) return;
         updateField('notification_channels', { ...settings.notification_channels, [key]: value });
     };
 
     const updateEvent = (key: keyof NotificationEvents, value: boolean) => {
+        if ((key === 'stock_zero' || key === 'oversell_risk') && alertLocked) return;
         if (key === 'oversell_risk' && value && (!settings.low_stock_threshold || settings.low_stock_threshold < 1)) {
             updateField('low_stock_threshold', 5);
         }
@@ -827,6 +865,12 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
     return (
         <div className="space-y-4">
             <SectionHeader title="Notifications" description="Choose what events trigger alerts and where they are delivered" />
+
+            {(emailLocked || alertLocked) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {plan.name} plan keeps critical sync-failed alerts available, while email notifications and stock alerts are unlocked on Growth and Pro.
+                </div>
+            )}
 
             {/* Channels */}
             <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
@@ -838,7 +882,7 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                 </SettingRow>
                 <div>
                     <SettingRow label="Email Notifications" description="Send critical alerts to your email">
-                        <ToggleSwitch enabled={settings.notification_channels.email} onChange={(v) => updateChannel('email', v)} />
+                        <ToggleSwitch enabled={settings.notification_channels.email} onChange={(v) => updateChannel('email', v)} disabled={emailLocked} />
                     </SettingRow>
                     {settings.notification_channels.email && (
                         <div className="px-6 pb-4 -mt-1">
@@ -852,6 +896,7 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                                         setNotificationEmail(e.target.value);
                                         setIsDirty(true);
                                     }}
+                                    disabled={emailLocked}
                                     placeholder="your@email.com"
                                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
@@ -869,7 +914,7 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                     <p className="text-xs text-gray-400 mt-0.5">Notifications are sent instantly when the selected event occurs</p>
                 </div>
                 <SettingRow label="Stock reaches zero" description="When any product runs out of stock">
-                    <ToggleSwitch enabled={settings.notification_events.stock_zero} onChange={(v) => updateEvent('stock_zero', v)} />
+                    <ToggleSwitch enabled={settings.notification_events.stock_zero} onChange={(v) => updateEvent('stock_zero', v)} disabled={alertLocked} />
                 </SettingRow>
                 <SettingRow label="Sync failed" description="When a stock sync operation fails">
                     <ToggleSwitch enabled={settings.notification_events.sync_failed} onChange={(v) => updateEvent('sync_failed', v)} />
@@ -889,12 +934,13 @@ function NotificationsTab({ settings, updateField, notificationEmail, setNotific
                                     max={1000}
                                     value={settings.low_stock_threshold || 5}
                                     onChange={(e) => updateField('low_stock_threshold', Math.max(1, parseInt(e.target.value) || 5))}
+                                    disabled={alertLocked}
                                     className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-gray-50"
                                 />
                                 <span className="text-xs text-gray-400">units</span>
                             </motion.div>
                         )}
-                        <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} />
+                        <ToggleSwitch enabled={settings.notification_events.oversell_risk} onChange={(v) => updateEvent('oversell_risk', v)} disabled={alertLocked} />
                     </div>
                 </SettingRow>
             </div>
@@ -1196,11 +1242,13 @@ function SettingRow({ label, description, children }: { label: string; descripti
     );
 }
 
-function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+function ToggleSwitch({ enabled, onChange, disabled = false }: { enabled: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
     return (
         <button
-            onClick={() => onChange(!enabled)}
-            className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-200'}`}
+            type="button"
+            onClick={() => !disabled && onChange(!enabled)}
+            disabled={disabled}
+            className={`relative w-11 h-6 rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-gray-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
             <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${enabled ? 'translate-x-5' : ''}`} />
         </button>

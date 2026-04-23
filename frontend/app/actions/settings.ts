@@ -1,6 +1,7 @@
 'use server'
 
-import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
+import { getValidatedUserContext } from '@/utils/supabase/admin'
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans'
 
 // ─── Types ───────────────────────────────────
 
@@ -69,6 +70,35 @@ const DEFAULT_SETTINGS: ShopSettings = {
     notification_email: null
 }
 
+function applyPlanRestrictions(settings: ShopSettings, planType?: string | null): ShopSettings {
+    const plan = getPlanConfig(planType) || PLAN_CONFIG.starter
+    const next = { ...settings }
+
+    if (!plan.capabilities.priceRules) {
+        next.price_sync_enabled = false
+        next.price_rules = []
+    }
+
+    if (!plan.capabilities.merchantAlerts) {
+        next.notification_events = {
+            ...next.notification_events,
+            stock_zero: false,
+            oversell_risk: false,
+            sync_failed: true,
+        }
+    }
+
+    if (!plan.capabilities.emailNotifications) {
+        next.notification_channels = {
+            ...next.notification_channels,
+            email: false,
+        }
+        next.notification_email = null
+    }
+
+    return next
+}
+
 // ─── Get Settings ────────────────────────────
 
 export async function getSettings(): Promise<ShopSettings> {
@@ -77,11 +107,11 @@ export async function getSettings(): Promise<ShopSettings> {
 
     const { data: shop } = await supabase
         .from('shops')
-        .select('id')
+        .select('id, plan_type')
         .eq('owner_id', ownerId)
         .maybeSingle()
 
-    if (!shop) return DEFAULT_SETTINGS
+    if (!shop) return applyPlanRestrictions(DEFAULT_SETTINGS, null)
 
     const { data: settings, error } = await supabase
         .from('shop_settings')
@@ -91,10 +121,10 @@ export async function getSettings(): Promise<ShopSettings> {
 
     if (error || !settings) {
         console.log('[Settings] No settings found, returning defaults')
-        return DEFAULT_SETTINGS
+        return applyPlanRestrictions(DEFAULT_SETTINGS, shop.plan_type)
     }
 
-    return {
+    return applyPlanRestrictions({
         sync_direction: settings.sync_direction || DEFAULT_SETTINGS.sync_direction,
         auto_sync_enabled: settings.auto_sync_enabled ?? DEFAULT_SETTINGS.auto_sync_enabled,
         low_stock_threshold: settings.low_stock_threshold ?? DEFAULT_SETTINGS.low_stock_threshold,
@@ -108,7 +138,7 @@ export async function getSettings(): Promise<ShopSettings> {
         notification_events: settings.notification_events || DEFAULT_SETTINGS.notification_events,
         notification_frequency: settings.notification_frequency || DEFAULT_SETTINGS.notification_frequency,
         notification_email: settings.notification_email || DEFAULT_SETTINGS.notification_email
-    }
+    }, shop.plan_type)
 }
 
 // ─── Update Settings ─────────────────────────
@@ -121,13 +151,37 @@ export async function updateSettings(
 
     const { data: shop } = await supabase
         .from('shops')
-        .select('id')
+        .select('id, plan_type')
         .eq('owner_id', ownerId)
         .maybeSingle()
 
     if (!shop) return { success: false, message: 'Shop not found' }
 
     const normalizedUpdates = { ...updates }
+    const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
+
+    if (!plan.capabilities.priceRules) {
+        normalizedUpdates.price_sync_enabled = false
+        normalizedUpdates.price_rules = []
+    }
+
+    if (!plan.capabilities.merchantAlerts) {
+        normalizedUpdates.notification_events = {
+            ...(normalizedUpdates.notification_events || DEFAULT_SETTINGS.notification_events),
+            stock_zero: false,
+            oversell_risk: false,
+            sync_failed: true,
+        }
+    }
+
+    if (!plan.capabilities.emailNotifications) {
+        normalizedUpdates.notification_channels = {
+            ...(normalizedUpdates.notification_channels || DEFAULT_SETTINGS.notification_channels),
+            email: false,
+        }
+        normalizedUpdates.notification_email = null
+    }
+
     if (
         normalizedUpdates.notification_events?.oversell_risk &&
         (!normalizedUpdates.low_stock_threshold || normalizedUpdates.low_stock_threshold < 1)
@@ -136,7 +190,7 @@ export async function updateSettings(
     }
 
     // Build the update payload — only include provided fields
-    const payload: any = { updated_at: new Date().toISOString() }
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
     if (normalizedUpdates.sync_direction !== undefined) payload.sync_direction = normalizedUpdates.sync_direction
     if (normalizedUpdates.auto_sync_enabled !== undefined) payload.auto_sync_enabled = normalizedUpdates.auto_sync_enabled

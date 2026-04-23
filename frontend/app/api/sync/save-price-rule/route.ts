@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 /**
  * POST /api/sync/save-price-rule
@@ -19,12 +20,20 @@ export async function POST(req: NextRequest) {
         // Find the shop
         const { data: shop, error: shopError } = await supabase
             .from('shops')
-            .select('id')
+            .select('id, plan_type')
             .eq('owner_id', owner_id)
             .maybeSingle();
 
         if (shopError || !shop) {
             return NextResponse.json({ error: 'Shop not found' }, { status: 404 });
+        }
+
+        const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter;
+        if (!plan.capabilities.priceRules) {
+            return NextResponse.json({
+                error: `${plan.name} plan does not include price rules. Upgrade to Growth or Pro to use automated pricing.`,
+                code: 'PLAN_PRICE_RULES_REQUIRED'
+            }, { status: 402 });
         }
 
         // Upsert settings with the new price_rules
@@ -45,8 +54,9 @@ export async function POST(req: NextRequest) {
         }
 
         return NextResponse.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Internal server error';
         console.error('[save-price-rule] Fatal Error:', err);
-        return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
