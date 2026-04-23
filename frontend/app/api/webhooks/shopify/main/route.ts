@@ -156,13 +156,16 @@ export async function POST(req: NextRequest) {
                 break;
 
             case 'orders/create':
-            case 'orders/updated':
                 console.log(`[Shopify Webhook] Order ${topic} for ${shop}: ${payload.id}`);
                 handleShopifyOrder(payload, shop, supabase).then(result => {
                     console.log(`[Shopify Webhook] Order sync result: ${result.status} — ${result.message}`);
                 }).catch((err: any) => {
                     console.error(`[Shopify Webhook] Order sync error:`, err);
                 });
+                break;
+
+            case 'orders/updated':
+                console.log(`[Shopify Webhook] Ignoring ${topic} for ${shop}: ${payload.id}`);
                 break;
 
             case 'inventory_levels/update':

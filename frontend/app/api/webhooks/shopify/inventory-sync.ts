@@ -228,7 +228,7 @@ export async function handleShopifyOrder(
     try {
         const { data: shop } = await supabase
             .from('shops')
-            .select('id, shop_domain, etsy_access_token, owner_id')
+            .select('id, shop_domain, access_token, etsy_access_token, owner_id, main_location_id')
             .eq('shop_domain', shopDomain)
             .maybeSingle();
 
@@ -261,7 +261,9 @@ export async function handleShopifyOrder(
         let syncedItems = 0;
         let failedItems = 0;
         let skippedItems = 0;
+        let touchedItems = 0;
 
+        const variantQuantities = new Map<string, number>();
         for (const lineItem of payload.line_items || []) {
             const variantId = lineItem.variant_id?.toString();
             const quantity = Number(lineItem.quantity || 0);
@@ -270,9 +272,13 @@ export async function handleShopifyOrder(
                 continue;
             }
 
+            variantQuantities.set(variantId, (variantQuantities.get(variantId) || 0) + quantity);
+        }
+
+        for (const [variantId, quantity] of variantQuantities.entries()) {
             const { data: item } = await supabase
                 .from('inventory_items')
-                .select('id, master_stock, etsy_listing_id, etsy_variant_id')
+                .select('id, master_stock, shopify_stock_snapshot, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
                 .eq('shop_id', shop.id)
                 .eq('shopify_variant_id', variantId)
                 .maybeSingle();
@@ -282,7 +288,30 @@ export async function handleShopifyOrder(
                 continue;
             }
 
-            const newStock = Math.max(0, (item.master_stock || 0) - quantity);
+            let currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0));
+
+            const trackedLocationIds = Array.isArray(item.selected_location_ids) && item.selected_location_ids.length > 0
+                ? item.selected_location_ids.map(id => id.toString())
+                : (shop.main_location_id ? [shop.main_location_id.toString()] : []);
+
+            if (shop.access_token && item.shopify_inventory_item_id && trackedLocationIds.length > 0) {
+                try {
+                    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+                    const levelsData = await shopifyApi.getInventoryLevels(creds, trackedLocationIds, item.shopify_inventory_item_id);
+                    const levels = Array.isArray(levelsData?.inventory_levels) ? levelsData.inventory_levels : [];
+
+                    currentShopifyTotal = levels
+                        .filter((level: any) => level.inventory_item_id?.toString() === item.shopify_inventory_item_id?.toString())
+                        .reduce((sum: number, level: any) => sum + Math.max(0, Number(level.available || 0)), 0);
+                } catch (err: any) {
+                    console.error(`${logPrefix} Failed to fetch live Shopify inventory for variant ${variantId}:`, err.message);
+                    currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0) - quantity);
+                }
+            } else {
+                currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0) - quantity);
+            }
+
+            const newStock = currentShopifyTotal;
             const updatePayload: Record<string, unknown> = {
                 master_stock: newStock,
                 shopify_stock_snapshot: newStock,
@@ -321,6 +350,8 @@ export async function handleShopifyOrder(
                 .from('inventory_items')
                 .update(updatePayload)
                 .eq('id', item.id);
+
+            touchedItems++;
 
             if (newStock === 0) {
                 await createNotification(
@@ -364,6 +395,8 @@ export async function handleShopifyOrder(
             metadata: {
                 shopify_order_id: orderId,
                 line_items: (payload.line_items || []).length,
+                unique_variants: variantQuantities.size,
+                touched_items: touchedItems,
                 synced_items: syncedItems,
                 failed_items: failedItems,
                 skipped_items: skippedItems,
