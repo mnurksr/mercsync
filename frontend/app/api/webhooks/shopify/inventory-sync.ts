@@ -11,6 +11,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import * as etsyApi from '../../sync/lib/etsy';
 import * as shopifyApi from '../../sync/lib/shopify';
 import { createNotification } from '../../../actions/notifications';
+import { canProcessMonthlyOrderSync } from '@/utils/planLimits';
 
 type SyncResult = {
     status: 'success' | 'failed' | 'skipped';
@@ -21,14 +22,12 @@ type SyncResult = {
  * Handle an inventory_levels/update webhook from Shopify.
  *
  * Flow:
- * 1. Find shop + settings, verify auto_sync and direction
+ * 1. Find shop + settings
  * 2. Find matching inventory_item in DB
  * 3. Fetch ALL inventory levels for this item across selected locations from Shopify API
  * 4. Aggregate total stock = sum of all selected locations
  * 5. Evaluate low_stock_threshold → send notification if stock is below
- * 6. Push effective_stock to Etsy if matched
- * 7. Update DB (master_stock, snapshots, location_map)
- * 8. Log to sync_logs
+ * 6. Update DB only (manual platform changes should not sync the opposite platform)
  */
 export async function handleInventoryUpdate(
     payload: {
@@ -58,41 +57,6 @@ export async function handleInventoryUpdate(
         if (shopError || !shop) {
             console.error(`${logPrefix} Shop not found for domain: ${shopDomain}`);
             return { status: 'failed', message: 'Shop not found' };
-        }
-
-        // ── 2. Check shop_settings ──
-        const { data: settings } = await supabase
-            .from('shop_settings')
-            .select('auto_sync_enabled, sync_direction, low_stock_threshold')
-            .eq('shop_id', shop.id)
-            .maybeSingle();
-
-        if (!settings?.auto_sync_enabled) {
-            console.log(`${logPrefix} Auto-sync disabled for shop ${shop.id}. Skipping.`);
-            await logSyncEvent(supabase, {
-                shop_id: shop.id,
-                source: 'shopify',
-                event_type: 'stock_update',
-                status: 'skipped',
-                error_message: 'Auto-sync disabled',
-                metadata: { inventory_item_id: inventoryItemId, location_id: webhookLocationId }
-            });
-            return { status: 'skipped', message: 'Auto-sync is disabled' };
-        }
-
-        // Direction check — must allow Shopify → Etsy
-        const direction = settings.sync_direction || 'bidirectional';
-        if (direction === 'etsy_to_shopify') {
-            console.log(`${logPrefix} Direction is etsy_to_shopify; ignoring Shopify webhook.`);
-            await logSyncEvent(supabase, {
-                shop_id: shop.id,
-                source: 'shopify',
-                event_type: 'stock_update',
-                status: 'skipped',
-                error_message: 'Direction does not allow Shopify → Etsy',
-                metadata: { inventory_item_id: inventoryItemId, direction }
-            });
-            return { status: 'skipped', message: 'Direction mismatch' };
         }
 
         // ── 3. Find matching inventory_item in DB ──
@@ -214,85 +178,10 @@ export async function handleInventoryUpdate(
 
         console.log(`${logPrefix} Stock change: ${oldStock} → ${effectiveStock} (shopify total: ${totalShopifyStock})`);
 
-        // --- Notification Triggers ---
-        const lowStockThreshold = settings.low_stock_threshold || 0;
-        console.log(`${logPrefix} Threshold Check: effective=${effectiveStock}, old=${oldStock}, threshold=${lowStockThreshold}`);
+        // Passive inventory refresh only: manual platform edits should update local DB
+        // without generating sync logs or cross-platform side effects.
 
-        if (effectiveStock === 0) {
-            console.log(`${logPrefix} Triggering stock_zero`);
-            await createNotification(
-                supabase,
-                shop.id,
-                'stock_zero',
-                'Stock Reached Zero',
-                `Product (Item ID: ${inventoryItemId}) is now out of stock on all platforms.`,
-                `/dashboard/inventory`
-            );
-        } else if (lowStockThreshold > 0 && effectiveStock <= lowStockThreshold && (oldStock > lowStockThreshold || oldStock === null)) {
-            console.log(`${logPrefix} Triggering low_stock (oversell_risk)`);
-            await createNotification(
-                supabase,
-                shop.id,
-                'oversell_risk',
-                'Low Stock Alert',
-                `Product (Item ID: ${inventoryItemId}) dropped to ${effectiveStock} units — below your alert threshold of ${lowStockThreshold}.`,
-                `/dashboard/inventory`
-            );
-        } else {
-            console.log(`${logPrefix} No notification needed.`);
-        }
-
-        // ── 7. Push to Etsy if matched ──
-        let etsySyncResult: 'success' | 'failed' | 'skipped' = 'skipped';
-        let etsyError: string | null = null;
-
-        if (item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
-            const MAX_RETRIES = 3;
-            const BASE_DELAY_MS = 2000; // 2s, 4s, 8s
-
-            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                try {
-                    console.log(`${logPrefix} Pushing to Etsy (attempt ${attempt}/${MAX_RETRIES}): listing=${item.etsy_listing_id}, variant=${item.etsy_variant_id}, stock=${effectiveStock}`);
-
-                    const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
-                    const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
-                        { item_id: item.etsy_variant_id.toString(), new_stock: effectiveStock }
-                    ]);
-                    await etsyApi.updateInventory(item.etsy_listing_id, shop.etsy_access_token, updatedPayload);
-
-                    etsySyncResult = 'success';
-                    console.log(`${logPrefix} ✅ Etsy stock updated to ${effectiveStock} (attempt ${attempt})`);
-                    break; // Success, exit retry loop
-                } catch (err: any) {
-                    const is409 = err.message?.includes('409') || err.message?.includes('being edited');
-
-                    if (is409 && attempt < MAX_RETRIES) {
-                        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 2s, 4s, 8s
-                        console.warn(`${logPrefix} ⚠️ Etsy 409 conflict, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        continue;
-                    }
-
-                    etsySyncResult = 'failed';
-                    etsyError = err.message;
-                    console.error(`${logPrefix} ❌ Etsy push failed after ${attempt} attempts:`, err.message);
-
-                    // Trigger Sync Failure Notification
-                    await createNotification(
-                        supabase,
-                        shop.id,
-                        'sync_failed',
-                        'Etsy Sync Failed',
-                        `Failed to push stock update to Etsy listing ${item.etsy_listing_id}. Error: ${err.message}`,
-                        `/dashboard/inventory`
-                    );
-                }
-            }
-        } else {
-            console.log(`${logPrefix} No Etsy match for this item. Updating DB only.`);
-        }
-
-        // ── 8. Update DB records ──
+        // ── 7. Update DB records only ──
         const dbUpdate: any = {
             master_stock: effectiveStock,
             shopify_stock_snapshot: totalShopifyStock,
@@ -300,11 +189,6 @@ export async function handleInventoryUpdate(
             shopify_updated_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
-
-        if (etsySyncResult === 'success') {
-            dbUpdate.etsy_stock_snapshot = effectiveStock;
-            dbUpdate.etsy_updated_at = new Date().toISOString();
-        }
 
         const { error: updateError } = await supabase
             .from('inventory_items')
@@ -315,36 +199,184 @@ export async function handleInventoryUpdate(
             console.error(`${logPrefix} DB update failed:`, updateError);
         }
 
-        // ── 9. Log the sync event ──
+        return {
+            status: 'success',
+            message: `Local stock updated: ${oldStock} → ${effectiveStock} (from ${locationMap.length} tracked locations)`
+        };
+
+    } catch (err: any) {
+        console.error(`${logPrefix} Fatal error:`, err);
+        return { status: 'failed', message: err.message };
+    }
+}
+
+export async function handleShopifyOrder(
+    payload: {
+        id: number | string;
+        line_items?: Array<{ variant_id?: number | string | null; quantity?: number | null }>;
+    },
+    shopDomain: string,
+    supabase: SupabaseClient
+): Promise<SyncResult> {
+    const logPrefix = '[Shopify Order Sync]';
+    const orderId = payload.id?.toString();
+
+    if (!orderId) {
+        return { status: 'failed', message: 'Missing order id' };
+    }
+
+    try {
+        const { data: shop } = await supabase
+            .from('shops')
+            .select('id, shop_domain, etsy_access_token, owner_id')
+            .eq('shop_domain', shopDomain)
+            .maybeSingle();
+
+        if (!shop) {
+            return { status: 'failed', message: 'Shop not found' };
+        }
+
+        const { data: existing } = await supabase
+            .from('sync_logs')
+            .select('id')
+            .eq('shop_id', shop.id)
+            .eq('event_type', 'order')
+            .eq('metadata->>shopify_order_id', orderId)
+            .maybeSingle();
+
+        if (existing) {
+            return { status: 'skipped', message: 'Order already processed' };
+        }
+
+        const { data: settings } = await supabase
+            .from('shop_settings')
+            .select('auto_sync_enabled, sync_direction, low_stock_threshold')
+            .eq('shop_id', shop.id)
+            .maybeSingle();
+
+        const canPushToEtsy = !!settings?.auto_sync_enabled && (settings.sync_direction || 'bidirectional') !== 'etsy_to_shopify';
+        const quota = canPushToEtsy ? await canProcessMonthlyOrderSync(supabase, shop.id) : null;
+        const canUseOrderQuota = !quota || quota.ok;
+
+        let syncedItems = 0;
+        let failedItems = 0;
+        let skippedItems = 0;
+
+        for (const lineItem of payload.line_items || []) {
+            const variantId = lineItem.variant_id?.toString();
+            const quantity = Number(lineItem.quantity || 0);
+
+            if (!variantId || quantity <= 0) {
+                continue;
+            }
+
+            const { data: item } = await supabase
+                .from('inventory_items')
+                .select('id, master_stock, etsy_listing_id, etsy_variant_id')
+                .eq('shop_id', shop.id)
+                .eq('shopify_variant_id', variantId)
+                .maybeSingle();
+
+            if (!item) {
+                skippedItems++;
+                continue;
+            }
+
+            const newStock = Math.max(0, (item.master_stock || 0) - quantity);
+            const updatePayload: Record<string, unknown> = {
+                master_stock: newStock,
+                shopify_stock_snapshot: newStock,
+                updated_at: new Date().toISOString(),
+                shopify_updated_at: new Date().toISOString()
+            };
+
+            let pushedToEtsy = false;
+
+            if (canPushToEtsy && canUseOrderQuota && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
+                try {
+                    const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
+                    const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
+                        { item_id: item.etsy_variant_id.toString(), new_stock: newStock }
+                    ]);
+                    await etsyApi.updateInventory(item.etsy_listing_id, shop.etsy_access_token, updatedPayload);
+                    updatePayload.etsy_stock_snapshot = newStock;
+                    updatePayload.etsy_updated_at = new Date().toISOString();
+                    pushedToEtsy = true;
+                } catch (err: any) {
+                    failedItems++;
+                    await createNotification(
+                        supabase,
+                        shop.id,
+                        'sync_failed',
+                        'Shopify Order Sync Failed',
+                        `Failed to push Shopify order stock update to Etsy. Error: ${err.message}`,
+                        `/dashboard/history`
+                    );
+                }
+            } else if (!canPushToEtsy || !canUseOrderQuota) {
+                skippedItems++;
+            }
+
+            await supabase
+                .from('inventory_items')
+                .update(updatePayload)
+                .eq('id', item.id);
+
+            if (newStock === 0) {
+                await createNotification(
+                    supabase,
+                    shop.id,
+                    'stock_zero',
+                    'Stock Reached Zero',
+                    `A Shopify sale reduced an item to 0 stock.`,
+                    `/dashboard/inventory`
+                );
+            } else if ((settings?.low_stock_threshold || 0) > 0 && newStock <= (settings?.low_stock_threshold || 0)) {
+                await createNotification(
+                    supabase,
+                    shop.id,
+                    'oversell_risk',
+                    'Low Stock Alert',
+                    `A Shopify sale reduced an item to ${newStock} units.`,
+                    `/dashboard/inventory`
+                );
+            }
+
+            if (pushedToEtsy) {
+                syncedItems++;
+            }
+        }
+
+        const status = failedItems > 0 ? 'failed' : syncedItems > 0 ? 'success' : 'skipped';
+        const errorMessage = !canUseOrderQuota && quota?.message
+            ? quota.message
+            : failedItems > 0
+                ? 'One or more Etsy updates failed during Shopify order sync.'
+                : null;
+
         await logSyncEvent(supabase, {
             shop_id: shop.id,
-            inventory_item_id: item.id,
             source: 'shopify',
-            event_type: 'stock_update',
+            event_type: 'order',
             direction: 'shopify_to_etsy',
-            old_stock: oldStock,
-            new_stock: effectiveStock,
-            status: etsySyncResult === 'failed' ? 'failed' : 'success',
-            error_message: etsyError,
+            status,
+            error_message: errorMessage,
             metadata: {
-                shopify_total: totalShopifyStock,
-                low_stock_threshold: lowStockThreshold,
-                webhook_location_id: webhookLocationId,
-                webhook_available: webhookAvailable,
-                location_breakdown: locationMap,
-                etsy_listing_id: item.etsy_listing_id,
-                etsy_variant_id: item.etsy_variant_id,
-                etsy_push: etsySyncResult
+                shopify_order_id: orderId,
+                line_items: (payload.line_items || []).length,
+                synced_items: syncedItems,
+                failed_items: failedItems,
+                skipped_items: skippedItems,
+                quota_limited: !canUseOrderQuota
             }
         });
 
         return {
-            status: etsySyncResult === 'failed' ? 'failed' : 'success',
-            message: etsySyncResult === 'failed'
-                ? `DB updated but Etsy push failed: ${etsyError}`
-                : `Synced: ${oldStock} → ${effectiveStock} (from ${locationMap.length} locations, total Shopify: ${totalShopifyStock})`
+            status,
+            message: status === 'success'
+                ? `Processed Shopify order ${orderId}`
+                : errorMessage || 'Order processed without outbound sync'
         };
-
     } catch (err: any) {
         console.error(`${logPrefix} Fatal error:`, err);
         return { status: 'failed', message: err.message };

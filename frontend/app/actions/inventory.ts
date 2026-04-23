@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans'
 
 export type PlatformVariant = {
     id: string
@@ -365,7 +366,7 @@ export async function getShopifyLocations(): Promise<{ id: string, name: string,
     const { supabase, ownerId } = await getValidatedUserContext()
     if (!ownerId) return []
 
-    const { data: shop } = await supabase.from('shops').select('id, main_location_id').eq('owner_id', ownerId).single()
+    const { data: shop } = await supabase.from('shops').select('id, main_location_id, selected_location_ids, plan_type').eq('owner_id', ownerId).single()
     if (!shop) return []
 
     const { data: locations } = await supabase
@@ -373,7 +374,15 @@ export async function getShopifyLocations(): Promise<{ id: string, name: string,
         .select('id, name, shopify_location_id')
         .eq('shop_id', shop.id)
 
-    const activeIds = (shop.main_location_id || '').split(',').map((s: string) => s.trim())
+    const selectedIds = Array.isArray(shop.selected_location_ids)
+        ? shop.selected_location_ids.map((id: any) => id.toString())
+        : []
+    const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
+    const maxTrackedLocations = plan.limits.maxTrackedLocations
+    const normalizedSelectedIds = selectedIds.slice(0, maxTrackedLocations)
+    const activeIds = normalizedSelectedIds.length > 0
+        ? normalizedSelectedIds
+        : (shop.main_location_id ? [shop.main_location_id.toString()] : [])
 
     return (locations || []).map((loc: any) => ({
         id: loc.shopify_location_id || loc.id,
@@ -391,12 +400,30 @@ export async function getShopSelectedLocationIds(): Promise<string[]> {
 
     const { data: shop } = await supabase
         .from('shops')
-        .select('selected_location_ids')
+        .select('id, selected_location_ids, main_location_id, plan_type')
         .eq('owner_id', ownerId)
         .maybeSingle()
 
-    if (!shop?.selected_location_ids || !Array.isArray(shop.selected_location_ids)) return []
-    return shop.selected_location_ids.map((id: any) => id.toString())
+    if (!shop) return []
+
+    const selectedIds = Array.isArray(shop.selected_location_ids)
+        ? shop.selected_location_ids.map((id: any) => id.toString())
+        : []
+    const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
+    const normalizedSelectedIds = selectedIds.slice(0, plan.limits.maxTrackedLocations)
+
+    if (normalizedSelectedIds.length === 0 && shop.main_location_id) {
+        return [shop.main_location_id.toString()]
+    }
+
+    if (normalizedSelectedIds.length !== selectedIds.length && shop.id) {
+        await supabase
+            .from('shops')
+            .update({ selected_location_ids: normalizedSelectedIds })
+            .eq('id', shop.id)
+    }
+
+    return normalizedSelectedIds
 }
 
 /**

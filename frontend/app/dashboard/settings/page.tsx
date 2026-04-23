@@ -108,7 +108,7 @@ export default function SettingsPage() {
                 getDashboardStats()
             ]);
 
-            setProductsCount(dashStats.matchedProducts || 0);
+            setProductsCount(dashStats.totalProducts || 0);
 
             setStores({
                 shopify: { 
@@ -146,26 +146,33 @@ export default function SettingsPage() {
 
                     const { mainLocationId: savedPrimaryId, selectedLocationIds: savedSelectedIds } = savedConfig;
 
-                    // Restore saved primary location from DB
-                    if (savedPrimaryId) {
-                        setPrimaryLocationId(savedPrimaryId);
-                    } else {
-                        // No saved primary — fall back to first active location
-                        const firstActive = locs.find(l => l.active);
-                        setPrimaryLocationId(firstActive?.id || (locs.length > 0 ? locs[0].id : null));
-                    }
+                    const plan = getPlanConfig(shopify.plan_type) || PLAN_CONFIG.starter;
+
+                    let normalizedSelectedIds: string[] = [];
 
                     // Restore saved selected locations from DB
                     if (savedSelectedIds.length > 0) {
                         // Only use IDs that still exist in the Shopify locations list
                         const validLocIds = locs.map(l => l.id);
-                        const validSavedIds = savedSelectedIds.filter(id => validLocIds.includes(id));
-                        setSelectedLocationIds(validSavedIds.length > 0 ? validSavedIds : [locs[0]?.id].filter(Boolean));
+                        normalizedSelectedIds = savedSelectedIds
+                            .filter(id => validLocIds.includes(id))
+                            .slice(0, plan.limits.maxTrackedLocations);
+                        setSelectedLocationIds(normalizedSelectedIds.length > 0 ? normalizedSelectedIds : [locs[0]?.id].filter(Boolean));
                     } else {
-                        // No saved selection — fall back to all active locations
-                        const activeLocs = locs.filter(l => l.active).map(l => l.id);
-                        setSelectedLocationIds(activeLocs.length > 0 ? activeLocs : locs.length > 0 ? [locs[0].id] : []);
+                        // No saved selection — fall back to active locations within plan limit
+                        const activeLocs = locs.filter(l => l.active).map(l => l.id).slice(0, plan.limits.maxTrackedLocations);
+                        normalizedSelectedIds = activeLocs.length > 0 ? activeLocs : locs.length > 0 ? [locs[0].id] : [];
+                        setSelectedLocationIds(normalizedSelectedIds);
                     }
+
+                    const candidatePrimaryId =
+                        (savedPrimaryId && normalizedSelectedIds.includes(savedPrimaryId) ? savedPrimaryId : null) ||
+                        normalizedSelectedIds[0] ||
+                        locs.find(l => l.active)?.id ||
+                        locs[0]?.id ||
+                        null;
+
+                    setPrimaryLocationId(candidatePrimaryId);
                 }
             }
         } catch (error) {
@@ -340,7 +347,7 @@ export default function SettingsPage() {
                         />
                     )}
                     {activeTab === 'sync' && (
-                        <SyncTab settings={settings} updateField={updateField} locations={locations} storesConnected={stores.shopify.connected} />
+                        <SyncTab settings={settings} updateField={updateField} locations={locations} selectedLocationIds={selectedLocationIds} storesConnected={stores.shopify.connected} />
                     )}
                     {activeTab === 'locations' && (
                         <LocationsTab
@@ -438,11 +445,14 @@ function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyM
 
 // ─── Sync Settings Tab (simplified) ──────────
 
-function SyncTab({ settings, updateField, locations, storesConnected }: { settings: ShopSettings; updateField: any; locations: any[]; storesConnected: boolean }) {
+function SyncTab({ settings, updateField, locations, selectedLocationIds, storesConnected }: { settings: ShopSettings; updateField: any; locations: any[]; selectedLocationIds: string[]; storesConnected: boolean }) {
+    const trackedLocations = selectedLocationIds.length > 0
+        ? locations.filter((loc) => selectedLocationIds.includes(loc.id))
+        : locations;
     
     // Sort locations based on the saved deduction order
     // If a location is not in the array, it goes to the bottom
-    const sortedLocations = [...locations].sort((a, b) => {
+    const sortedLocations = [...trackedLocations].sort((a, b) => {
         const indexA = settings.location_deduction_order.indexOf(a.id);
         const indexB = settings.location_deduction_order.indexOf(b.id);
         if (indexA === -1 && indexB === -1) return 0;
@@ -454,10 +464,10 @@ function SyncTab({ settings, updateField, locations, storesConnected }: { settin
     const moveLocation = (index: number, direction: 'up' | 'down') => {
         const currentOrder = settings.location_deduction_order.length > 0 
             ? [...settings.location_deduction_order]
-            : locations.map(l => l.id); // Initialize if empty
+            : trackedLocations.map(l => l.id); // Initialize if empty
         
         // Ensure all locations exist in the order array
-        locations.forEach(loc => {
+        trackedLocations.forEach(loc => {
             if (!currentOrder.includes(loc.id)) currentOrder.push(loc.id);
         });
 
@@ -511,7 +521,7 @@ function SyncTab({ settings, updateField, locations, storesConnected }: { settin
                 <div className="mb-4">
                     <h3 className="text-sm font-semibold text-gray-900">Shopify Location Deduction Priority</h3>
                     <p className="text-xs text-gray-500 mt-1">
-                        When an order is placed on Etsy, we need to reduce stock on Shopify. If a product has stock in multiple Shopify locations, we will deduct stock in the order defined below (top to bottom).
+                        These are the Shopify locations currently selected in the Locations tab. When an Etsy order reduces Shopify stock, deduction follows the order shown below.
                     </p>
                 </div>
                 
@@ -522,6 +532,10 @@ function SyncTab({ settings, updateField, locations, storesConnected }: { settin
                 ) : locations.length === 0 ? (
                     <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
                         <p className="text-sm text-gray-400">Loading locations...</p>
+                    </div>
+                ) : sortedLocations.length === 0 ? (
+                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                        <p className="text-sm text-gray-400">Select at least one tracked location from the Locations tab.</p>
                     </div>
                 ) : (
                     <div className="space-y-2">
@@ -619,11 +633,12 @@ function LocationsTab({ locations, selectedLocationIds, setSelectedLocationIds, 
                                         className="flex items-center gap-3 cursor-pointer select-none flex-1"
                                         onClick={() => {
                                             if (isPrimary) {
-                                                toast.warning('Cannot unselect the primary location. Assign a new primary first.');
+                                                toast.warning('Choose another location first if you want to replace the current primary location.');
                                                 return;
                                             }
                                             if (!isSelected && multiLocationLocked && selectedLocationIds.length >= maxTrackedLocations) {
-                                                toast.warning(`${plan.name} plan allows tracking 1 Shopify location. Upgrade to Growth or Pro for multi-location inventory sync.`);
+                                                setSelectedLocationIds([loc.id]);
+                                                setPrimaryLocationId(loc.id);
                                                 return;
                                             }
                                             setSelectedLocationIds((prev: string[]) =>
@@ -1130,7 +1145,7 @@ function BillingTab({ stores, productsCount = 0 }: { stores: any, productsCount?
                     <div className="space-y-4">
                         <div>
                             <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-sm text-gray-600">Matched products</span>
+                                <span className="text-sm text-gray-600">Tracked products</span>
                                 <span className="text-sm font-medium text-gray-900">
                                     {`${productsCount} / ${limit}`}
                                 </span>

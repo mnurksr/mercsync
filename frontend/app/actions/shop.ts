@@ -521,7 +521,7 @@ export async function getShopLocationConfig(): Promise<{
 
     if (!shop) return { mainLocationId: null, selectedLocationIds: [] }
 
-    const mainLocationId = shop.main_location_id?.toString() || null
+    let mainLocationId = shop.main_location_id?.toString() || null
 
     // selected_location_ids may be in shops table or we can fall back to inventory_items
     let selectedIds: string[] = []
@@ -544,5 +544,46 @@ export async function getShopLocationConfig(): Promise<{
 
     const plan = getPlanConfig(shop.plan_type) || PLAN_CONFIG.starter
     const maxTrackedLocations = plan.limits.maxTrackedLocations
-    return { mainLocationId, selectedLocationIds: selectedIds.slice(0, maxTrackedLocations) }
+    let normalizedSelectedIds = selectedIds.slice(0, maxTrackedLocations)
+
+    if (normalizedSelectedIds.length === 0 && mainLocationId) {
+        normalizedSelectedIds = [mainLocationId]
+    }
+
+    if (mainLocationId && !normalizedSelectedIds.includes(mainLocationId)) {
+        mainLocationId = normalizedSelectedIds[0] || mainLocationId
+    }
+
+    const persistedSelectionChanged =
+        normalizedSelectedIds.length !== selectedIds.length ||
+        normalizedSelectedIds.some((id, index) => id !== selectedIds[index]) ||
+        (mainLocationId || null) !== (shop.main_location_id?.toString() || null)
+
+    if (persistedSelectionChanged) {
+        const { data: shopRow } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('owner_id', ownerId)
+            .maybeSingle()
+
+        if (shopRow?.id) {
+            await supabase
+                .from('shops')
+                .update({
+                    main_location_id: mainLocationId,
+                    selected_location_ids: normalizedSelectedIds
+                })
+                .eq('id', shopRow.id)
+
+            await createAdminClient()
+                .from('inventory_items')
+                .update({
+                    selected_location_ids: normalizedSelectedIds,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('shop_id', shopRow.id)
+        }
+    }
+
+    return { mainLocationId, selectedLocationIds: normalizedSelectedIds }
 }

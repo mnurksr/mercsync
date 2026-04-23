@@ -17,6 +17,7 @@ import { useAuth } from '@/components/AuthProvider';
 import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/components/dashboard/CloneModal';
 import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
 import MatchModal from '@/components/dashboard/MatchModal';
+import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 export default function ProductsPage() {
     const toast = useToast();
@@ -56,6 +57,7 @@ export default function ProductsPage() {
     // Shop Metadata
     const [shopCurrencies, setShopCurrencies] = useState<{ shopify: string, etsy: string }>({ shopify: 'USD', etsy: 'USD' });
     const [pricingRules, setPricingRules] = useState<any[]>([]);
+    const [shopPlanType, setShopPlanType] = useState<string | null>(null);
 
     // Import Modal
     const [showImportModal, setShowImportModal] = useState(false);
@@ -106,13 +108,15 @@ export default function ProductsPage() {
         setIsLoading(true);
         setSelectedItems(new Set()); // Reset selections on reload
         try {
-            const [itemList, statsData] = await Promise.all([
+            const [itemList, statsData, shopInfo] = await Promise.all([
                 getPlatformListings(activePlatform, searchQuery || undefined),
-                getInventoryStats(activePlatform)
+                getInventoryStats(activePlatform),
+                getConnectedShop('shopify')
             ]);
 
             setItems(itemList);
             setStats(statsData);
+            setShopPlanType(shopInfo.plan_type || null);
 
             // Fetch price rules via server action (handles auth properly in Shopify embed)
             try {
@@ -243,6 +247,9 @@ export default function ProductsPage() {
             crossListing.to_etsy.some(i => i.source_id === sourceId);
     };
 
+    const currentPlan = getPlanConfig(shopPlanType) || PLAN_CONFIG.starter;
+    const canCloneProducts = currentPlan.capabilities.productCloning;
+
     const getQueuedItem = (sourceId: string) => {
         return crossListing.to_shopify.find(i => i.source_id === sourceId) ||
             crossListing.to_etsy.find(i => i.source_id === sourceId);
@@ -250,6 +257,10 @@ export default function ProductsPage() {
 
     const handleCloneClick = (item: ListingItem, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
+        if (!canCloneProducts) {
+            toast.warning(`${currentPlan.name} plan does not include product cloning. Upgrade to Growth or Pro to clone products.`);
+            return;
+        }
 
         const sourcePlatform = activePlatform;
         const targetPlatform = sourcePlatform === 'shopify' ? 'etsy' : 'shopify';
@@ -333,7 +344,10 @@ export default function ProductsPage() {
                 body: JSON.stringify(payload)
             });
 
-            if (!res.ok) throw new Error('Failed to start sync');
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                throw new Error(data?.error || 'Failed to start sync');
+            }
 
             setSyncJobId(job_id);
             setIsProgressModalOpen(true);
@@ -346,6 +360,10 @@ export default function ProductsPage() {
     };
 
     const handleBulkClone = () => {
+        if (!canCloneProducts) {
+            toast.warning(`${currentPlan.name} plan does not include product cloning. Upgrade to Growth or Pro to clone products.`);
+            return;
+        }
         const selectedListings = filteredItems.filter(i => selectedItems.has(i.id) && i.matchStatus !== 'synced');
         if (selectedListings.length === 0) return;
 
@@ -499,19 +517,30 @@ export default function ProductsPage() {
                                             Bulk Actions
                                         </div>
 
-                                        {/* Clone All */}
                                         <button
-                                            onClick={() => { handleBulkClone(); setBulkActionsOpen(false); }}
-                                            disabled={!allSelectedUnmatched}
-                                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors ${allSelectedUnmatched
-                                                ? 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'
-                                                : 'text-gray-300 cursor-not-allowed'
+                                            onClick={() => {
+                                                if (!canCloneProducts) {
+                                                    toast.warning(`${currentPlan.name} plan does not include product cloning. Upgrade to Growth or Pro to clone products.`);
+                                                    setBulkActionsOpen(false);
+                                                    return;
+                                                }
+                                                handleBulkClone();
+                                                setBulkActionsOpen(false);
+                                            }}
+                                            disabled={canCloneProducts ? !allSelectedUnmatched : false}
+                                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors ${canCloneProducts
+                                                ? (allSelectedUnmatched
+                                                    ? 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-700'
+                                                    : 'text-gray-300 cursor-not-allowed')
+                                                : 'text-gray-400 hover:bg-gray-50'
                                             }`}
                                         >
                                             <Copy className="w-4 h-4 shrink-0" />
                                             <div>
-                                                <div className="font-semibold">Clone All</div>
-                                                <div className="text-[10px] text-gray-400">Add to clone queue</div>
+                                                <div className="font-semibold">{canCloneProducts ? 'Clone All' : 'Clone All Locked'}</div>
+                                                <div className="text-[10px] text-gray-400">
+                                                    {canCloneProducts ? 'Add to clone queue' : 'Upgrade to Growth or Pro'}
+                                                </div>
                                             </div>
                                         </button>
 
@@ -882,7 +911,7 @@ export default function ProductsPage() {
                                                         </button>
 
                                                         {/* Row 2, Col 2: Clone / Edit Queue / Delete */}
-                                                        {isQueued ? (
+                                                        {canCloneProducts && isQueued ? (
                                                             <button
                                                                 onClick={() => handleCloneClick(item, { stopPropagation: () => {} } as any)}
                                                                 className="inline-flex items-center justify-center gap-1 h-7 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md transition-all text-[10px] font-semibold"
@@ -901,10 +930,13 @@ export default function ProductsPage() {
                                                         ) : (
                                                             <button
                                                                 onClick={() => handleCloneClick(item, { stopPropagation: () => {} } as any)}
-                                                                className="inline-flex items-center justify-center gap-1 h-7 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md transition-all text-[10px] font-semibold"
+                                                                className={`inline-flex items-center justify-center gap-1 h-7 border rounded-md transition-all text-[10px] font-semibold ${canCloneProducts
+                                                                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                                                    : 'border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100'
+                                                                }`}
                                                             >
                                                                 <Copy className="w-3 h-3 shrink-0" />
-                                                                Clone
+                                                                {canCloneProducts ? 'Clone' : 'Clone Locked'}
                                                             </button>
                                                         )}
                                                     </div>

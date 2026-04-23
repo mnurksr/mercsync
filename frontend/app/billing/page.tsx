@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/useToast';
 import { getShopDomain } from '@/utils/shopDomain';
 import { PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
+import { useRouter } from 'next/navigation';
 
 const PLAN_STYLE: Record<PlanId, { icon: typeof Zap; color: string; popular?: boolean }> = {
     starter: { icon: Zap, color: 'from-blue-500 to-indigo-600' },
@@ -23,12 +24,63 @@ const PLANS = PLAN_ORDER.map(id => ({
 export default function PlansPage() {
     const { user } = useAuth();
     const toast = useToast();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
     // Get shop domain — checks URL params first, then sessionStorage
     const shopDomain = getShopDomain(searchParams);
+    const chargeId = searchParams.get('charge_id');
+
+    useEffect(() => {
+        if (!chargeId || !shopDomain) {
+            return;
+        }
+
+        let cancelled = false;
+
+        const verifySubscription = async () => {
+            setIsLoading(true);
+
+            try {
+                const response = await fetch('/api/billing/verify-subscription', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ charge_id: chargeId, shop_domain: shopDomain })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Subscription verification failed');
+                }
+
+                if (cancelled) {
+                    return;
+                }
+
+                toast.success('Subscription activated.');
+                router.replace(`/dashboard?shop=${shopDomain}`);
+            } catch (error: unknown) {
+                if (cancelled) {
+                    return;
+                }
+                const message = error instanceof Error ? error.message : 'Error verifying payment.';
+                toast.error(message);
+            } finally {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        verifySubscription();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chargeId, router, shopDomain, toast]);
 
     const handleSelectPlan = async (planId: string) => {
         if (!user?.id && !shopDomain) {

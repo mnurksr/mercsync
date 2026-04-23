@@ -2,7 +2,7 @@
 import { NextRequest } from 'next/server';
 import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
-import { handleInventoryUpdate } from '../inventory-sync';
+import { handleInventoryUpdate, handleShopifyOrder } from '../inventory-sync';
 import { handlePriceUpdate } from '../../../sync/price-sync';
 import { scrubShopAfterUninstall } from '../cleanup';
 
@@ -157,9 +157,12 @@ export async function POST(req: NextRequest) {
 
             case 'orders/create':
             case 'orders/updated':
-                // Note: Shopify automatically reduces inventory and fires `inventory_levels/update` 
-                // when an order is created. We rely on that webhook for sync instead of this one.
-                console.log(`[Shopify Webhook] Order ${topic} for ${shop}: ${payload.id}. Stock handled via inventory_levels/update.`);
+                console.log(`[Shopify Webhook] Order ${topic} for ${shop}: ${payload.id}`);
+                handleShopifyOrder(payload, shop, supabase).then(result => {
+                    console.log(`[Shopify Webhook] Order sync result: ${result.status} — ${result.message}`);
+                }).catch((err: any) => {
+                    console.error(`[Shopify Webhook] Order sync error:`, err);
+                });
                 break;
 
             case 'inventory_levels/update':

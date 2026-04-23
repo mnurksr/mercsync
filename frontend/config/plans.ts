@@ -116,9 +116,10 @@ export const PLAN_CONFIG: Record<PlanId, PlanConfig> = {
 
 export function normalizePlanId(value?: string | null): PlanId | null {
     const plan = (value || '').toLowerCase().trim();
-    if (plan === 'starter') return 'starter';
-    if (plan === 'growth' || plan === 'professional') return 'growth';
-    if (plan === 'pro' || plan === 'enterprise' || plan === 'unlimited') return 'pro';
+    if (!plan) return null;
+    if (plan === 'starter' || plan.includes('starter')) return 'starter';
+    if (plan === 'growth' || plan === 'professional' || plan.includes('growth') || plan.includes('professional')) return 'growth';
+    if (plan === 'pro' || plan === 'enterprise' || plan === 'unlimited' || plan.includes(' pro') || plan.startsWith('pro ') || plan.includes('enterprise') || plan.includes('unlimited')) return 'pro';
     return null;
 }
 
