@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         const variables = {
             name: `MercSync ${planConfig.name}`,
             returnUrl,
-            test: process.env.NODE_ENV !== 'production',
+            test: true,
             trialDays: planConfig.trialDays,
             lineItems: [
                 {
