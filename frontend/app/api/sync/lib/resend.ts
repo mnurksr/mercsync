@@ -79,6 +79,16 @@ const NOTIFICATION_CONFIG: Record<NotificationType, {
     }
 };
 
+/** Escape HTML special characters to prevent injection. */
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 /**
  * Build premium HTML email template for all notification types.
  */
@@ -90,6 +100,8 @@ export function buildNotificationHtml(
 ) {
     const config = NOTIFICATION_CONFIG[(type as NotificationType) || 'oversell_risk'] || NOTIFICATION_CONFIG.oversell_risk;
     const year = new Date().getFullYear();
+    const safeTitle = escapeHtml(title);
+    const safeMessage = escapeHtml(message);
 
     return `
 <!DOCTYPE html>
@@ -99,7 +111,7 @@ export function buildNotificationHtml(
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
     <meta name="supported-color-schemes" content="light" />
-    <title>${title}</title>
+    <title>${safeTitle}</title>
     <!--[if mso]>
     <noscript>
         <xml>
@@ -151,7 +163,7 @@ export function buildNotificationHtml(
                                                 </td>
                                                 <td style="padding-left: 16px;">
                                                     <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #111827; line-height: 1.3;">
-                                                        ${title}
+                                                        ${safeTitle}
                                                     </h1>
                                                 </td>
                                             </tr>
@@ -164,7 +176,7 @@ export function buildNotificationHtml(
                                     <td style="padding: 20px 36px 0 36px;">
                                         <div style="background-color: ${config.accentBg}; border-radius: 12px; padding: 16px 20px; border-left: 3px solid ${config.accentColor};">
                                             <p style="margin: 0; font-size: 14px; line-height: 1.7; color: #374151;">
-                                                ${message}
+                                                ${safeMessage}
                                             </p>
                                         </div>
                                     </td>

@@ -3,6 +3,13 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import * as shopifyApi from '../../sync/lib/shopify';
 
 export async function POST(req: NextRequest) {
+    // Auth check — only allow with valid CRON_SECRET
+    const secret = req.headers.get('authorization')?.replace('Bearer ', '') || req.nextUrl.searchParams.get('secret');
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret || secret !== cronSecret) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const payload = await req.json();
         const { shop_id, receipt_id, transactions } = payload;

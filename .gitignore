@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Shopify app config (contains real client_id)
+shopify.app.toml
+
+# Next.js build output
+.next/
+
+# Debug/test scripts
+test-payload.js
+test_db.ts
+scripts/inspect_db.ts
+frontend/test-db-update.mjs
+frontend/get_func.mjs
+
+# Internal planning docs
+LAUNCH_IMPLEMENTATION_PLAN.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
