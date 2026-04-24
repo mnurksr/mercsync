@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ShoppingBag, Store, Zap, Check, X, Database } from 'lucide-react';
+import { Zap, Check, X, Database } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 
 interface SymmetricSyncModalProps {
     isOpen: boolean;
@@ -336,7 +337,7 @@ export function SymmetricSyncModal({
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-2">
                                     <div className="p-2 bg-blue-100 rounded-xl text-blue-600 relative z-10">
-                                        <ShoppingBag className="w-4 h-4" />
+                                        <ShopifyIcon size={16} />
                                     </div>
                                     <span className="text-xs font-black text-blue-600 uppercase tracking-tighter">Shopify Sum</span>
                                 </div>
@@ -359,7 +360,7 @@ export function SymmetricSyncModal({
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-2">
                                     <div className="p-2 bg-orange-100 rounded-xl text-orange-600 relative z-10">
-                                        <Store className="w-4 h-4" />
+                                        <EtsyIcon size={16} />
                                     </div>
                                     <span className="text-xs font-black text-orange-600 uppercase tracking-tighter">Etsy</span>
                                 </div>

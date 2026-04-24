@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
 import {
-    ShoppingBag, Store,
     Loader2, Zap, Check, Box, FileText, Archive, AlertCircle, Plus
 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
@@ -275,7 +275,7 @@ export default function SetupPage() {
                                 {/* Shopify Options */}
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-3">
-                                        <ShoppingBag className="w-4 h-4 text-[#95BF47]" />
+                                        <ShopifyIcon size={16} />
                                         <h4 className="font-semibold text-sm text-gray-900">Shopify</h4>
                                     </div>
                                     <div className="space-y-2">
@@ -296,7 +296,7 @@ export default function SetupPage() {
                                 {/* Etsy Options */}
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-3">
-                                        <Store className="w-4 h-4 text-[#F56400]" />
+                                        <EtsyIcon size={16} />
                                         <h4 className="font-semibold text-sm text-gray-900">Etsy</h4>
                                     </div>
                                     <div className="space-y-2">
@@ -359,8 +359,8 @@ export default function SetupPage() {
                             {/* SHOPIFY CARD */}
                             <div className="flex-1 bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex flex-col min-w-0">
                                 <div className="flex items-center gap-3 mb-5 shrink-0">
-                                    <div className="w-10 h-10 bg-[#1A1A1A] rounded-xl flex items-center justify-center shrink-0">
-                                        <ShoppingBag className="w-5 h-5 text-white" />
+                                    <div className="w-10 h-10 bg-[#95BF47]/10 rounded-xl flex items-center justify-center shrink-0">
+                                        <ShopifyIcon size={24} />
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="font-bold text-lg text-gray-900 leading-tight">Shopify</h3>
@@ -447,8 +447,8 @@ export default function SetupPage() {
                             {/* ETSY CARD */}
                             <div className="flex-1 bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex flex-col min-w-0">
                                 <div className="flex items-center gap-3 mb-5 shrink-0">
-                                    <div className="w-10 h-10 bg-[#1A1A1A] rounded-xl flex items-center justify-center shrink-0">
-                                        <Store className="w-5 h-5 text-white" />
+                                    <div className="w-10 h-10 bg-[#F56400]/10 rounded-xl flex items-center justify-center shrink-0">
+                                        <EtsyIcon size={24} />
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="font-bold text-lg text-gray-900 leading-tight">Etsy</h3>
@@ -500,7 +500,7 @@ export default function SetupPage() {
 
                                             <div className="flex items-center justify-between p-3 bg-purple-50 rounded-xl border border-purple-100">
                                                 <div className="flex items-center gap-2.5">
-                                                    <Store className="w-4 h-4 text-purple-600" />
+                                                    <EtsyIcon size={16} />
                                                     <span className="font-medium text-sm text-gray-700">Sold Out</span>
                                                 </div>
                                                 <span className="text-base font-bold text-purple-600">{stores.etsy.counts.sold_out}</span>

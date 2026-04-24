@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { getSyncHistory, type HistoryItem } from '../../actions/history';
 import {
-    ShoppingBag, Store, Check, X, RefreshCw, AlertTriangle,
+    Check, X, RefreshCw, AlertTriangle,
     ArrowRight, Clock, History, SkipForward, ChevronDown, ChevronUp,
     Loader2, Zap, Package
 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 
 export default function HistoryPage() {
     const [filterStatus, setFilterStatus] = useState('all');
@@ -72,24 +73,24 @@ export default function HistoryPage() {
         if (direction === 'shopify_to_etsy') {
             return (
                 <div className="flex items-center gap-1.5">
-                    <div className="p-1 bg-blue-50 rounded-md"><ShoppingBag className="w-3 h-3 text-blue-500" /></div>
+                    <div className="p-1 bg-blue-50 rounded-md"><ShopifyIcon size={12} /></div>
                     <ArrowRight className="w-3 h-3 text-gray-300" />
-                    <div className="p-1 bg-orange-50 rounded-md"><Store className="w-3 h-3 text-orange-500" /></div>
+                    <div className="p-1 bg-orange-50 rounded-md"><EtsyIcon size={12} /></div>
                 </div>
             );
         }
         if (direction === 'etsy_to_shopify') {
             return (
                 <div className="flex items-center gap-1.5">
-                    <div className="p-1 bg-orange-50 rounded-md"><Store className="w-3 h-3 text-orange-500" /></div>
+                    <div className="p-1 bg-orange-50 rounded-md"><EtsyIcon size={12} /></div>
                     <ArrowRight className="w-3 h-3 text-gray-300" />
-                    <div className="p-1 bg-blue-50 rounded-md"><ShoppingBag className="w-3 h-3 text-blue-500" /></div>
+                    <div className="p-1 bg-blue-50 rounded-md"><ShopifyIcon size={12} /></div>
                 </div>
             );
         }
         // Fallback based on source
-        if (source === 'shopify') return <div className="p-1 bg-blue-50 rounded-md"><ShoppingBag className="w-3 h-3 text-blue-500" /></div>;
-        if (source === 'etsy') return <div className="p-1 bg-orange-50 rounded-md"><Store className="w-3 h-3 text-orange-500" /></div>;
+        if (source === 'shopify') return <div className="p-1 bg-blue-50 rounded-md"><ShopifyIcon size={12} /></div>;
+        if (source === 'etsy') return <div className="p-1 bg-orange-50 rounded-md"><EtsyIcon size={12} /></div>;
         return <div className="p-1 bg-gray-50 rounded-md"><Zap className="w-3 h-3 text-gray-400" /></div>;
     };
 

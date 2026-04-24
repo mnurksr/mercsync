@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
-import { CheckCircle2, Loader2, Package, ShoppingBag, Store, AlertCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Loader2, Package, AlertCircle, ArrowRight } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getShopDomain } from '@/utils/shopDomain';
 
@@ -250,7 +251,7 @@ export default function SyncingDashboard() {
                             {toShopifyEvents.length > 0 && (
                                 <div>
                                     <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                                        <Store className="w-4 h-4 text-[#95BF47]" />
+                                        <ShopifyIcon size={16} />
                                         <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Shopify</span>
                                         <span className="ml-auto text-[11px] text-gray-400 tabular-nums">{toShopifyEvents.length}</span>
                                     </div>
@@ -266,7 +267,7 @@ export default function SyncingDashboard() {
                             {toEtsyEvents.length > 0 && (
                                 <div>
                                     <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100 border-t">
-                                        <ShoppingBag className="w-4 h-4 text-[#F56400]" />
+                                        <EtsyIcon size={16} />
                                         <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Etsy</span>
                                         <span className="ml-auto text-[11px] text-gray-400 tabular-nums">{toEtsyEvents.length}</span>
                                     </div>

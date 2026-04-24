@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CheckCircle2, Loader2, XCircle, ShoppingBag, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, ArrowRight } from 'lucide-react';
+import { ShopifyIcon } from '@/components/PlatformIcons';
 import Link from 'next/link';
 
 export default function ShopifyCallbackPage() {
@@ -92,7 +93,7 @@ export default function ShopifyCallbackPage() {
 
                         <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-sm text-green-700">
                             <div className="flex items-center gap-2 justify-center">
-                                <ShoppingBag className="w-4 h-4" />
+                                <ShopifyIcon size={16} />
                                 <span>Redirecting to Products page...</span>
                             </div>
                         </div>

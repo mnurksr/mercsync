@@ -5,10 +5,11 @@ import { getStagingProducts, clearStagingTables, getInventoryReferences, type St
 import { getShopifyLocations, getConnectedShop, syncShopCurrencies } from '@/app/actions/shop';
 import { getSettings, type PriceRule } from '@/app/actions/settings';
 import {
-    ArrowLeft, ShoppingBag, Store, RefreshCw, Search,
+    ArrowLeft, RefreshCw, Search,
     Check, X, Loader2, Link2, Sparkles, Wand2, ArrowRight, RotateCcw, Copy,
     ChevronDown, ChevronRight, AlertTriangle, Layers, Package, GitBranch, ArrowDownUp, Plus, Info, Pencil, Trash2
 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -130,8 +131,8 @@ function EditableStock({
                 }`}
         >
             {platform === 'shopify'
-                ? <ShoppingBag className={`w-4 h-4 mb-0.5 ${isExcess ? 'text-red-500' : 'text-gray-400'}`} />
-                : <Store className={`w-4 h-4 mb-0.5 ${isExcess ? 'text-red-500' : 'text-gray-400'}`} />
+                ? <ShopifyIcon size={16} />
+                : <EtsyIcon size={16} />
             }
             <span className={`text-xl font-bold ${isExcess ? 'text-red-600' : 'text-emerald-600'}`}>
                 {value}
@@ -305,7 +306,7 @@ function DraggableProductCard({ group, side, onDragStart, onDrop, onDragOver, on
                         <img src={group.imageUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            {side === 'shopify' ? <ShoppingBag size={16} /> : <Store size={16} />}
+                            {side === 'shopify' ? <ShopifyIcon size={16} /> : <EtsyIcon size={16} />}
                         </div>
                     )}
                 </div>
@@ -502,7 +503,7 @@ function MatchedParentCard({ match, onRemove, onUpdate }: { match: MatchedGroup,
                         {sGroup ? (
                             <>
                                 <div className="w-10 h-10 rounded-lg bg-white p-0.5 shadow-sm border border-gray-200 flex-shrink-0 overflow-hidden">
-                                    {sGroup.imageUrl ? <img src={sGroup.imageUrl} alt="" className="w-full h-full object-cover rounded-md" /> : <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-md"><ShoppingBag className="w-5 h-5 text-gray-400" /></div>}
+                                    {sGroup.imageUrl ? <img src={sGroup.imageUrl} alt="" className="w-full h-full object-cover rounded-md" /> : <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-md"><ShopifyIcon size={20} /></div>}
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-bold text-gray-900 truncate" title={sTitle}>{sTitle}</p>
@@ -544,7 +545,7 @@ function MatchedParentCard({ match, onRemove, onUpdate }: { match: MatchedGroup,
                                     <p className="text-xs text-gray-500 font-medium truncate">{match.variantMatches.length} matches • {match.unmatchedEtsyVariants.length} unmatched</p>
                                 </div>
                                 <div className="w-10 h-10 rounded-lg bg-white p-0.5 shadow-sm border border-gray-200 flex-shrink-0 overflow-hidden">
-                                    {eGroup.imageUrl ? <img src={eGroup.imageUrl} alt="" className="w-full h-full object-cover rounded-md" /> : <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-md"><Store className="w-5 h-5 text-gray-400" /></div>}
+                                    {eGroup.imageUrl ? <img src={eGroup.imageUrl} alt="" className="w-full h-full object-cover rounded-md" /> : <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-md"><EtsyIcon size={20} /></div>}
                                 </div>
                             </>
                         ) : (
@@ -2061,13 +2062,13 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                 onClick={() => setCatalogFilter('etsy')}
                                                 className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${catalogFilter === 'etsy' ? 'bg-orange-50 text-orange-700 shadow-sm ring-1 ring-orange-900/5' : 'text-gray-500 hover:text-orange-600'}`}
                                             >
-                                                <Store className="w-3.5 h-3.5" /> Clone to Etsy
+                                                <EtsyIcon size={14} /> Clone to Etsy
                                             </button>
                                             <button
                                                 onClick={() => setCatalogFilter('shopify')}
                                                 className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${catalogFilter === 'shopify' ? 'bg-blue-50 text-blue-700 shadow-sm ring-1 ring-blue-900/5' : 'text-gray-500 hover:text-blue-600'}`}
                                             >
-                                                <ShoppingBag className="w-3.5 h-3.5" /> Clone to Shopify
+                                                <ShopifyIcon size={14} /> Clone to Shopify
                                             </button>
                                         </div>
                                     </div>
@@ -2100,9 +2101,9 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                 <div className={`p-4 rounded-2xl border-2 transition-all ${applyRuleToEtsy && etsyRule ? 'border-orange-200 bg-orange-50/30' : 'border-gray-100 bg-gray-50/50'}`}>
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <ShoppingBag className="w-3.5 h-3.5 text-[#95BF47]" />
+                                                            <ShopifyIcon size={14} />
                                                             <ArrowRight className="w-3 h-3 text-gray-400" />
-                                                            <Store className="w-3.5 h-3.5 text-[#F56400]" />
+                                                            <EtsyIcon size={14} />
                                                         </div>
                                                         <label className="relative inline-flex items-center cursor-pointer">
                                                             <input 
@@ -2168,9 +2169,9 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                 <div className={`p-4 rounded-2xl border-2 transition-all ${applyRuleToShopify && shopifyRule ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100 bg-gray-50/50'}`}>
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <Store className="w-3.5 h-3.5 text-[#F56400]" />
+                                                            <EtsyIcon size={14} />
                                                             <ArrowRight className="w-3 h-3 text-gray-400" />
-                                                            <ShoppingBag className="w-3.5 h-3.5 text-[#95BF47]" />
+                                                            <ShopifyIcon size={14} />
                                                         </div>
                                                         <label className="relative inline-flex items-center cursor-pointer">
                                                             <input 
@@ -2340,7 +2341,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                         {isUnmatched && groupSourcePlatform && (
                                                             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${groupSourcePlatform === 'shopify' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'
                                                                 }`}>
-                                                                {groupSourcePlatform === 'shopify' ? <ShoppingBag className="w-3.5 h-3.5" /> : <Store className="w-3.5 h-3.5" />}
+                                                                {groupSourcePlatform === 'shopify' ? <ShopifyIcon size={14} /> : <EtsyIcon size={14} />}
                                                                 Only on {groupSourcePlatform === 'shopify' ? 'Shopify' : 'Etsy'}
                                                             </div>
                                                         )}
@@ -2374,7 +2375,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                                     : 'bg-blue-600 text-white hover:bg-blue-700'
                                                                     }`}
                                                             >
-                                                                {cloneTarget === 'Etsy' ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
+                                                                {cloneTarget === 'Etsy' ? <EtsyIcon size={14} /> : <ShopifyIcon size={14} />}
                                                                 Clone to {cloneTarget}
                                                             </button>
                                                         )}
@@ -2557,7 +2558,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     <div className="col-span-3 flex flex-col h-full bg-gray-50/50 rounded-xl border border-gray-200 overflow-hidden">
                         <div className="p-3 bg-white border-b flex items-center justify-between">
                             <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-                                <ShoppingBag className="w-4 h-4 text-[#95BF47]" />
+                                <ShopifyIcon size={16} />
                                 Shopify Products
                             </h3>
                             <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{unmatchedShopifyGroups.length}</span>
@@ -2694,7 +2695,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                     <div className="col-span-3 flex flex-col h-full bg-gray-50/50 rounded-xl border border-gray-200 overflow-hidden">
                         <div className="p-3 bg-white border-b flex items-center justify-between">
                             <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-                                <Store className="w-4 h-4 text-[#F56400]" />
+                                <EtsyIcon size={16} />
                                 Etsy Listings
                             </h3>
                             <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{unmatchedEtsyGroups.length}</span>
@@ -2946,13 +2947,13 @@ function AddRuleModal({ isOpen, onClose, onSave, isSaving }: {
                                 onClick={() => setRule(prev => ({ ...prev, platform: 'etsy' }))}
                                 className={'p-3 rounded-2xl border-2 flex items-center gap-2 transition-all ' + (rule.platform === 'etsy' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:border-gray-200 text-gray-500')}
                             >
-                                <Store className="w-4 h-4" /> <span className="text-sm font-semibold">Etsy</span>
+                                <EtsyIcon size={16} /> <span className="text-sm font-semibold">Etsy</span>
                             </button>
                             <button 
                                 onClick={() => setRule(prev => ({ ...prev, platform: 'shopify' }))}
                                 className={'p-3 rounded-2xl border-2 flex items-center gap-2 transition-all ' + (rule.platform === 'shopify' ? 'border-green-600 bg-green-50 text-green-700' : 'border-gray-100 hover:border-gray-200 text-gray-500')}
                             >
-                                <ShoppingBag className="w-4 h-4" /> <span className="text-sm font-semibold">Shopify</span>
+                                <ShopifyIcon size={16} /> <span className="text-sm font-semibold">Shopify</span>
                             </button>
                         </div>
                     </div>

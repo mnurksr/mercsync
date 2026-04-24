@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
+import { ArrowRight, Check, Zap, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
 import { getSetupStatus } from '@/app/actions/staging';
@@ -132,12 +133,12 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
             <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-widest mb-6">Seamlessly Connects</p>
             <div className="flex items-center justify-center gap-16">
               <div className="flex items-center gap-2">
-                <Store className="w-6 h-6 text-[#F56400]" />
+                <EtsyIcon size={28} />
                 <span className="text-xl font-bold text-gray-800">Etsy</span>
               </div>
               <div className="w-8 h-[2px] bg-gray-200"></div>
               <div className="flex items-center gap-2">
-                <ShoppingBag className="w-6 h-6 text-[#95BF47]" />
+                <ShopifyIcon size={28} />
                 <span className="text-xl font-bold text-gray-800">Shopify</span>
               </div>
             </div>

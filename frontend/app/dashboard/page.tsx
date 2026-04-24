@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import {
     Package, TrendingUp, AlertTriangle, Clock,
-    Link2, ArrowRight, RefreshCw, ShoppingBag,
-    Store, CheckCircle2, XCircle, Activity, Bell
+    Link2, ArrowRight, RefreshCw,
+    CheckCircle2, XCircle, Activity, Bell
 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { useAuth } from '@/components/AuthProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getConnectedShop } from '../actions/shop';
@@ -208,8 +209,8 @@ export default function Dashboard() {
                 {/* Shopify Stat */}
                 <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 group hover:shadow-2xl hover:shadow-gray-300/30 transition-all duration-300">
                     <div className="flex items-center gap-4 mb-6">
-                        <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <ShoppingBag className="w-6 h-6" />
+                        <div className="w-12 h-12 bg-[#95BF47]/10 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <ShopifyIcon size={28} />
                         </div>
                         <div>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Shopify Items</p>
@@ -225,8 +226,8 @@ export default function Dashboard() {
                 {/* Etsy Stat */}
                 <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-xl shadow-gray-200/50 group hover:shadow-2xl hover:shadow-gray-300/30 transition-all duration-300">
                     <div className="flex items-center gap-4 mb-6">
-                        <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Store className="w-6 h-6" />
+                        <div className="w-12 h-12 bg-[#F56400]/10 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <EtsyIcon size={28} />
                         </div>
                         <div>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Etsy Items</p>

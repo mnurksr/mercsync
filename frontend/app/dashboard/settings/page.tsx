@@ -5,11 +5,12 @@
 import { useState, useEffect } from 'react';
 import {
     Link2, Settings, Bell, DollarSign, MapPin, Shield,
-    ShoppingBag, Store, Check, X, ExternalLink,
+    ShoppingBag, Check, X, ExternalLink,
     ArrowUpRight, Unlink, Save, Loader2,
     CreditCard, Trash2, ArrowRight, Star,
     Mail, BellRing, ChevronUp, ChevronDown
 } from 'lucide-react';
+import { EtsyIcon } from '@/components/PlatformIcons';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -436,7 +437,7 @@ function ConnectionsTab({ stores, setShopName, setShowShopifyModal, setShowEtsyM
 
             <StoreCard
                 name="Etsy"
-                icon={<Store className="w-6 h-6 text-white" />}
+                icon={<EtsyIcon size={24} />}
                 color="#F56400"
                 connected={stores.etsy.connected}
                 domain={stores.etsy.name}

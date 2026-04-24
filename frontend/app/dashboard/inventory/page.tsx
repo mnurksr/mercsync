@@ -16,10 +16,11 @@ import {
 import {
     Search, Package, Layers, RefreshCw,
     AlertTriangle, Check, Loader2,
-    Box, ShoppingBag, Store, Pencil, X,
+    Box, Pencil, X,
     ChevronRight, History, Zap, CheckSquare, Square,
     ExternalLink, ChevronDown, Upload, Table2, ArrowRight, Percent
 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { useToast } from "@/components/ui/useToast";
 import SyncProgressModal from '@/components/dashboard/SyncProgressModal';
 import { SymmetricSyncModal } from './SymmetricSyncModal';
@@ -431,13 +432,13 @@ export default function InventoryPage() {
                             onClick={() => setBulkEditItems(prev => prev.map(e => ({ ...e, source: 'shopify' })))}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition-all active:scale-95"
                         >
-                            <ShoppingBag className="w-3.5 h-3.5" /> All → Shopify
+                            <ShopifyIcon size={14} /> All → Shopify
                         </button>
                         <button
                             onClick={() => setBulkEditItems(prev => prev.map(e => ({ ...e, source: 'etsy' })))}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 transition-all active:scale-95"
                         >
-                            <Store className="w-3.5 h-3.5" /> All → Etsy
+                            <EtsyIcon size={14} /> All → Etsy
                         </button>
                         <button onClick={() => setShowBulkEdit(false)} className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-200 transition-all active:scale-95">
                             <X className="w-4 h-4" /> Cancel
@@ -774,8 +775,8 @@ export default function InventoryPage() {
                                                     <div className="min-w-0 max-w-[300px]">
                                                         <p className="text-sm font-black text-gray-900 line-clamp-2 whitespace-normal leading-tight">{formatInventoryDisplayName(item.name)}</p>
                                                         <div className="flex items-center gap-2 mt-1.5 opacity-70">
-                                                            {item.shopify_variant_id && <ShoppingBag className="w-2.5 h-2.5 text-blue-600" />}
-                                                            {item.etsy_variant_id && <Store className="w-2.5 h-2.5 text-orange-600" />}
+                                                            {item.shopify_variant_id && <ShopifyIcon size={10} />}
+                                                            {item.etsy_variant_id && <EtsyIcon size={10} />}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -784,17 +785,17 @@ export default function InventoryPage() {
                                                 <div className="flex items-center justify-center gap-2">
                                                     {item.shopify_product_id ? (
                                                         <a href={`https://${item.shop_domain || 'admin.shopify.com'}/admin/products/${item.shopify_product_id}`} target="_blank" rel="noreferrer" title="Edit on Shopify" className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 hover:text-blue-600 transition-colors border border-blue-100 shadow-sm">
-                                                            <ShoppingBag className="w-4 h-4" />
+                                                            <ShopifyIcon size={16} />
                                                         </a>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><ShoppingBag className="w-4 h-4" /></div>
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><ShopifyIcon size={16} /></div>
                                                     )}
                                                     {item.etsy_listing_id ? (
                                                         <a href={`https://www.etsy.com/your/shops/me/tools/listings/${item.etsy_listing_id}`} target="_blank" rel="noreferrer" title="Edit on Etsy" className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center hover:bg-orange-100 hover:text-orange-600 transition-colors border border-orange-100 shadow-sm">
-                                                            <Store className="w-4 h-4" />
+                                                            <EtsyIcon size={16} />
                                                         </a>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><Store className="w-4 h-4" /></div>
+                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><EtsyIcon size={16} /></div>
                                                     )}
                                                 </div>
                                             </td>
@@ -810,12 +811,12 @@ export default function InventoryPage() {
                                                 <div className="flex flex-col items-center justify-center">
                                                     <div className="flex items-center justify-between w-[120px] bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 shadow-inner">
                                                         <div className="flex items-center gap-1.5 w-[40px]" title="Shopify Stock Snapshot">
-                                                            <ShoppingBag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                                            <ShopifyIcon size={14} />
                                                             <span className="text-[11px] font-black text-gray-900">{item.shopify_variant_id ? (item.shopify_stock_snapshot ?? 0) : '–'}</span>
                                                         </div>
                                                         <div className="w-px h-3 bg-gray-300 rounded-full shrink-0"></div>
                                                         <div className="flex items-center gap-1.5 w-[40px] flex-row-reverse" title="Etsy Stock Snapshot">
-                                                            <Store className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                            <EtsyIcon size={14} />
                                                             <span className="text-[11px] font-black text-gray-900 text-right w-full">{item.etsy_variant_id ? (item.etsy_stock_snapshot ?? 0) : '–'}</span>
                                                         </div>
                                                     </div>

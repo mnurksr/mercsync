@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ShoppingBag, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { ShopifyIcon } from '@/components/PlatformIcons';
 import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
 
@@ -86,8 +87,8 @@ export default function AuthPage() {
 
             <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 ring-1 ring-gray-900/5">
                 <div className="flex flex-col items-center mb-6">
-                    <div className="w-16 h-16 bg-[#95BF47] rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-green-100">
-                        <ShoppingBag className="w-8 h-8 text-white" />
+                    <div className="w-16 h-16 bg-[#95BF47]/10 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-green-100">
+                        <ShopifyIcon size={36} />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900">Connect Shopify</h3>
                     <p className="text-sm text-gray-500 text-center mt-2">

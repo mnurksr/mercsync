@@ -8,10 +8,11 @@ import { getSettings } from '../../actions/settings';
 import { deleteProduct, unmatchProduct } from '../../actions/matching';
 import {
     Search, Package, Box, Filter,
-    Loader2, ShoppingBag, Store, AlertTriangle,
+    Loader2, AlertTriangle,
     ChevronDown, ChevronRight, CheckSquare, Square, Check, X, Copy, Pencil, RefreshCw,
     Archive, FileText, AlertCircle, Link2, Unlink, Trash2, ExternalLink
 } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { useToast } from "@/components/ui/useToast";
 import { useAuth } from '@/components/AuthProvider';
 import CloneModal, { type CrossListingItem, type CloneSourceData } from '@/components/dashboard/CloneModal';
@@ -598,7 +599,7 @@ export default function ProductsPage() {
                                 : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
-                            <ShoppingBag className={`w-4 h-4 ${activePlatform === 'shopify' ? 'text-blue-600' : ''}`} />
+                            <ShopifyIcon size={16} />
                             Shopify
                         </button>
                         <button
@@ -608,7 +609,7 @@ export default function ProductsPage() {
                                 : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
-                            <Store className={`w-4 h-4 ${activePlatform === 'etsy' ? 'text-orange-500' : ''}`} />
+                            <EtsyIcon size={16} />
                             Etsy
                         </button>
                     </div>
@@ -1156,7 +1157,7 @@ export default function ProductsPage() {
                             {/* Shopify */}
                             <div>
                                 <div className="flex items-center gap-2 mb-3">
-                                    <ShoppingBag className="w-4 h-4 text-blue-600" />
+                                    <ShopifyIcon size={16} />
                                     <span className="text-sm font-bold text-gray-800">Shopify</span>
                                 </div>
                                 <div className="space-y-2">
@@ -1180,7 +1181,7 @@ export default function ProductsPage() {
                             {/* Etsy */}
                             <div>
                                 <div className="flex items-center gap-2 mb-3">
-                                    <Store className="w-4 h-4 text-orange-500" />
+                                    <EtsyIcon size={16} />
                                     <span className="text-sm font-bold text-gray-800">Etsy</span>
                                 </div>
                                 <div className="space-y-2">

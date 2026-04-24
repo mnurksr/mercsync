@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Upload, X, FileSpreadsheet, Loader2, AlertCircle, ShoppingBag, Store, ChevronDown, CheckCircle } from 'lucide-react';
+import { Upload, X, FileSpreadsheet, Loader2, AlertCircle, ChevronDown, CheckCircle } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MapperUploadStepProps {
@@ -228,8 +229,8 @@ export default function MapperUploadStep({ onSuccess }: MapperUploadStepProps) {
                             <div className={`w-14 h-14 rounded-lg flex items-center justify-center shrink-0 transition-colors ${file.type === 'shopify' ? 'bg-green-100 text-green-600' :
                                 file.type === 'etsy' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'
                                 }`}>
-                                {file.type === 'shopify' ? <ShoppingBag className="w-6 h-6" /> :
-                                    file.type === 'etsy' ? <Store className="w-6 h-6" /> :
+                                {file.type === 'shopify' ? <ShopifyIcon size={24} /> :
+                                    file.type === 'etsy' ? <EtsyIcon size={24} /> :
                                         <FileSpreadsheet className="w-6 h-6" />}
                             </div>
 

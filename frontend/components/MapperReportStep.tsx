@@ -1,7 +1,8 @@
 'use client';
 
 import { motion, Variants } from 'framer-motion';
-import { ShoppingBag, Store, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { ShoppingBag, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import Link from 'next/link';
 
 // --- Types based on User Request ---
@@ -183,7 +184,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                     <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500">
                         <img src={shopify.image_url} alt="Shopify Product" className="w-full h-full object-cover" />
                         <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
-                            <ShoppingBag className="w-3 h-3" /> Shopify
+                            <ShopifyIcon size={12} /> Shopify
                         </div>
                     </div>
                     <div>
@@ -210,7 +211,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                         {/* Shopify Node - Clean */}
                         <div className="bg-white/80 backdrop-blur p-5 rounded-2xl border border-emerald-100/50 shadow-lg shadow-emerald-50/50 text-center min-w-[120px]">
                             <div className="text-emerald-500 mb-1">
-                                <ShoppingBag className="w-6 h-6 mx-auto opacity-80" />
+                                <ShopifyIcon size={24} />
                             </div>
                             <div className={`text-4xl font-black ${item.shopify_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'} tracking-tight`}>
                                 {shopify.stock}
@@ -226,7 +227,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                         {/* Etsy Node - Clean */}
                         <div className="bg-white/80 backdrop-blur p-5 rounded-2xl border border-orange-100/50 shadow-lg shadow-orange-50/50 text-center min-w-[120px]">
                             <div className="text-orange-500 mb-1">
-                                <Store className="w-6 h-6 mx-auto opacity-80" />
+                                <EtsyIcon size={24} />
                             </div>
                             <div className={`text-4xl font-black ${item.etsy_oversell_units > 0 ? 'text-red-500' : 'text-gray-900'} tracking-tight`}>
                                 {etsy.stock}
@@ -296,7 +297,7 @@ function RiskCard({ item }: { item: AnalysisItem }) {
                     <div className="w-32 h-32 xl:w-full xl:h-48 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden shadow-inner shrink-0 relative group-hover:scale-[1.02] transition-transform duration-500">
                         <img src={etsy.image_url} alt="Etsy Product" className="w-full h-full object-cover" />
                         <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1">
-                            <Store className="w-3 h-3" /> Etsy
+                            <EtsyIcon size={12} /> Etsy
                         </div>
                     </div>
 

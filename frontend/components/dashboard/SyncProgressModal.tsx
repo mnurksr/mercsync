@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { CheckCircle2, Loader2, Package, ShoppingBag, Store, AlertCircle, X } from 'lucide-react';
+import { CheckCircle2, Loader2, Package, AlertCircle, X } from 'lucide-react';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type SyncStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -264,7 +265,7 @@ export default function SyncProgressModal({ isOpen, jobId, onClose }: SyncProgre
                                 {toShopifyEvents.length > 0 && (
                                     <div>
                                         <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                                            <Store className="w-4 h-4 text-[#95BF47]" />
+                                            <ShopifyIcon size={16} />
                                             <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Shopify</span>
                                         </div>
                                         <div className="divide-y divide-gray-50">
@@ -277,7 +278,7 @@ export default function SyncProgressModal({ isOpen, jobId, onClose }: SyncProgre
                                 {toEtsyEvents.length > 0 && (
                                     <div>
                                         <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100 border-t">
-                                            <ShoppingBag className="w-4 h-4 text-[#F56400]" />
+                                            <EtsyIcon size={16} />
                                             <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Etsy</span>
                                         </div>
                                         <div className="divide-y divide-gray-50">
