@@ -38,7 +38,13 @@ export async function POST(req: NextRequest) {
         switch (topic) {
             case 'app/uninstalled':
                 console.log(`[Shopify Webhook] App uninstalled for ${shop}`);
-                await scrubShopAfterUninstall(supabase, shop, '[Shopify Webhook]');
+                {
+                    const cleanupResult = await scrubShopAfterUninstall(supabase, shop, '[Shopify Webhook]');
+                    if (!cleanupResult.ok) {
+                        console.error(`[Shopify Webhook] Uninstall cleanup failed for ${shop}:`, cleanupResult.errors);
+                        return new Response('Cleanup failed', { status: 500 });
+                    }
+                }
                 break;
 
             case 'shop/update':

@@ -17,6 +17,10 @@ type CleanupResult = {
     errors: string[];
 };
 
+type ShopRow = {
+    id: string;
+};
+
 async function deleteShopRows(
     supabase: SupabaseClient,
     shopId: string,
@@ -54,7 +58,7 @@ export async function scrubShopAfterUninstall(
     shopDomain: string,
     logPrefix = '[Shopify Cleanup]'
 ): Promise<CleanupResult> {
-    const { data: shop, error } = await supabase
+    const { data: shops, error } = await supabase
         .from('shops')
         .update({
             is_active: false,
@@ -68,20 +72,33 @@ export async function scrubShopAfterUninstall(
             token_refresh_error: null,
         })
         .eq('shop_domain', shopDomain)
-        .select('id')
-        .maybeSingle();
+        .select('id');
 
     if (error) {
         console.error(`${logPrefix} Failed to scrub shop ${shopDomain}:`, error.message);
         return { ok: false, errors: [error.message] };
     }
 
-    if (!shop) {
+    if (!shops || shops.length === 0) {
         console.log(`${logPrefix} No shop record found for ${shopDomain}.`);
         return { ok: true, errors: [] };
     }
 
-    return clearOperationalShopData(supabase, shop.id, logPrefix);
+    const allErrors: string[] = [];
+
+    for (const shop of shops as ShopRow[]) {
+        const cleanupResult = await clearOperationalShopData(supabase, shop.id, logPrefix);
+        if (!cleanupResult.ok) {
+            allErrors.push(...cleanupResult.errors);
+        }
+    }
+
+    if (allErrors.length > 0) {
+        return { ok: false, errors: allErrors };
+    }
+
+    console.log(`${logPrefix} Scrubbed ${shops.length} shop record(s) for ${shopDomain}.`);
+    return { ok: true, errors: [] };
 }
 
 /**
