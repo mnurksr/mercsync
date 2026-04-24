@@ -65,7 +65,7 @@ const DEFAULT_SETTINGS: ShopSettings = {
     price_sync_enabled: false,
     price_rules: [],
     notification_channels: { in_app: true, email: false, slack_webhook_url: null },
-    notification_events: { stock_zero: true, sync_failed: true, oversell_risk: true },
+    notification_events: { stock_zero: false, sync_failed: true, oversell_risk: false },
     notification_frequency: 'instant',
     notification_email: null
 }
