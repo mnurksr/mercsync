@@ -21,6 +21,7 @@ import MatchModal from '@/components/dashboard/MatchModal';
 import { getPlanConfig, PLAN_CONFIG } from '@/config/plans';
 
 export default function ProductsPage() {
+    const PAGE_SIZE = 100;
     const toast = useToast();
     const router = useRouter();
     const { user, supabase } = useAuth();
@@ -77,6 +78,7 @@ export default function ProductsPage() {
 
     // Bulk Actions Dropdown
     const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Bulk Operation State
     const [bulkOp, setBulkOp] = useState<{
@@ -104,6 +106,10 @@ export default function ProductsPage() {
         }, 400);
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activePlatform, searchQuery, activeFilters, items.length]);
 
     const loadData = async () => {
         setIsLoading(true);
@@ -216,10 +222,17 @@ export default function ProductsPage() {
     };
 
     const toggleAllSelection = () => {
-        if (selectedItems.size === filteredItems.length && filteredItems.length > 0) {
-            setSelectedItems(new Set());
+        const pageIds = paginatedItems.map(i => i.id);
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedItems.has(id));
+
+        if (allPageSelected) {
+            setSelectedItems(prev => {
+                const next = new Set(prev);
+                pageIds.forEach(id => next.delete(id));
+                return next;
+            });
         } else {
-            setSelectedItems(new Set(filteredItems.map(i => i.id)));
+            setSelectedItems(prev => new Set([...prev, ...pageIds]));
         }
     };
 
@@ -242,6 +255,10 @@ export default function ProductsPage() {
         if (statusFilters.length > 0) checks.push(statusFilters.includes(item.platformStatus.toLowerCase()));
         return checks.some(Boolean);
     });
+
+    const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+    const paginatedItems = filteredItems.slice((safeCurrentPage - 1) * PAGE_SIZE, safeCurrentPage * PAGE_SIZE);
 
     const isItemQueued = (sourceId: string) => {
         return crossListing.to_shopify.some(i => i.source_id === sourceId) ||
@@ -712,7 +729,7 @@ export default function ProductsPage() {
                                         onClick={toggleAllSelection}
                                         className="text-gray-400 hover:text-indigo-600 transition-colors"
                                     >
-                                        {selectedItems.size > 0 && selectedItems.size === filteredItems.length ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+                                        {paginatedItems.length > 0 && paginatedItems.every(item => selectedItems.has(item.id)) ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
                                     </button>
                                 </th>
                                 <th className="px-2 py-4 w-10"></th>
@@ -772,11 +789,15 @@ export default function ProductsPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredItems.map((item) => {
+                                paginatedItems.map((item) => {
                                     const isExpanded = expandedRows.has(item.id);
                                     const isSelected = selectedItems.has(item.id);
                                     const queuedItem = getQueuedItem(item.id);
                                     const isQueued = !!queuedItem;
+                                    const variants = Array.isArray(item.variants) ? item.variants : [];
+                                    const primaryVariant = variants[0];
+                                    const displayTitle = queuedItem?.title || item.title || 'Unnamed Product';
+                                    const displayVariantCount = item.variantsCount || variants.length;
 
                                     return (
                                         <React.Fragment key={item.id}>
@@ -801,10 +822,10 @@ export default function ProductsPage() {
                                                         </div>
                                                         <div>
                                                             <p className="text-sm font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-1 break-all pr-4">
-                                                                {isQueued ? queuedItem.title : item.title}
+                                                                {displayTitle}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-1">
-                                                                <span className="text-[11px] font-semibold text-gray-500">{item.variantsCount} VARIANTS</span>
+                                                                <span className="text-[11px] font-semibold text-gray-500">{displayVariantCount} VARIANTS</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -817,7 +838,7 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-                                                        {item.variants?.[0]?.sku || 'NO-SKU'}
+                                                        {primaryVariant?.sku || 'NO-SKU'}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -825,7 +846,7 @@ export default function ProductsPage() {
                                                         {/* Row 1, Col 1: Current platform link (always exists) */}
                                                         {activePlatform === 'shopify' ? (
                                                             <a
-                                                                href={`https://${item.shopDomain}/admin/products/${item.variants[0]?.shopifyProductId}`}
+                                                                href={`https://${item.shopDomain}/admin/products/${primaryVariant?.shopifyProductId || ''}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 rounded-md text-blue-600 transition-all text-[10px] font-medium"
@@ -835,7 +856,7 @@ export default function ProductsPage() {
                                                             </a>
                                                         ) : (
                                                             <a
-                                                                href={`https://www.etsy.com/your/listings/${item.variants[0]?.etsyListingId}`}
+                                                                href={`https://www.etsy.com/your/listings/${primaryVariant?.etsyListingId || ''}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-orange-50 hover:border-orange-200 rounded-md text-orange-600 transition-all text-[10px] font-medium"
@@ -847,9 +868,9 @@ export default function ProductsPage() {
 
                                                         {/* Row 1, Col 2: Other platform link (or Delete if unmatched) */}
                                                         {activePlatform === 'shopify' ? (
-                                                            item.variants[0]?.etsyListingId ? (
+                                                            primaryVariant?.etsyListingId ? (
                                                                 <a
-                                                                    href={`https://www.etsy.com/your/listings/${item.variants[0].etsyListingId}`}
+                                                                    href={`https://www.etsy.com/your/listings/${primaryVariant.etsyListingId}`}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-orange-50 hover:border-orange-200 rounded-md text-orange-600 transition-all text-[10px] font-medium"
@@ -871,9 +892,9 @@ export default function ProductsPage() {
                                                                 </button>
                                                             )
                                                         ) : (
-                                                            item.variants[0]?.shopifyProductId ? (
+                                                            primaryVariant?.shopifyProductId ? (
                                                                 <a
-                                                                    href={`https://${item.shopDomain}/admin/products/${item.variants[0].shopifyProductId}`}
+                                                                    href={`https://${item.shopDomain}/admin/products/${primaryVariant.shopifyProductId}`}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
                                                                     className="inline-flex items-center justify-center gap-1 h-7 border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-200 rounded-md text-blue-600 transition-all text-[10px] font-medium"
@@ -954,7 +975,7 @@ export default function ProductsPage() {
                                                             </div>
                                                             <table className="w-full text-left">
                                                                 <tbody className="divide-y divide-gray-100">
-                                                                    {item.variants.map((variant) => (
+                                                                    {variants.map((variant) => (
                                                                         <tr key={variant.id} className="hover:bg-gray-50/50">
                                                                             <td className="px-4 py-3">
                                                                                 <div className="flex items-center gap-3">
@@ -1001,6 +1022,35 @@ export default function ProductsPage() {
                         </tbody>
                     </table>
                 </div>
+
+                {!isLoading && filteredItems.length > PAGE_SIZE && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                        <p className="text-sm text-gray-500">
+                            Showing <span className="font-semibold text-gray-700">{(safeCurrentPage - 1) * PAGE_SIZE + 1}</span>-
+                            <span className="font-semibold text-gray-700">{Math.min(safeCurrentPage * PAGE_SIZE, filteredItems.length)}</span> of{' '}
+                            <span className="font-semibold text-gray-700">{filteredItems.length}</span> products
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={safeCurrentPage === 1}
+                                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                            >
+                                Previous
+                            </button>
+                            <span className="px-4 py-2 text-sm font-semibold text-gray-600">
+                                Page {safeCurrentPage} / {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={safeCurrentPage === totalPages}
+                                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Simplified Confirmation Floating Bar */}
                 {totalQueued > 0 && (

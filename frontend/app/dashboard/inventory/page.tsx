@@ -62,6 +62,7 @@ function formatInventoryDisplayName(name?: string | null) {
 
 // --- Main InventoryPage Component ---
 export default function InventoryPage() {
+    const PAGE_SIZE = 100;
     const toast = useToast();
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -95,6 +96,7 @@ export default function InventoryPage() {
     // Fetch / Push loading
     const [isFetchingLatest, setIsFetchingLatest] = useState(false);
     const [isPushingMismatch, setIsPushingMismatch] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
         loadData();
@@ -107,6 +109,10 @@ export default function InventoryPage() {
         }, 400);
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, platformFilter, items.length]);
 
     const loadData = async () => {
         setIsLoading(true);
@@ -175,6 +181,10 @@ export default function InventoryPage() {
             return (a.name || '').localeCompare(b.name || '');
         });
     }, [items, platformFilter, searchQuery]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredAndSortedItems.length / PAGE_SIZE));
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+    const paginatedItems = filteredAndSortedItems.slice((safeCurrentPage - 1) * PAGE_SIZE, safeCurrentPage * PAGE_SIZE);
 
     const loadLocations = async () => {
         const locs = await getShopifyLocations();
@@ -268,8 +278,10 @@ export default function InventoryPage() {
     };
 
     const toggleSelectAll = () => {
-        if (selectedIds.length === filteredAndSortedItems.length) setSelectedIds([]);
-        else setSelectedIds(filteredAndSortedItems.map(i => i.id));
+        const pageIds = paginatedItems.map(i => i.id);
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id));
+        if (allPageSelected) setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
+        else setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])));
     };
 
     // Status dropdown: toggle-select all items of a given status
@@ -692,7 +704,7 @@ export default function InventoryPage() {
                                 <th className="pl-8 pr-2 py-6 w-10">
                                     <div className="flex items-center gap-1">
                                         <button onClick={toggleSelectAll} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
-                                            {selectedIds.length === filteredAndSortedItems.length && filteredAndSortedItems.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
+                                            {paginatedItems.length > 0 && paginatedItems.every(item => selectedIds.includes(item.id)) ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5 text-gray-300" />}
                                         </button>
                                         {/* Status-based bulk select dropdown */}
                                         <div className="relative">
@@ -772,7 +784,7 @@ export default function InventoryPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredAndSortedItems.map((item) => {
+                                paginatedItems.map((item) => {
                                     const displayStatus = getStockStatus(item);
                                     const isSelected = selectedIds.includes(item.id);
                                     return (
@@ -871,6 +883,35 @@ export default function InventoryPage() {
                     </table>
                 </div>
             </div>
+
+            {!isLoading && filteredAndSortedItems.length > PAGE_SIZE && (
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <p className="text-sm text-gray-500">
+                        Showing <span className="font-semibold text-gray-700">{(safeCurrentPage - 1) * PAGE_SIZE + 1}</span>-
+                        <span className="font-semibold text-gray-700">{Math.min(safeCurrentPage * PAGE_SIZE, filteredAndSortedItems.length)}</span> of{' '}
+                        <span className="font-semibold text-gray-700">{filteredAndSortedItems.length}</span> inventory items
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={safeCurrentPage === 1}
+                            className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                            Previous
+                        </button>
+                        <span className="px-4 py-2 text-sm font-semibold text-gray-600">
+                            Page {safeCurrentPage} / {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={safeCurrentPage === totalPages}
+                            className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Modals */}
             <SyncProgressModal

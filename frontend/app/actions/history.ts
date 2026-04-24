@@ -19,14 +19,22 @@ export type HistoryItem = {
     rawTime: string
 }
 
-export async function getSyncHistory(filter: string = 'all'): Promise<HistoryItem[]> {
+export type HistoryResponse = {
+    items: HistoryItem[]
+    total: number
+}
+
+export async function getSyncHistory(filter: string = 'all', page: number = 1, pageSize: number = 100): Promise<HistoryResponse> {
     const { supabase, ownerId } = await getValidatedUserContext()
-    if (!ownerId) return []
+    if (!ownerId) return { items: [], total: 0 }
 
     const { data: userShops } = await supabase.from('shops').select('id').eq('owner_id', ownerId)
     const shopIds = userShops?.map(s => s.id) || []
 
-    if (shopIds.length === 0) return []
+    if (shopIds.length === 0) return { items: [], total: 0 }
+
+    const from = Math.max(0, (page - 1) * pageSize)
+    const to = from + pageSize - 1
 
     let query = supabase
         .from('sync_logs')
@@ -35,20 +43,21 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
             old_stock, new_stock, status, error_message, metadata,
             created_at,
             inventory_items (name, image_url)
-        `)
+        `, { count: 'exact' })
         .in('shop_id', shopIds)
         .order('created_at', { ascending: false })
-        .limit(100)
+        .range(from, to)
 
     if (filter !== 'all') {
         query = query.eq('status', filter)
     }
 
-    const { data, error } = await query
+    const { data, error, count } = await query
 
-    if (error || !data) return []
+    if (error || !data) return { items: [], total: 0 }
 
-    return data.map((item: any) => ({
+    return {
+        items: data.map((item: any) => ({
         id: item.id,
         eventType: item.event_type,
         action: mapEventToAction(item.event_type, item.source),
@@ -63,7 +72,9 @@ export async function getSyncHistory(filter: string = 'all'): Promise<HistoryIte
         metadata: item.metadata || {},
         time: timeAgo(new Date(item.created_at)),
         rawTime: item.created_at
-    }))
+        })),
+        total: count || 0
+    }
 }
 
 function mapEventToAction(eventType: string, source: string): string {

@@ -35,19 +35,25 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         const container = navRef.current;
         if (!container) return;
 
+        if (window.top === window.self) return;
+
         // Remove any previously created menu
         const existing = container.querySelector('ui-nav-menu');
         if (existing) existing.remove();
 
-        const menu = document.createElement('ui-nav-menu');
-        navLinks.forEach((link) => {
-            const a = document.createElement('a');
-            a.href = link.href;
-            a.textContent = link.label;
-            if (link.rel) a.setAttribute('rel', link.rel);
-            menu.appendChild(a);
-        });
-        container.appendChild(menu);
+        try {
+            const menu = document.createElement('ui-nav-menu');
+            navLinks.forEach((link) => {
+                const a = document.createElement('a');
+                a.href = link.href;
+                a.textContent = link.label;
+                if (link.rel) a.setAttribute('rel', link.rel);
+                menu.appendChild(a);
+            });
+            container.appendChild(menu);
+        } catch (error) {
+            console.error('DashboardShell: failed to mount ui-nav-menu', error);
+        }
 
         return () => {
             const old = container.querySelector('ui-nav-menu');

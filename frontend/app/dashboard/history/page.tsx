@@ -10,21 +10,29 @@ import {
 import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 
 export default function HistoryPage() {
+    const PAGE_SIZE = 100;
     const [filterStatus, setFilterStatus] = useState('all');
     const [filterEventType, setFilterEventType] = useState<'all' | 'order' | 'price'>('all');
     const [history, setHistory] = useState<HistoryItem[]>([]);
+    const [totalHistoryCount, setTotalHistoryCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [currentPage, filterStatus]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filterStatus]);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const data = await getSyncHistory('all');
-            setHistory(data);
+            const response = await getSyncHistory(filterStatus, currentPage, PAGE_SIZE);
+            setHistory(response.items);
+            setTotalHistoryCount(response.total);
         } catch (error) {
             console.error('Failed to load history:', error);
         } finally {
@@ -108,8 +116,12 @@ export default function HistoryPage() {
     ] as const;
 
     // Stats calculated from ALL loaded items
-    const successCount = history.filter(h => h.status === 'success').length;
-    const failedCount = history.filter(h => h.status === 'failed').length;
+    const successCount = filterStatus === 'all'
+        ? history.filter(h => h.status === 'success').length
+        : filterStatus === 'success' ? totalHistoryCount : 0;
+    const failedCount = filterStatus === 'all'
+        ? history.filter(h => h.status === 'failed').length
+        : filterStatus === 'failed' ? totalHistoryCount : 0;
 
     // Items to display based on selected filter
     const displayedHistory = history.filter(h => {
@@ -146,6 +158,8 @@ export default function HistoryPage() {
         return null;
     };
 
+    const totalPages = Math.max(1, Math.ceil(totalHistoryCount / PAGE_SIZE));
+
     return (
         <div className="w-full pb-16">
             {/* Header */}
@@ -169,7 +183,7 @@ export default function HistoryPage() {
             <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-white rounded-2xl border border-gray-100 px-6 py-5 shadow-sm">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Events</p>
-                    <p className="text-3xl font-black text-gray-900">{history.length}</p>
+                    <p className="text-3xl font-black text-gray-900">{totalHistoryCount}</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-gray-100 px-6 py-5 shadow-sm">
                     <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Successful</p>
@@ -417,6 +431,35 @@ export default function HistoryPage() {
                     </div>
                 )}
             </div>
+
+            {!isLoading && totalHistoryCount > PAGE_SIZE && (
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <p className="text-sm text-gray-500">
+                        Showing <span className="font-semibold text-gray-700">{(currentPage - 1) * PAGE_SIZE + 1}</span>-
+                        <span className="font-semibold text-gray-700">{Math.min(currentPage * PAGE_SIZE, totalHistoryCount)}</span> of{' '}
+                        <span className="font-semibold text-gray-700">{totalHistoryCount}</span> events
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                            Previous
+                        </button>
+                        <span className="px-4 py-2 text-sm font-semibold text-gray-600">
+                            Page {currentPage} / {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
