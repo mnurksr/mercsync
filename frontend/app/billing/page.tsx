@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/useToast';
 import { getShopDomain, setShopDomain } from '@/utils/shopDomain';
 import { PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
 import { useRouter } from 'next/navigation';
+import EmbeddedAdminRedirect from '@/components/EmbeddedAdminRedirect';
 
 const PLAN_STYLE: Record<PlanId, { icon: typeof Zap; color: string; popular?: boolean }> = {
     starter: { icon: Zap, color: 'from-blue-500 to-indigo-600' },
@@ -200,6 +201,7 @@ export default function PlansPage() {
 
     return (
         <div className="h-[100dvh] w-full overflow-hidden bg-[#F6F6F7] flex flex-col items-center justify-center px-4 py-8 font-sans">
+            <EmbeddedAdminRedirect shopDomain={resolvedShopDomain || shopDomain || undefined} />
 
             {/* Header */}
             <motion.div

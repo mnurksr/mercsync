@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
+import EmbeddedAdminRedirect from '@/components/EmbeddedAdminRedirect';
 
 export default async function SetupLayout({ children }: { children: React.ReactNode }) {
     // RUNS ON THE SERVER = NO FLASHING OR JANK IN THE UI
@@ -26,5 +27,10 @@ export default async function SetupLayout({ children }: { children: React.ReactN
         redirect('/dashboard');
     }
 
-    return <>{children}</>;
+    return (
+        <>
+            <EmbeddedAdminRedirect shopDomain={shopify.shop_domain} />
+            {children}
+        </>
+    );
 }
