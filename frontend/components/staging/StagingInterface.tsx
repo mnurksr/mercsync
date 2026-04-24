@@ -2387,7 +2387,7 @@ export default function StagingInterface({ isSetupMode = false, onComplete, onBa
                                                             const src = item.shopify || item.etsy;
                                                             const isMissing = !!item.single;
                                                             const targetPlatformName = item.single === 'shopify' ? 'Etsy' : 'Shopify';
-                                                            const TargetIcon = item.single === 'shopify' ? Store : ShoppingBag;
+                                                            const TargetIcon = item.single === 'shopify' ? EtsyIcon : ShopifyIcon;
 
                                                             let queued = false;
                                                             if (isMissing && isGroupQueued(group)) {

@@ -647,24 +647,39 @@ export default function InventoryPage() {
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 flex items-center gap-1 shrink-0">
-                    {[
-                        { id: 'all', label: 'All Listings', icon: Layers },
-                        { id: 'shopify', label: 'Shopify Only', icon: ShoppingBag },
-                        { id: 'etsy', label: 'Etsy Only', icon: Store },
-                    ].map((btn) => (
-                        <button
-                            key={btn.id}
-                            onClick={() => setPlatformFilter(btn.id as 'all' | 'shopify' | 'etsy')}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
-                                platformFilter === btn.id
-                                    ? 'bg-gray-900 text-white shadow-lg'
-                                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                            }`}
-                        >
-                            <btn.icon className={`w-3.5 h-3.5 ${platformFilter === btn.id ? 'text-indigo-400' : 'text-gray-300'}`} />
-                            {btn.label}
-                        </button>
-                    ))}
+                    <button
+                        onClick={() => setPlatformFilter('all')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
+                            platformFilter === 'all'
+                                ? 'bg-gray-900 text-white shadow-lg'
+                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                        <Layers className={`w-3.5 h-3.5 ${platformFilter === 'all' ? 'text-indigo-400' : 'text-gray-300'}`} />
+                        All Listings
+                    </button>
+                    <button
+                        onClick={() => setPlatformFilter('shopify')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
+                            platformFilter === 'shopify'
+                                ? 'bg-gray-900 text-white shadow-lg'
+                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                        <ShopifyIcon size={14} />
+                        Shopify Only
+                    </button>
+                    <button
+                        onClick={() => setPlatformFilter('etsy')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
+                            platformFilter === 'etsy'
+                                ? 'bg-gray-900 text-white shadow-lg'
+                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                    >
+                        <EtsyIcon size={14} />
+                        Etsy Only
+                    </button>
                 </div>
             </div>
 

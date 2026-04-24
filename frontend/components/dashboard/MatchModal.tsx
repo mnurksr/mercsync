@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import {
-    X, Link2, Unlink, Search, Check, Package, ShoppingBag, Store,
+    X, Link2, Unlink, Search, Check, Package,
     ArrowRight, Loader2, AlertTriangle, ChevronDown
 } from 'lucide-react'
 import { unmatchProduct, matchProducts, getUnmatchedProducts } from '@/app/actions/matching'
@@ -102,8 +102,8 @@ export default function MatchModal({ isOpen, onClose, product, platform, onMatch
 
     if (!isOpen || !product) return null
 
-    const PlatformIcon = platform === 'shopify' ? ShoppingBag : Store
-    const OppositeIcon = platform === 'shopify' ? Store : ShoppingBag
+    const PlatformIcon = platform === 'shopify' ? ShopifyIcon : EtsyIcon
+    const OppositeIcon = platform === 'shopify' ? EtsyIcon : ShopifyIcon
 
     return (
         <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>

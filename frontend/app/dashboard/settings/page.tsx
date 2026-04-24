@@ -5,12 +5,12 @@
 import { useState, useEffect } from 'react';
 import {
     Link2, Settings, Bell, DollarSign, MapPin, Shield,
-    ShoppingBag, Check, X, ExternalLink,
+    Check, X, ExternalLink,
     ArrowUpRight, Unlink, Save, Loader2,
     CreditCard, Trash2, ArrowRight, Star,
     Mail, BellRing, ChevronUp, ChevronDown
 } from 'lucide-react';
-import { EtsyIcon } from '@/components/PlatformIcons';
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
 import ConfirmModal from '@/components/ui/ConfirmModal';
@@ -1393,7 +1393,7 @@ function ConnectModal({ show, onClose, platform, shopName, setShopName, onConnec
 }) {
     const isShopify = platform === 'shopify';
     const color = isShopify ? '#95BF47' : '#F56400';
-    const Icon = isShopify ? ShoppingBag : Store;
+    const Icon = isShopify ? ShopifyIcon : EtsyIcon;
 
     return (
         <AnimatePresence>
@@ -1414,7 +1414,7 @@ function ConnectModal({ show, onClose, platform, shopName, setShopName, onConnec
                     >
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: color }}>
-                                <Icon className="w-6 h-6 text-white" />
+                                <Icon size={24} />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-gray-900">Connect {isShopify ? 'Shopify' : 'Etsy'}</h3>

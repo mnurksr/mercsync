@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { getPlanConfig } from '@/config/plans';
+import { ShopifyIcon, EtsyIcon } from '@/components/PlatformIcons';
 import {
-    X, ShoppingBag, Store, ArrowRight, Package, Info, Check, Settings
+    X, ArrowRight, Package, Info, Check, Settings
 } from 'lucide-react';
 
 export type CrossListingVariant = {
@@ -156,8 +157,8 @@ export default function CloneModal({
     if (!isOpen || !sourceData) return null;
 
     const sourcePlatform = sourceData.platform;
-    const SourceIcon = sourcePlatform === 'shopify' ? ShoppingBag : Store;
-    const TargetIcon = targetPlatform === 'shopify' ? ShoppingBag : Store;
+    const SourceIcon = sourcePlatform === 'shopify' ? ShopifyIcon : EtsyIcon;
+    const TargetIcon = targetPlatform === 'shopify' ? ShopifyIcon : EtsyIcon;
     const isEditing = !!initialData;
 
     return (

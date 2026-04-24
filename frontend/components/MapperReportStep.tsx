@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, Variants } from 'framer-motion';
-import { ShoppingBag, AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { AlertTriangle, TrendingDown, Lightbulb, Activity, Zap, ShieldAlert, ArrowRight, Link as LinkIcon, Sparkles } from 'lucide-react';
 import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import Link from 'next/link';
 
