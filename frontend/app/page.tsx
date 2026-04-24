@@ -90,7 +90,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
             </h1>
 
             <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Real-time inventory sync that prevents double-selling and saves you from refunds. Connect once, sync forever.
+              Automatic inventory synchronization between Shopify and Etsy. Sell on both platforms without the fear of overselling.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -162,12 +162,12 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               <StepCard
                 number="2"
                 title="Match Your Products"
-                description="Our smart matching automatically links products between platforms using SKUs and title similarity. No manual mapping needed."
+                description="MercSync automatically links products between platforms using SKU and title similarity. Review matches in the staging area and confirm."
               />
               <StepCard
                 number="3"
                 title="Sync Automatically"
-                description="When a sale happens, inventory updates across all stores in real time. Zero overselling."
+                description="Once matched, inventory syncs automatically across both platforms via webhooks and scheduled jobs. Set it and forget it."
               />
             </div>
           </div>
@@ -184,23 +184,23 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
             <div className="grid md:grid-cols-2 gap-6">
               <FeatureItem
                 icon={<Activity className="w-5 h-5 text-blue-600" />}
-                title="Real-Time Sync"
-                description="Inventory updates propagate in seconds when a sale occurs on any platform. Webhook-driven, not hourly polling."
+                title="Real-Time Inventory Sync"
+                description="Stock levels update across Shopify and Etsy automatically when orders are placed, items restocked, or quantities adjusted."
               />
               <FeatureItem
                 icon={<ShieldCheck className="w-5 h-5 text-green-600" />}
                 title="Overselling Protection"
-                description="Never sell a product you don't have. Save thousands in refunds and avoid negative reviews."
+                description="Automatic stock deduction prevents selling products you don't have. Save on refunds and protect your seller reputation."
               />
               <FeatureItem
                 icon={<Zap className="w-5 h-5 text-yellow-600" />}
                 title="Smart Product Matching"
-                description="Automatically links products between Shopify and Etsy by SKU and title similarity. ~95% accuracy."
+                description="Links products between Shopify and Etsy using SKU matching and title similarity scoring with ~95% accuracy."
               />
               <FeatureItem
                 icon={<BarChart3 className="w-5 h-5 text-purple-600" />}
-                title="Multi-Location Support"
-                description="Tracks stock across all your Shopify warehouses with cascade deduction in your priority order."
+                title="Multi-Location & Price Rules"
+                description="Tracks inventory across multiple Shopify locations and supports cross-platform price rules with percentage or fixed adjustments."
               />
             </div>
           </div>

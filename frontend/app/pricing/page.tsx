@@ -262,14 +262,24 @@ export default function PricingPage() {
 
             {/* Footer */}
             <footer className="bg-white border-t border-gray-100 py-12">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="MercSync" width={24} height={24} className="rounded" />
-                        <span className="text-lg font-bold text-gray-900">MercSync</span>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <Image src="/logo.png" alt="MercSync" width={24} height={24} className="rounded" />
+                            <span className="text-lg font-bold text-gray-900">MercSync</span>
+                        </div>
+                        <div className="flex gap-6">
+                            <Link href="/privacy" className="text-gray-400 hover:text-gray-900 transition-colors text-sm">Privacy Policy</Link>
+                            <Link href="/terms" className="text-gray-400 hover:text-gray-900 transition-colors text-sm">Terms of Service</Link>
+                        </div>
                     </div>
-                    <div className="flex gap-6">
-                        <Link href="/privacy" className="text-gray-400 hover:text-gray-900 transition-colors text-sm">Privacy Policy</Link>
-                        <Link href="/terms" className="text-gray-400 hover:text-gray-900 transition-colors text-sm">Terms of Service</Link>
+                    <div className="mt-8 pt-6 border-t border-gray-100 text-center">
+                        <p className="text-xs text-gray-400">
+                            © {new Date().getFullYear()} MercSync. All rights reserved.
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                            The term &apos;Etsy&apos; is a trademark of Etsy, Inc. This application uses the Etsy API but is not endorsed or certified by Etsy, Inc.
+                        </p>
                     </div>
                 </div>
             </footer>
