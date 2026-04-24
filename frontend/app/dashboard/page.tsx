@@ -29,6 +29,7 @@ export default function Dashboard() {
         shopifyProductCount: 0,
         etsyProductCount: 0,
         matchedProducts: 0,
+        monthlyOrderSyncCount: 0,
         mismatchCount: 0,
         actionRequiredCount: 0,
         connectedStores: 0,

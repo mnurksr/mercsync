@@ -129,7 +129,7 @@ async function processShopifyRestockEvent(
     if (reason === 'refund') {
         const refundLineItems = payload.refund_line_items || [];
         const creds = shop.access_token ? { shopDomain: shop.shop_domain, accessToken: shop.access_token } : null;
-        let orderLineItemVariantMap = new Map<string, string>();
+        const orderLineItemVariantMap = new Map<string, string>();
 
         if (creds && payload.order_id) {
             try {
@@ -636,6 +636,13 @@ export async function handleShopifyOrder(
         }
 
         const status = failedItems > 0 ? 'failed' : syncedItems > 0 ? 'success' : 'skipped';
+        const skipReason = status === 'skipped'
+            ? !canPushToEtsy
+                ? 'Auto-sync disabled or direction blocks Shopify -> Etsy order sync.'
+                : !canUseOrderQuota
+                    ? quota?.message || 'Monthly order sync limit reached.'
+                    : 'Matched items were blocked by action-required state or missing Etsy links.'
+            : null;
         const errorMessage = !canUseOrderQuota && quota?.message
             ? quota.message
             : failedItems > 0
@@ -662,7 +669,11 @@ export async function handleShopifyOrder(
                 failed_items: failedItems,
                 skipped_items: skippedItems,
                 action_required_blocked: skippedItems > 0,
-                quota_limited: !canUseOrderQuota
+                quota_limited: !canUseOrderQuota,
+                auto_sync_enabled: !!settings?.auto_sync_enabled,
+                sync_direction: settings?.sync_direction || 'bidirectional',
+                can_push_to_etsy: canPushToEtsy,
+                skip_reason: skipReason
             }
         });
 

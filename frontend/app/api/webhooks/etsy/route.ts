@@ -125,7 +125,8 @@ export async function POST(req: NextRequest) {
         const { receiptId, parsedShopId, resourceUrl } = parseReceiptIdentifiers(payload);
         console.log(`${logPrefix} Received event: ${eventType}`);
 
-        const eventKey = [eventType, parsedShopId || 'unknown-shop', receiptId || resourceUrl || 'unknown-resource'].join(':');
+        const deliveryId = req.headers.get('webhook-id') || req.headers.get('Webhook-Id');
+        const eventKey = deliveryId || [eventType, parsedShopId || 'unknown-shop', receiptId || resourceUrl || 'unknown-resource'].join(':');
         const claimed = await claimWebhookEvent(supabase, 'etsy', eventKey, eventType, parsedShopId || null);
         if (!claimed) {
             console.log(`${logPrefix} Duplicate event ignored: ${eventKey}`);
