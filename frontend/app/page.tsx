@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Check, Zap, ShoppingBag, Store, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
@@ -49,7 +50,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
       <header className="fixed w-full bg-white/90 backdrop-blur-md border-b border-gray-100 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
+            <Image src="/logo.png" alt="MercSync" width={32} height={32} className="rounded-lg" />
             <span className="text-xl font-bold tracking-tight">MercSync</span>
           </Link>
 
@@ -57,7 +58,6 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
             <Link href="#how-it-works" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">How It Works</Link>
             <Link href="#features" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Features</Link>
             <Link href="/pricing" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Pricing</Link>
-            <Link href="/setup" className="text-sm text-blue-600 hover:text-blue-800 transition-colors font-medium">Setup (Test)</Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -83,9 +83,9 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-gray-900 mb-6 leading-[1.1]">
               Stop Overselling Between
               <span className="block mt-2">
-                <span className="text-[#95BF47]">Shopify</span>
-                {' & '}
                 <span className="text-[#F56400]">Etsy</span>
+                {' & '}
+                <span className="text-[#95BF47]">Shopify</span>
               </span>
             </h1>
 
@@ -102,10 +102,10 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
               <Link
-                href="/dashboard/mapper"
+                href="/pricing"
                 className="px-8 py-4 text-gray-700 font-semibold hover:text-gray-900 transition-colors flex items-center gap-2"
               >
-                Try Free Calculator →
+                View Pricing →
               </Link>
             </div>
 
@@ -133,45 +133,13 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
             <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-widest mb-6">Seamlessly Connects</p>
             <div className="flex items-center justify-center gap-16">
               <div className="flex items-center gap-2">
-                <ShoppingBag className="w-6 h-6 text-[#95BF47]" />
-                <span className="text-xl font-bold text-gray-800">Shopify</span>
-              </div>
-              <div className="w-8 h-[2px] bg-gray-200"></div>
-              <div className="flex items-center gap-2">
                 <Store className="w-6 h-6 text-[#F56400]" />
                 <span className="text-xl font-bold text-gray-800">Etsy</span>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Free Tool CTA - Elegant */}
-        <section className="py-20">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl p-10 md:p-14 overflow-hidden">
-              {/* Subtle gradient orb */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-
-              <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-                <div className="flex-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-6">
-                    <Zap className="w-3 h-3" />
-                    Free Tool • No Signup Required
-                  </div>
-                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-                    Calculate Your Overselling Risk
-                  </h2>
-                  <p className="text-gray-400 text-lg max-w-lg">
-                    Upload your inventory CSVs and instantly see how much money you could be losing to sync errors.
-                  </p>
-                </div>
-                <Link
-                  href="/dashboard/mapper"
-                  className="shrink-0 px-6 py-3.5 bg-white text-gray-900 font-semibold rounded-xl hover:bg-gray-100 transition-all flex items-center gap-2"
-                >
-                  <BarChart3 className="w-5 h-5" />
-                  Try Free Calculator
-                </Link>
+              <div className="w-8 h-[2px] bg-gray-200"></div>
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-6 h-6 text-[#95BF47]" />
+                <span className="text-xl font-bold text-gray-800">Shopify</span>
               </div>
             </div>
           </div>
@@ -194,12 +162,12 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               <StepCard
                 number="2"
                 title="Match Your Products"
-                description="Our AI automatically matches products between platforms using SKUs. No manual mapping needed."
+                description="Our smart matching automatically links products between platforms using SKUs and title similarity. No manual mapping needed."
               />
               <StepCard
                 number="3"
                 title="Sync Automatically"
-                description="When a sale happens, inventory updates across all stores within milliseconds. Zero overselling."
+                description="When a sale happens, inventory updates across all stores in real time. Zero overselling."
               />
             </div>
           </div>
@@ -217,7 +185,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               <FeatureItem
                 icon={<Activity className="w-5 h-5 text-blue-600" />}
                 title="Real-Time Sync"
-                description="Inventory updates propagate in under 2 seconds when a sale occurs on any platform."
+                description="Inventory updates propagate in seconds when a sale occurs on any platform. Webhook-driven, not hourly polling."
               />
               <FeatureItem
                 icon={<ShieldCheck className="w-5 h-5 text-green-600" />}
@@ -226,13 +194,13 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               />
               <FeatureItem
                 icon={<Zap className="w-5 h-5 text-yellow-600" />}
-                title="Zero Configuration"
-                description="Connect your stores and start syncing. No complex setup or technical knowledge required."
+                title="Smart Product Matching"
+                description="Automatically links products between Shopify and Etsy by SKU and title similarity. ~95% accuracy."
               />
               <FeatureItem
                 icon={<BarChart3 className="w-5 h-5 text-purple-600" />}
-                title="Risk Analytics"
-                description="See exactly how much money you're at risk of losing and take action before it happens."
+                title="Multi-Location Support"
+                description="Tracks stock across all your Shopify warehouses with cascade deduction in your priority order."
               />
             </div>
           </div>
@@ -252,7 +220,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
                 href="/login"
                 className="px-8 py-4 bg-gray-900 text-white font-semibold rounded-xl hover:bg-gray-800 transition-all"
               >
-                Start 14-Day Free Trial
+                Start 7-Day Free Trial
               </Link>
               <Link
                 href="/pricing"
@@ -272,7 +240,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
           <div className="flex flex-col md:flex-row justify-between items-start gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 bg-gray-900 rounded flex items-center justify-center text-white text-xs font-bold">M</div>
+                <Image src="/logo.png" alt="MercSync" width={24} height={24} className="rounded" />
                 <span className="text-lg font-bold text-gray-900">MercSync</span>
               </div>
               <p className="text-sm text-gray-500 max-w-xs">
@@ -284,7 +252,6 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               <div>
                 <h4 className="font-semibold text-gray-900 mb-3 text-sm">Product</h4>
                 <ul className="space-y-2">
-                  <li><Link href="/dashboard/mapper" className="text-sm text-gray-500 hover:text-gray-900">Free Calculator</Link></li>
                   <li><Link href="/pricing" className="text-sm text-gray-500 hover:text-gray-900">Pricing</Link></li>
                   <li><Link href="/login" className="text-sm text-gray-500 hover:text-gray-900">Dashboard</Link></li>
                 </ul>
@@ -304,7 +271,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
               © {new Date().getFullYear()} MercSync. All rights reserved.
             </p>
             <p className="text-xs text-gray-400 text-center mt-2">
-              The term &apos;Etsy&apos; is a trademark of Etsy, Inc. This application uses Etsy&apos;s API but is not endorsed or certified by Etsy.
+              The term &apos;Etsy&apos; is a trademark of Etsy, Inc. This application uses the Etsy API but is not endorsed or certified by Etsy, Inc.
             </p>
           </div>
         </div>
