@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { getPlanConfig } from '@/config/plans';
 import { ShopifyIcon, EtsyIcon } from '@/components/PlatformIcons';
 import {
