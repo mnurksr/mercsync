@@ -6,7 +6,6 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { ToastProvider } from "@/components/ui/useToast";
 import { Package, Settings, LogOut } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { useAuth } from "@/components/AuthProvider";
 import { usePathname } from "next/navigation";
 
@@ -30,7 +29,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
-              <Image src="/logo.png" alt="MercSync" width={32} height={32} />
+              <img src="/logo.png" alt="MercSync" width={32} height={32} />
             </div>
             <span className="font-bold text-gray-800 text-lg">MercSync</span>
           </div>

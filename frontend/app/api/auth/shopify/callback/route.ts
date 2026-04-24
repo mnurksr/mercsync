@@ -58,7 +58,19 @@ export async function GET(req: NextRequest) {
 
         const { data: existingShop } = await supabase
             .from('shops')
-            .select('id, is_active, shopify_connected, access_token')
+            .select(`
+                id,
+                is_active,
+                shopify_connected,
+                access_token,
+                plan_type,
+                etsy_connected,
+                etsy_access_token,
+                etsy_refresh_token,
+                etsy_token_expires_at,
+                etsy_shop_id,
+                etsy_currency
+            `)
             .eq('shop_domain', shop)
             .maybeSingle();
 
@@ -77,11 +89,7 @@ export async function GET(req: NextRequest) {
         ]);
         const currency = shopDetails.shop?.currency || 'USD';
 
-        // 6. Register Webhooks (Async)
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
-        await shopifyApi.registerWebhooks(creds, appUrl);
-
-        // 7. Upsert to DB - Safely handle missing currency columns
+        // 6. Upsert to DB - Safely preserve platform state on reconnect/reinstall.
         const upsertData: any = {
             shop_domain: shop,
             owner_id: owner_id,
@@ -92,10 +100,13 @@ export async function GET(req: NextRequest) {
             shopify_currency: currency,
             last_token_refresh_at: new Date().toISOString(),
             initial_product_counts: { shopify: counts },
-            plan_type: 'guest',
-            etsy_connected: false,
-            etsy_access_token: null,
-            etsy_refresh_token: null
+            plan_type: existingShop?.plan_type || 'guest',
+            etsy_connected: existingShop?.etsy_connected ?? false,
+            etsy_access_token: existingShop?.etsy_access_token ?? null,
+            etsy_refresh_token: existingShop?.etsy_refresh_token ?? null,
+            etsy_token_expires_at: existingShop?.etsy_token_expires_at ?? null,
+            etsy_shop_id: existingShop?.etsy_shop_id ?? null,
+            etsy_currency: existingShop?.etsy_currency ?? null,
         };
 
         const { error: upsertError } = await supabase

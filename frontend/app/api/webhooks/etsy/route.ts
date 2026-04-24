@@ -22,6 +22,75 @@ import * as shopifyApi from '../../sync/lib/shopify';
 import { createNotification } from '../../../actions/notifications';
 import crypto from 'crypto';
 import { classifyInventoryState } from '@/utils/inventoryStatus';
+import { canProcessMonthlyOrderSync } from '@/utils/planLimits';
+import { claimWebhookEvent } from '@/utils/webhookIdempotency';
+
+function parseReceiptIdentifiers(payload: any) {
+    let receiptId = payload.receipt_id?.toString();
+    const resourceUrl = payload.resource_url || '';
+    let parsedShopId = payload.shop_id?.toString() || '';
+
+    if (!receiptId && resourceUrl) {
+        const receiptMatch = resourceUrl.match(/receipts\/(\d+)/);
+        if (receiptMatch) {
+            receiptId = receiptMatch[1];
+        }
+    }
+
+    if (!parsedShopId && resourceUrl) {
+        const shopMatch = resourceUrl.match(/shops\/(\d+)/);
+        if (shopMatch) {
+            parsedShopId = shopMatch[1];
+        }
+    }
+
+    return { receiptId, parsedShopId, resourceUrl };
+}
+
+async function getCurrentEtsyVariantStock(listingId: string, variantId: string, accessToken: string): Promise<number> {
+    const currentInventory = await etsyApi.getInventory(listingId, accessToken);
+    const products = Array.isArray(currentInventory?.products) ? currentInventory.products : [];
+    const matchedProduct = products.find((product: any) => product.product_id?.toString() === variantId.toString());
+
+    if (!matchedProduct) {
+        return 0;
+    }
+
+    return (matchedProduct.offerings || []).reduce(
+        (sum: number, offering: any) => sum + Math.max(0, Number(offering.quantity || 0)),
+        0
+    );
+}
+
+async function restoreShopifyStockToTrackedLocations(
+    shop: any,
+    item: any,
+    desiredTotal: number,
+    locationPreference: string[]
+) {
+    if (!shop.access_token || !item.shopify_inventory_item_id || locationPreference.length === 0) {
+        return;
+    }
+
+    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+    const levelsData = await shopifyApi.getInventoryLevels(creds, locationPreference, item.shopify_inventory_item_id);
+    const levels = Array.isArray(levelsData?.inventory_levels) ? levelsData.inventory_levels : [];
+
+    const currentTotal = levels
+        .filter((level: any) => level.inventory_item_id?.toString() === item.shopify_inventory_item_id?.toString())
+        .reduce((sum: number, level: any) => sum + Math.max(0, Number(level.available || 0)), 0);
+
+    const delta = desiredTotal - currentTotal;
+    if (delta === 0) {
+        return;
+    }
+
+    const primaryLocationId = locationPreference[0];
+    const primaryLevel = levels.find((level: any) => level.location_id?.toString() === primaryLocationId) || { available: 0 };
+    const nextPrimaryStock = Math.max(0, Number(primaryLevel.available || 0) + delta);
+
+    await shopifyApi.setInventoryLevel(creds, primaryLocationId, item.shopify_inventory_item_id, nextPrimaryStock);
+}
 
 export async function POST(req: NextRequest) {
     const logPrefix = '[Etsy Webhook]';
@@ -53,7 +122,15 @@ export async function POST(req: NextRequest) {
 
         const payload = JSON.parse(rawBody);
         const eventType = payload.event_type || payload.type || '';
+        const { receiptId, parsedShopId, resourceUrl } = parseReceiptIdentifiers(payload);
         console.log(`${logPrefix} Received event: ${eventType}`);
+
+        const eventKey = [eventType, parsedShopId || 'unknown-shop', receiptId || resourceUrl || 'unknown-resource'].join(':');
+        const claimed = await claimWebhookEvent(supabase, 'etsy', eventKey, eventType, parsedShopId || null);
+        if (!claimed) {
+            console.log(`${logPrefix} Duplicate event ignored: ${eventKey}`);
+            return new Response('OK', { status: 200 });
+        }
 
         switch (eventType) {
             case 'order.paid':
@@ -63,8 +140,7 @@ export async function POST(req: NextRequest) {
 
             case 'order.canceled':
             case 'ORDER_CANCELED':
-                console.log(`${logPrefix} Order canceled: ${payload.receipt_id || 'unknown'}`);
-                // Future: could restore stock here
+                await handleOrderCanceled(payload, supabase, logPrefix);
                 break;
 
             case 'order.shipped':
@@ -94,18 +170,7 @@ export async function POST(req: NextRequest) {
  * { "event_type": "order.paid", "resource_url": "https://openapi.etsy.com/v3/application/shops/{shop_id}/receipts/{receipt_id}", "shop_id": 12345 }
  */
 async function handleOrderPaid(payload: any, supabase: any, logPrefix: string) {
-    // Extract receipt_id — may be directly in payload OR embedded in resource_url
-    let receiptId = payload.receipt_id?.toString();
-    const resourceUrl = payload.resource_url || '';
-    const etsyShopId = payload.shop_id?.toString() || '';
-
-    // Parse receipt_id from resource_url if not directly available
-    if (!receiptId && resourceUrl) {
-        const receiptMatch = resourceUrl.match(/receipts\/(\d+)/);
-        if (receiptMatch) {
-            receiptId = receiptMatch[1];
-        }
-    }
+    const { receiptId, parsedShopId } = parseReceiptIdentifiers(payload);
 
     if (!receiptId) {
         console.log(`${logPrefix} No receipt_id found in payload or resource_url. Skipping.`);
@@ -113,47 +178,155 @@ async function handleOrderPaid(payload: any, supabase: any, logPrefix: string) {
         return;
     }
 
-    // Parse shop_id from resource_url if not in payload
-    let parsedShopId = etsyShopId;
-    if (!parsedShopId && resourceUrl) {
-        const shopMatch = resourceUrl.match(/shops\/(\d+)/);
-        if (shopMatch) {
-            parsedShopId = shopMatch[1];
-        }
-    }
-
     console.log(`${logPrefix} Processing order.paid for receipt ${receiptId} (shop: ${parsedShopId})`);
 
     // 1. Find the shop
-    let shop = null;
-    
-    if (parsedShopId) {
-        const { data } = await supabase
-            .from('shops')
-            .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
-            .eq('etsy_shop_id', parsedShopId)
-            .eq('is_active', true)
-            .maybeSingle();
-        shop = data;
+    if (!parsedShopId) {
+        console.log(`${logPrefix} Missing shop_id for Etsy receipt ${receiptId}. Skipping.`);
+        return;
     }
 
-    if (!shop) {
-        // Fallback: find any active Etsy-connected shop
-        const { data: shops } = await supabase
-            .from('shops')
-            .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
-            .eq('is_active', true)
-            .not('etsy_shop_id', 'is', null)
-            .not('etsy_access_token', 'is', null);
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
+        .eq('etsy_shop_id', parsedShopId)
+        .eq('is_active', true)
+        .maybeSingle();
 
-        if (!shops || shops.length === 0) {
-            console.log(`${logPrefix} No matching shop found for Etsy shop_id ${parsedShopId}`);
-            return;
-        }
-        shop = shops[0];
+    if (!shop) {
+        console.log(`${logPrefix} No matching active shop found for Etsy shop_id ${parsedShopId}`);
+        return;
     }
 
     return processReceipt(shop, receiptId, supabase, logPrefix);
+}
+
+async function handleOrderCanceled(payload: any, supabase: any, logPrefix: string) {
+    const { receiptId, parsedShopId } = parseReceiptIdentifiers(payload);
+
+    if (!receiptId || !parsedShopId) {
+        console.log(`${logPrefix} Missing receipt_id or shop_id for cancellation payload. Skipping.`);
+        return;
+    }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id, shop_domain, access_token, etsy_access_token, etsy_shop_id, main_location_id')
+        .eq('etsy_shop_id', parsedShopId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (!shop) {
+        console.log(`${logPrefix} No matching active shop found for canceled Etsy receipt ${receiptId}`);
+        return;
+    }
+
+    const { data: settings } = await supabase
+        .from('shop_settings')
+        .select('auto_sync_enabled, sync_direction, location_deduction_order')
+        .eq('shop_id', shop.id)
+        .maybeSingle();
+
+    if (!settings?.auto_sync_enabled) {
+        console.log(`${logPrefix} Auto-sync disabled for shop ${shop.id}. Skipping cancellation restore.`);
+        return;
+    }
+
+    const direction = settings.sync_direction || 'bidirectional';
+    if (direction === 'shopify_to_etsy') {
+        console.log(`${logPrefix} Direction is shopify_to_etsy. Skipping Etsy cancellation restore.`);
+        return;
+    }
+
+    const txData = await etsyApi.getReceiptTransactions(shop.etsy_shop_id, receiptId, shop.etsy_access_token);
+    const transactions = txData.results || [];
+
+    let restoredItems = 0;
+    let skippedItems = 0;
+    let failedItems = 0;
+
+    for (const tx of transactions) {
+        const listingId = tx.listing_id?.toString();
+        if (!listingId) continue;
+
+        const { data: item } = await supabase
+            .from('inventory_items')
+            .select('id, name, master_stock, shopify_stock_snapshot, etsy_stock_snapshot, shopify_variant_id, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
+            .eq('shop_id', shop.id)
+            .eq('etsy_listing_id', listingId)
+            .maybeSingle();
+
+        if (!item || !item.shopify_inventory_item_id || !item.etsy_variant_id) {
+            skippedItems++;
+            continue;
+        }
+
+        let currentEtsyStock = Math.max(0, Number(item.etsy_stock_snapshot ?? item.master_stock ?? 0));
+        try {
+            currentEtsyStock = await getCurrentEtsyVariantStock(listingId, item.etsy_variant_id.toString(), shop.etsy_access_token);
+        } catch (err: any) {
+            console.error(`${logPrefix} Failed to fetch live Etsy inventory for listing ${listingId}:`, err.message);
+        }
+
+        const itemStateBeforeSync = classifyInventoryState({
+            shopifyVariantId: item.shopify_variant_id,
+            etsyVariantId: item.etsy_variant_id,
+            masterStock: item.master_stock,
+            shopifyStock: item.shopify_stock_snapshot,
+            etsyStock: item.etsy_stock_snapshot,
+        });
+
+        const desiredTotal = currentEtsyStock;
+        const locationPreference = Array.isArray(settings?.location_deduction_order) && settings.location_deduction_order.length > 0
+            ? settings.location_deduction_order.map((id: any) => id.toString())
+            : Array.isArray(item.selected_location_ids) && item.selected_location_ids.length > 0
+                ? item.selected_location_ids.map((id: any) => id.toString())
+                : (shop.main_location_id ? [shop.main_location_id.toString()] : []);
+
+        const updatePayload: Record<string, unknown> = {
+            master_stock: desiredTotal,
+            etsy_stock_snapshot: desiredTotal,
+            updated_at: new Date().toISOString(),
+            etsy_updated_at: new Date().toISOString()
+        };
+
+        try {
+            if (itemStateBeforeSync !== 'action_required') {
+                await restoreShopifyStockToTrackedLocations(shop, item, desiredTotal, locationPreference);
+                updatePayload.shopify_stock_snapshot = desiredTotal;
+                updatePayload.shopify_updated_at = new Date().toISOString();
+            } else {
+                skippedItems++;
+            }
+        } catch (err: any) {
+            failedItems++;
+            console.error(`${logPrefix} Failed to restore Shopify stock for listing ${listingId}:`, err.message);
+            continue;
+        }
+
+        await supabase.from('inventory_items').update(updatePayload).eq('id', item.id);
+
+        restoredItems++;
+    }
+
+    const status = failedItems > 0 ? 'failed' : restoredItems > 0 ? 'success' : 'skipped';
+    await supabase.from('sync_logs').insert({
+        shop_id: shop.id,
+        source: 'etsy',
+        event_type: 'order_cancel',
+        direction: 'etsy_to_shopify',
+        status,
+        error_message: failedItems > 0 ? 'One or more Shopify restock updates failed during Etsy cancellation sync.' : null,
+        metadata: {
+            etsy_receipt_id: receiptId.toString(),
+            source: 'webhook',
+            restored_items: restoredItems,
+            skipped_items: skippedItems,
+            failed_items: failedItems,
+            transaction_count: transactions.length
+        },
+        created_at: new Date().toISOString()
+    });
 }
 
 async function processReceipt(shop: any, receiptId: string, supabase: any, logPrefix: string) {
@@ -186,6 +359,28 @@ async function processReceipt(shop: any, receiptId: string, supabase: any, logPr
     const direction = settings.sync_direction || 'bidirectional';
     if (direction === 'shopify_to_etsy') {
         console.log(`${logPrefix} Direction is shopify_to_etsy. Skipping Etsy order processing.`);
+        return;
+    }
+
+    const orderLimit = await canProcessMonthlyOrderSync(supabase, shop.id);
+    if (!orderLimit.ok) {
+        console.warn(`${logPrefix} Monthly order sync limit reached for shop ${shop.id}: ${orderLimit.current}/${orderLimit.limit}`);
+        await supabase.from('sync_logs').insert({
+            shop_id: shop.id,
+            source: 'etsy',
+            event_type: 'order',
+            direction: 'etsy_to_shopify',
+            status: 'skipped',
+            error_message: orderLimit.message,
+            metadata: {
+                etsy_receipt_id: receiptId.toString(),
+                source: 'webhook',
+                plan: orderLimit.planName,
+                monthly_order_sync_count: orderLimit.current,
+                monthly_order_sync_limit: orderLimit.limit
+            },
+            created_at: new Date().toISOString()
+        });
         return;
     }
 

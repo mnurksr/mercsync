@@ -114,7 +114,7 @@ export default function HistoryPage() {
     const displayedHistory = history.filter(h => {
         const statusMatch = filterStatus === 'all' || h.status === filterStatus;
         const eventMatch = filterEventType === 'all'
-            || (filterEventType === 'order' && h.eventType === 'order')
+            || (filterEventType === 'order' && (h.eventType === 'order' || h.eventType === 'order_cancel'))
             || (filterEventType === 'price' && h.eventType === 'price_update');
 
         return statusMatch && eventMatch;

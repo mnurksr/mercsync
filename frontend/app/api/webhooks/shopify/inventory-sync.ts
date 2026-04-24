@@ -19,6 +19,255 @@ type SyncResult = {
     message: string;
 };
 
+type ShopifyShopContext = {
+    id: string;
+    shop_domain: string;
+    access_token: string | null;
+    etsy_access_token?: string | null;
+    owner_id?: string | null;
+    main_location_id?: string | number | null;
+};
+
+type ShopifyInventoryItem = {
+    id: string;
+    name?: string | null;
+    master_stock: number | null;
+    shopify_stock_snapshot: number | null;
+    etsy_stock_snapshot?: number | null;
+    shopify_inventory_item_id?: string | null;
+    selected_location_ids?: string[] | null;
+    etsy_listing_id?: string | null;
+    etsy_variant_id?: string | null;
+    shopify_variant_id?: string | null;
+};
+
+function getTrackedLocationIds(shop: ShopifyShopContext, item: ShopifyInventoryItem): string[] {
+    if (Array.isArray(item.selected_location_ids) && item.selected_location_ids.length > 0) {
+        return item.selected_location_ids.map(id => id.toString());
+    }
+
+    if (shop.main_location_id) {
+        return [shop.main_location_id.toString()];
+    }
+
+    return [];
+}
+
+async function getCurrentShopifyTrackedStock(
+    shop: ShopifyShopContext,
+    item: ShopifyInventoryItem
+): Promise<number> {
+    if (!shop.access_token || !item.shopify_inventory_item_id) {
+        return Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0));
+    }
+
+    const trackedLocationIds = getTrackedLocationIds(shop, item);
+    if (trackedLocationIds.length === 0) {
+        return Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0));
+    }
+
+    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
+    const levelsData = await shopifyApi.getInventoryLevels(creds, trackedLocationIds, item.shopify_inventory_item_id);
+    const levels = Array.isArray(levelsData?.inventory_levels) ? levelsData.inventory_levels : [];
+
+    return levels
+        .filter((level: any) => level.inventory_item_id?.toString() === item.shopify_inventory_item_id?.toString())
+        .reduce((sum: number, level: any) => sum + Math.max(0, Number(level.available || 0)), 0);
+}
+
+async function pushStockToEtsy(
+    shop: ShopifyShopContext,
+    item: ShopifyInventoryItem,
+    newStock: number
+): Promise<boolean> {
+    if (!shop.etsy_access_token || !item.etsy_listing_id || !item.etsy_variant_id) {
+        return false;
+    }
+
+    const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
+    const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
+        { item_id: item.etsy_variant_id.toString(), new_stock: newStock }
+    ]);
+    await etsyApi.updateInventory(item.etsy_listing_id, shop.etsy_access_token, updatedPayload);
+    return true;
+}
+
+async function processShopifyRestockEvent(
+    payload: {
+        id?: number | string;
+        order_id?: number | string;
+        line_items?: Array<{ variant_id?: number | string | null; quantity?: number | null }>;
+        refund_line_items?: Array<{
+            quantity?: number | null;
+            line_item_id?: number | string | null;
+            line_item?: { id?: number | string | null; variant_id?: number | string | null } | null;
+        }>;
+    },
+    shopDomain: string,
+    supabase: SupabaseClient,
+    reason: 'cancelled' | 'refund'
+): Promise<SyncResult> {
+    const shopIdentifier = reason === 'cancelled' ? payload.id?.toString() : payload.order_id?.toString();
+    const logPrefix = reason === 'cancelled' ? '[Shopify Cancel Sync]' : '[Shopify Refund Sync]';
+
+    if (!shopIdentifier) {
+        return { status: 'failed', message: 'Missing order identifier' };
+    }
+
+    const { data: shop } = await supabase
+        .from('shops')
+        .select('id, shop_domain, access_token, etsy_access_token, owner_id, main_location_id')
+        .eq('shop_domain', shopDomain)
+        .maybeSingle();
+
+    if (!shop) {
+        return { status: 'failed', message: 'Shop not found' };
+    }
+
+    const variantQuantities = new Map<string, number>();
+
+    if (reason === 'refund') {
+        const refundLineItems = payload.refund_line_items || [];
+        const creds = shop.access_token ? { shopDomain: shop.shop_domain, accessToken: shop.access_token } : null;
+        let orderLineItemVariantMap = new Map<string, string>();
+
+        if (creds && payload.order_id) {
+            try {
+                const orderData = await shopifyApi.getOrder(creds, payload.order_id);
+                for (const lineItem of orderData?.order?.line_items || []) {
+                    if (lineItem?.id && lineItem?.variant_id) {
+                        orderLineItemVariantMap.set(lineItem.id.toString(), lineItem.variant_id.toString());
+                    }
+                }
+            } catch (err: any) {
+                console.error(`${logPrefix} Failed to fetch order ${payload.order_id} for refund mapping:`, err.message);
+            }
+        }
+
+        for (const lineItem of refundLineItems) {
+            const lineItemId = lineItem?.line_item_id?.toString() || lineItem?.line_item?.id?.toString();
+            const variantId =
+                lineItem?.line_item?.variant_id?.toString()
+                || (lineItemId ? orderLineItemVariantMap.get(lineItemId) : undefined);
+            const quantity = Number(lineItem?.quantity || 0);
+            if (!variantId || quantity <= 0) continue;
+            variantQuantities.set(variantId, (variantQuantities.get(variantId) || 0) + quantity);
+        }
+    } else {
+        for (const lineItem of payload.line_items || []) {
+            const variantId = lineItem?.variant_id?.toString();
+            const quantity = Number(lineItem?.quantity || 0);
+            if (!variantId || quantity <= 0) continue;
+            variantQuantities.set(variantId, (variantQuantities.get(variantId) || 0) + quantity);
+        }
+    }
+
+    if (variantQuantities.size === 0) {
+        return { status: 'skipped', message: 'No refundable/cancelled line items matched variants' };
+    }
+
+    const { data: settings } = await supabase
+        .from('shop_settings')
+        .select('auto_sync_enabled, sync_direction')
+        .eq('shop_id', shop.id)
+        .maybeSingle();
+
+    const canPushToEtsy = !!settings?.auto_sync_enabled && (settings.sync_direction || 'bidirectional') !== 'etsy_to_shopify';
+    let restoredItems = 0;
+    let skippedItems = 0;
+    let failedItems = 0;
+
+    for (const variantId of variantQuantities.keys()) {
+        const { data: item } = await supabase
+            .from('inventory_items')
+            .select('id, name, master_stock, shopify_stock_snapshot, etsy_stock_snapshot, shopify_variant_id, shopify_inventory_item_id, selected_location_ids, etsy_listing_id, etsy_variant_id')
+            .eq('shop_id', shop.id)
+            .eq('shopify_variant_id', variantId)
+            .maybeSingle();
+
+        if (!item) {
+            skippedItems++;
+            continue;
+        }
+
+        let sourceShopifyStock = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0));
+        try {
+            sourceShopifyStock = await getCurrentShopifyTrackedStock(shop, item);
+        } catch (err: any) {
+            console.error(`${logPrefix} Failed to fetch live Shopify stock for variant ${variantId}:`, err.message);
+        }
+
+        const itemStateBeforeSync = classifyInventoryState({
+            shopifyVariantId: variantId,
+            etsyVariantId: item.etsy_variant_id,
+            masterStock: item.master_stock,
+            shopifyStock: item.shopify_stock_snapshot,
+            etsyStock: item.etsy_stock_snapshot,
+        });
+
+        const updatePayload: Record<string, unknown> = {
+            master_stock: sourceShopifyStock,
+            shopify_stock_snapshot: sourceShopifyStock,
+            updated_at: new Date().toISOString(),
+            shopify_updated_at: new Date().toISOString(),
+        };
+
+        let pushedToEtsy = false;
+        if (itemStateBeforeSync !== 'action_required' && canPushToEtsy) {
+            try {
+                pushedToEtsy = await pushStockToEtsy(shop, item, sourceShopifyStock);
+                if (pushedToEtsy) {
+                    updatePayload.etsy_stock_snapshot = sourceShopifyStock;
+                    updatePayload.etsy_updated_at = new Date().toISOString();
+                }
+            } catch (err: any) {
+                failedItems++;
+                await createNotification(
+                    supabase,
+                    shop.id,
+                    'sync_failed',
+                    reason === 'cancelled' ? 'Shopify Cancellation Restock Failed' : 'Shopify Refund Restock Failed',
+                    `Failed to push restocked stock to Etsy. Error: ${err.message}`,
+                    '/dashboard/history'
+                );
+            }
+        } else {
+            skippedItems++;
+        }
+
+        await supabase.from('inventory_items').update(updatePayload).eq('id', item.id);
+        restoredItems++;
+    }
+
+    const status = failedItems > 0 ? 'failed' : restoredItems > 0 ? 'success' : 'skipped';
+    await logSyncEvent(supabase, {
+        shop_id: shop.id,
+        source: 'shopify',
+        event_type: 'order_cancel',
+        direction: 'shopify_to_etsy',
+        status,
+        error_message: failedItems > 0 ? 'One or more restock updates failed during Shopify cancellation/refund sync.' : null,
+        metadata: {
+            shopify_order_id: shopIdentifier,
+            reason,
+            restored_items: restoredItems,
+            skipped_items: skippedItems,
+            failed_items: failedItems,
+            variant_count: variantQuantities.size,
+            order_items: Array.from(variantQuantities.entries()).map(([variant_id, quantity]) => ({ variant_id, quantity }))
+        }
+    });
+
+    return {
+        status,
+        message: status === 'success'
+            ? `Processed Shopify ${reason} ${shopIdentifier}`
+            : failedItems > 0
+                ? `Shopify ${reason} processed with failures`
+                : `Shopify ${reason} required no outbound restock`
+    };
+}
+
 /**
  * Handle an inventory_levels/update webhook from Shopify.
  *
@@ -298,25 +547,10 @@ export async function handleShopifyOrder(
             });
 
             let currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0));
-
-            const trackedLocationIds = Array.isArray(item.selected_location_ids) && item.selected_location_ids.length > 0
-                ? item.selected_location_ids.map(id => id.toString())
-                : (shop.main_location_id ? [shop.main_location_id.toString()] : []);
-
-            if (shop.access_token && item.shopify_inventory_item_id && trackedLocationIds.length > 0) {
-                try {
-                    const creds = { shopDomain: shop.shop_domain, accessToken: shop.access_token };
-                    const levelsData = await shopifyApi.getInventoryLevels(creds, trackedLocationIds, item.shopify_inventory_item_id);
-                    const levels = Array.isArray(levelsData?.inventory_levels) ? levelsData.inventory_levels : [];
-
-                    currentShopifyTotal = levels
-                        .filter((level: any) => level.inventory_item_id?.toString() === item.shopify_inventory_item_id?.toString())
-                        .reduce((sum: number, level: any) => sum + Math.max(0, Number(level.available || 0)), 0);
-                } catch (err: any) {
-                    console.error(`${logPrefix} Failed to fetch live Shopify inventory for variant ${variantId}:`, err.message);
-                    currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0) - quantity);
-                }
-            } else {
+            try {
+                currentShopifyTotal = await getCurrentShopifyTrackedStock(shop, item);
+            } catch (err: any) {
+                console.error(`${logPrefix} Failed to fetch live Shopify inventory for variant ${variantId}:`, err.message);
                 currentShopifyTotal = Math.max(0, Number(item.shopify_stock_snapshot ?? item.master_stock ?? 0) - quantity);
             }
 
@@ -334,11 +568,7 @@ export async function handleShopifyOrder(
                 skippedItems++;
             } else if (canPushToEtsy && canUseOrderQuota && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
                 try {
-                    const currentInventory = await etsyApi.getInventory(item.etsy_listing_id, shop.etsy_access_token);
-                    const updatedPayload = etsyApi.mergeStockUpdate(currentInventory, [
-                        { item_id: item.etsy_variant_id.toString(), new_stock: newStock }
-                    ]);
-                    await etsyApi.updateInventory(item.etsy_listing_id, shop.etsy_access_token, updatedPayload);
+                    await pushStockToEtsy(shop, item, newStock);
                     updatePayload.etsy_stock_snapshot = newStock;
                     updatePayload.etsy_updated_at = new Date().toISOString();
                     pushedToEtsy = true;
@@ -446,6 +676,29 @@ export async function handleShopifyOrder(
         console.error(`${logPrefix} Fatal error:`, err);
         return { status: 'failed', message: err.message };
     }
+}
+
+export async function handleShopifyOrderCancellation(
+    payload: {
+        id: number | string;
+        line_items?: Array<{ variant_id?: number | string | null; quantity?: number | null }>;
+    },
+    shopDomain: string,
+    supabase: SupabaseClient
+): Promise<SyncResult> {
+    return processShopifyRestockEvent(payload, shopDomain, supabase, 'cancelled');
+}
+
+export async function handleShopifyRefund(
+    payload: {
+        id: number | string;
+        order_id?: number | string;
+        refund_line_items?: Array<{ quantity?: number | null; line_item?: { variant_id?: number | string | null } | null }>;
+    },
+    shopDomain: string,
+    supabase: SupabaseClient
+): Promise<SyncResult> {
+    return processShopifyRestockEvent(payload, shopDomain, supabase, 'refund');
 }
 
 /**

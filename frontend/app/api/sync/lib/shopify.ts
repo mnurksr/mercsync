@@ -99,7 +99,23 @@ export async function registerWebhooks(creds: ShopifyCredentials, callbackBaseUr
 
     const webhookUrl = `${callbackBaseUrl}/api/webhooks/shopify/main`;
 
+    let existingTopics = new Set<string>();
+    try {
+        const current = await shopifyFetch(creds, 'webhooks.json');
+        existingTopics = new Set(
+            (current.webhooks || [])
+                .filter((webhook: any) => webhook.address === webhookUrl)
+                .map((webhook: any) => webhook.topic)
+        );
+    } catch (err) {
+        console.warn('[Shopify] Failed to load existing webhooks before registration:', err);
+    }
+
     const requests = topics.map(async (topic) => {
+        if (existingTopics.has(topic)) {
+            return { topic, status: 'exists' };
+        }
+
         try {
             return await shopifyFetch(creds, 'webhooks.json', {
                 method: 'POST',
@@ -210,6 +226,16 @@ export async function getProduct(
     productId: string | number
 ) {
     return shopifyFetch(creds, `products/${productId}.json`);
+}
+
+/**
+ * Get a Shopify order with line items.
+ */
+export async function getOrder(
+    creds: ShopifyCredentials,
+    orderId: string | number
+) {
+    return shopifyFetch(creds, `orders/${orderId}.json?fields=id,line_items`);
 }
 
 /**

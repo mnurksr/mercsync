@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import * as etsyApi from '../../sync/lib/etsy';
 import { createNotification } from '../../../actions/notifications';
+import { clearEtsyConnectionData } from '@/utils/etsyDisconnect';
 
 const REFRESH_THRESHOLD_MS = 30 * 60 * 1000; // Refresh if expires within 30 minutes
 
@@ -139,29 +140,10 @@ export async function GET(req: NextRequest) {
 
                 if (looksRevoked) {
                     console.warn(`${logPrefix} Etsy token appears revoked for shop ${shop.id}. Disconnecting Etsy integration.`);
-                    await supabase
-                        .from('staging_etsy_products')
-                        .delete()
-                        .eq('shop_id', shop.id);
-
-                    await supabase
-                        .from('inventory_items')
-                        .update({
-                            etsy_variant_id: null,
-                            etsy_listing_id: null,
-                            etsy_stock_snapshot: 0
-                        })
-                        .eq('shop_id', shop.id);
-
-                    await supabase
-                        .from('shops')
-                        .update({
-                            etsy_connected: false,
-                            etsy_access_token: null,
-                            etsy_refresh_token: null,
-                            etsy_token_expires_at: null
-                        })
-                        .eq('id', shop.id);
+                    const cleanup = await clearEtsyConnectionData(supabase, shop.id);
+                    if (!cleanup.ok) {
+                        console.error(`${logPrefix} Failed to clean Etsy data after revoke for shop ${shop.id}:`, cleanup.errors);
+                    }
                 }
             }
         }

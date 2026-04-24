@@ -2,9 +2,15 @@
 import { NextRequest } from 'next/server';
 import { validateWebhookHMAC } from '../../../auth/shopify/utils';
 import { createAdminClient } from '@/utils/supabase/admin';
-import { handleInventoryUpdate, handleShopifyOrder } from '../inventory-sync';
+import {
+    handleInventoryUpdate,
+    handleShopifyOrder,
+    handleShopifyOrderCancellation,
+    handleShopifyRefund
+} from '../inventory-sync';
 import { handlePriceUpdate } from '../../../sync/price-sync';
 import { scrubShopAfterUninstall } from '../cleanup';
+import { claimWebhookEvent } from '@/utils/webhookIdempotency';
 
 export async function POST(req: NextRequest) {
     const supabase = createAdminClient();
@@ -12,6 +18,7 @@ export async function POST(req: NextRequest) {
         const hmac = req.headers.get('x-shopify-hmac-sha256');
         const topic = req.headers.get('x-shopify-topic');
         const shop = req.headers.get('x-shopify-shop-domain');
+        const eventId = req.headers.get('x-shopify-event-id') || req.headers.get('x-shopify-webhook-id');
 
         if (!hmac || !topic || !shop) {
             return new Response('Missing headers', { status: 400 });
@@ -33,6 +40,14 @@ export async function POST(req: NextRequest) {
 
         const payload = JSON.parse(rawBody);
         console.log(`[Shopify Webhook] Received topic ${topic} from ${shop}`);
+
+        if (eventId) {
+            const claimed = await claimWebhookEvent(supabase, 'shopify', eventId, topic, shop);
+            if (!claimed) {
+                console.log(`[Shopify Webhook] Duplicate event ignored: ${topic} ${eventId}`);
+                return new Response('OK', { status: 200 });
+            }
+        }
 
         // Handle specific topics
         switch (topic) {
@@ -196,6 +211,24 @@ export async function POST(req: NextRequest) {
 
             case 'orders/updated':
                 console.log(`[Shopify Webhook] Ignoring ${topic} for ${shop}: ${payload.id}`);
+                break;
+
+            case 'orders/cancelled':
+                console.log(`[Shopify Webhook] Order cancelled for ${shop}: ${payload.id}`);
+                handleShopifyOrderCancellation(payload, shop, supabase).then(result => {
+                    console.log(`[Shopify Webhook] Order cancel sync result: ${result.status} — ${result.message}`);
+                }).catch((err: any) => {
+                    console.error(`[Shopify Webhook] Order cancel sync error:`, err);
+                });
+                break;
+
+            case 'refunds/create':
+                console.log(`[Shopify Webhook] Refund created for ${shop}: ${payload.id} order=${payload.order_id}`);
+                handleShopifyRefund(payload, shop, supabase).then(result => {
+                    console.log(`[Shopify Webhook] Refund sync result: ${result.status} — ${result.message}`);
+                }).catch((err: any) => {
+                    console.error(`[Shopify Webhook] Refund sync error:`, err);
+                });
                 break;
 
             case 'inventory_levels/update':

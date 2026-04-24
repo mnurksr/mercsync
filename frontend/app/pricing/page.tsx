@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Check, Zap, Crown, Shield, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/AuthProvider';
@@ -94,7 +93,7 @@ export default function PricingPage() {
             <header className="fixed w-full bg-white/90 backdrop-blur-md border-b border-gray-100 z-50">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-2.5">
-                        <Image src="/logo.png" alt="MercSync" width={32} height={32} className="rounded-lg" />
+                        <img src="/logo.png" alt="MercSync" width={32} height={32} className="rounded-lg" />
                         <span className="text-xl font-bold tracking-tight">MercSync</span>
                     </Link>
                     <nav className="hidden md:flex items-center gap-8">
@@ -265,7 +264,7 @@ export default function PricingPage() {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="flex items-center gap-2">
-                            <Image src="/logo.png" alt="MercSync" width={24} height={24} className="rounded" />
+                            <img src="/logo.png" alt="MercSync" width={24} height={24} className="rounded" />
                             <span className="text-lg font-bold text-gray-900">MercSync</span>
                         </div>
                         <div className="flex gap-6">
