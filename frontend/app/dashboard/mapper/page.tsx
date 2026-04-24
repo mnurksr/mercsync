@@ -101,7 +101,7 @@ export default function StockMapperWizard() {
             <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0 z-20">
                 <div className="flex items-center gap-3">
                     <Link href="/" className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center text-white font-bold text-sm">M</div>
+                        <img src="/logo.png" alt="MercSync" width={32} height={32} className="rounded-lg" />
                         <span className="text-xl font-bold tracking-tight">MercSync</span>
                     </Link>
                     <span className="text-gray-300">|</span>
