@@ -245,9 +245,13 @@ export default function SettingsPage() {
     };
 
     const handleConnectEtsy = () => {
-        if (!shopName.trim()) { toast.warning('Please enter the shop name'); return; }
-        const returnUrl = encodeURIComponent(`${window.location.origin}/auth/etsy/callback`);
-        window.location.href = `/api/auth/etsy/start?user_id=${user?.id || ''}&shop=${encodeURIComponent(shopName.trim())}&return_url=${returnUrl}`;
+        const shopDomain = stores.shopify?.domain;
+        const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
+        const returnUrl = shopDomain
+            ? encodeURIComponent(`https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/apps/${appHandle}/dashboard/settings?shop=${encodeURIComponent(shopDomain)}`)
+            : '';
+        const maybeUserId = user?.id ? `user_id=${encodeURIComponent(user.id)}&` : '';
+        window.location.href = `/api/auth/etsy/start?${maybeUserId}return_url=${returnUrl}`;
     };
 
     const executeDisconnect = async () => {

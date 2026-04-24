@@ -6,7 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { Check, Zap, Crown, Shield, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/components/ui/useToast';
-import { getShopDomain } from '@/utils/shopDomain';
+import { getShopDomain, setShopDomain } from '@/utils/shopDomain';
 import { PLAN_CONFIG, PLAN_ORDER, type PlanId } from '@/config/plans';
 import { useRouter } from 'next/navigation';
 
@@ -28,13 +28,47 @@ export default function PlansPage() {
     const searchParams = useSearchParams();
     const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [resolvedShopDomain, setResolvedShopDomain] = useState<string | undefined>(undefined);
 
     // Get shop domain — checks URL params first, then sessionStorage
     const shopDomain = getShopDomain(searchParams);
     const chargeId = searchParams.get('charge_id');
 
     useEffect(() => {
-        if (!chargeId || !shopDomain) {
+        if (shopDomain) {
+            setResolvedShopDomain(shopDomain);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadCurrentShop = async () => {
+            try {
+                const response = await fetch('/api/shop/current');
+                const data = await response.json();
+
+                if (cancelled || !data?.shopDomain) {
+                    return;
+                }
+
+                setShopDomain(data.shopDomain);
+                setResolvedShopDomain(data.shopDomain);
+            } catch (error) {
+                console.error('[Billing Page] Failed to resolve current shop:', error);
+            }
+        };
+
+        loadCurrentShop();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [shopDomain]);
+
+    useEffect(() => {
+        const effectiveShopDomain = resolvedShopDomain || shopDomain;
+
+        if (!chargeId || !effectiveShopDomain) {
             return;
         }
 
@@ -47,7 +81,7 @@ export default function PlansPage() {
                 const response = await fetch('/api/billing/verify-subscription', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ charge_id: chargeId, shop_domain: shopDomain })
+                    body: JSON.stringify({ charge_id: chargeId, shop_domain: effectiveShopDomain })
                 });
 
                 const data = await response.json();
@@ -61,7 +95,7 @@ export default function PlansPage() {
                 }
 
                 toast.success('Subscription activated.');
-                router.replace(`/setup?shop=${shopDomain}`);
+                router.replace(`/setup?shop=${effectiveShopDomain}`);
             } catch (error: unknown) {
                 if (cancelled) {
                     return;
@@ -80,10 +114,49 @@ export default function PlansPage() {
         return () => {
             cancelled = true;
         };
-    }, [chargeId, router, shopDomain, toast]);
+    }, [chargeId, resolvedShopDomain, router, shopDomain, toast]);
+
+    useEffect(() => {
+        const effectiveShopDomain = resolvedShopDomain || shopDomain;
+
+        if (!effectiveShopDomain || chargeId) {
+            return;
+        }
+
+        let cancelled = false;
+
+        const syncBillingState = async () => {
+            try {
+                const response = await fetch('/api/billing/sync-subscription', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ shop_domain: effectiveShopDomain })
+                });
+
+                const data = await response.json();
+                if (cancelled || !response.ok) {
+                    return;
+                }
+
+                if (data.success && data.plan) {
+                    router.replace(`/setup?shop=${effectiveShopDomain}`);
+                }
+            } catch (error) {
+                console.error('[Billing Page] Failed to sync billing state:', error);
+            }
+        };
+
+        syncBillingState();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chargeId, resolvedShopDomain, router, shopDomain]);
 
     const handleSelectPlan = async (planId: string) => {
-        if (!user?.id && !shopDomain) {
+        const effectiveShopDomain = resolvedShopDomain || shopDomain;
+
+        if (!user?.id && !effectiveShopDomain) {
             toast.error('Could not identify your shop. Please try again from Shopify admin.');
             return;
         }
@@ -98,7 +171,7 @@ export default function PlansPage() {
                 body: JSON.stringify({
                     plan: planId,
                     user_id: user?.id || undefined,
-                    shop_domain: shopDomain
+                    shop_domain: effectiveShopDomain
                 })
             });
 

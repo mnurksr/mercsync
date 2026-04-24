@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePKCE, encodeState } from '../utils';
+import { createAdminClient } from '@/utils/supabase/admin';
 
 function topLevelRedirectHtml(url: string) {
     const safeUrl = JSON.stringify(url);
@@ -19,11 +20,29 @@ function topLevelRedirectHtml(url: string) {
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
-        const userId = searchParams.get('user_id');
+        const explicitUserId = searchParams.get('user_id');
         const returnUrl = searchParams.get('return_url') || '';
+        let userId = explicitUserId;
 
         if (!userId) {
-            return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
+            const shopCookie = req.cookies.get('mercsync_shop')?.value;
+
+            if (shopCookie) {
+                const supabase = createAdminClient();
+                const { data: shop } = await supabase
+                    .from('shops')
+                    .select('owner_id')
+                    .eq('shop_domain', shopCookie)
+                    .maybeSingle();
+
+                if (shop?.owner_id) {
+                    userId = shop.owner_id;
+                }
+            }
+        }
+
+        if (!userId) {
+            return NextResponse.json({ error: 'user_id is required or mercsync_shop cookie must resolve a shop owner' }, { status: 400 });
         }
 
         const rawId = process.env.ETSY_API_KEY || process.env.ETSY_CLIENT_ID;

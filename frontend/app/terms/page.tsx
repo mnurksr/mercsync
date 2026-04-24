@@ -18,13 +18,13 @@ export default function TermsPage() {
                     <p className="mb-4"><strong>Effective Date: February 10, 2026</strong></p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">1. ACCEPTANCE OF TERMS</h2>
-                    <p className="mb-4">This Terms of Service ("Agreement") constitutes a binding contract between MercSync ("we", "us", or "our"), located in Istanbul, Turkiye, and you ("Customer" or "you"). By installing or using the MercSync application (the "Service"), you agree to be bound by these terms.</p>
+                    <p className="mb-4">This Terms of Service (&quot;Agreement&quot;) constitutes a binding contract between MercSync (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;), located in Istanbul, Turkiye, and you (&quot;Customer&quot; or &quot;you&quot;). By installing or using the MercSync application (the &quot;Service&quot;), you agree to be bound by these terms.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">2. SERVICE DESCRIPTION</h2>
                     <p className="mb-4">MercSync is an automation software designed to synchronize inventory, orders, and product data between e-commerce platforms, specifically Shopify and Etsy.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">3. ETSY TRADEMARK USAGE & DISCLAIMER</h2>
-                    <p className="mb-4">The term 'Etsy' is a trademark of Etsy, Inc. This application uses the Etsy API but is not endorsed or certified by Etsy, Inc. MercSync is an independent service provider.</p>
+                    <p className="mb-4">The term &apos;Etsy&apos; is a trademark of Etsy, Inc. This application uses the Etsy API but is not endorsed or certified by Etsy, Inc. MercSync is an independent service provider.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">4. COMPLIANCE WITH PLATFORM RULES</h2>
                     <p className="mb-4">You agree to use MercSync in full compliance with Etsy’s Terms of Use, House Rules, and Prohibited Items Policy. You are solely responsible for the content and products you list on your connected shops.</p>
@@ -41,11 +41,13 @@ export default function TermsPage() {
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">6. FEES AND PAYMENTS</h2>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
                         <li><strong>Shopify Billing:</strong> All fees for the Service are billed through the Shopify Billing API. You agree to pay the fees applicable to your selected subscription plan.</li>
-                        <li><strong>Refunds:</strong> As we offer a free trial period for evaluation, fees paid are generally non-refundable, subject to Shopify's refund policies.</li>
+                        <li><strong>Trials:</strong> Paid plans may include a trial period as displayed in the app and in Shopify billing approval screens.</li>
+                        <li><strong>Refunds:</strong> MercSync may honor the refund promise displayed on its active pricing page or listing materials. Outside of any expressly stated offer, charges are generally non-refundable, subject to applicable law and Shopify billing rules.</li>
+                        <li><strong>Uninstall and Billing:</strong> Uninstalling the app does not itself guarantee a refund. Subscription handling, including cancellation timing and remaining billing-period access, is governed by Shopify Billing.</li>
                     </ul>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. SERVICE AVAILABILITY & WARRANTY DISCLAIMER</h2>
-                    <p className="mb-4 uppercase font-semibold">THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE". WE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.</p>
+                    <p className="mb-4 uppercase font-semibold">THE SERVICE IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot;. WE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.</p>
                     <p className="mb-4 uppercase font-semibold">DISCLAIMER: THIS APPLICATION IS SOLELY PROVIDED BY MERCSYNC. YOU ACKNOWLEDGE THAT ETSY, INC. AND ITS AFFILIATES ARE NOT THE APPLICATION DEVELOPER, DO NOT PROVIDE THE APPLICATION SERVICE, AND MAKE NO WARRANTIES OF ANY KIND WITH RESPECT TO THE APPLICATION OR DATA ACCESSED THROUGH IT.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">8. LIMITATION OF LIABILITY</h2>

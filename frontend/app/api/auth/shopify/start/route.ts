@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         let shop = searchParams.get('shop');
         const userId = searchParams.get('user_id');
+        const returnUrl = searchParams.get('return_url') || undefined;
 
         if (!shop) {
             return NextResponse.json({ error: 'Shop parameter is required' }, { status: 400 });
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
         const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
         // 2. Encode State (n8n structure: only userId and nonce)
-        const state = encodeState(userId || '', nonce);
+        const state = encodeState(userId || '', nonce, returnUrl);
 
         // 3. Scopes (Match n8n working structure: comma-separated)
         const scopes = 'read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_locations';

@@ -31,12 +31,14 @@ export async function GET(req: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const mode = req.nextUrl.searchParams.get('mode') || 'all';
+    const refreshAll = mode !== 'expiring_only';
 
     try {
-        // Get all active shops with Etsy tokens
+        // Get all active shops with Etsy refresh tokens
         const { data: shops, error: shopsError } = await supabase
             .from('shops')
-            .select('id, etsy_access_token, etsy_refresh_token, etsy_token_expires_at, etsy_shop_id')
+            .select('id, shop_domain, etsy_access_token, etsy_refresh_token, etsy_token_expires_at, etsy_shop_id')
             .eq('is_active', true)
             .eq('etsy_connected', true)
             .not('etsy_refresh_token', 'is', null);
@@ -49,21 +51,25 @@ export async function GET(req: NextRequest) {
         const now = Date.now();
         let refreshed = 0;
         let failed = 0;
+        let skipped = 0;
 
         for (const shop of shops) {
             const expiresAt = shop.etsy_token_expires_at
                 ? new Date(shop.etsy_token_expires_at).getTime()
                 : 0;
 
-            // Only refresh if token expires within threshold (or is already expired)
-            if (expiresAt > now + REFRESH_THRESHOLD_MS) {
-                continue; // Token still valid, skip
+            // Mirror the working n8n flow by default: refresh all connected Etsy shops.
+            // Optional mode=expiring_only preserves the older threshold-based behavior.
+            if (!refreshAll && expiresAt > now + REFRESH_THRESHOLD_MS) {
+                skipped++;
+                continue;
             }
 
-            console.log(`${logPrefix} Refreshing token for shop ${shop.id} (expires: ${shop.etsy_token_expires_at || 'unknown'})`);
+            console.log(`${logPrefix} Refreshing token for shop ${shop.id} (${shop.shop_domain || 'unknown-shop'}) (expires: ${shop.etsy_token_expires_at || 'unknown'})`);
 
             try {
                 const tokenData = await etsyApi.refreshToken(shop.etsy_refresh_token);
+                const nextRefreshToken = tokenData.refresh_token || shop.etsy_refresh_token;
 
                 const newExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString();
 
@@ -71,9 +77,12 @@ export async function GET(req: NextRequest) {
                     .from('shops')
                     .update({
                         etsy_access_token: tokenData.access_token,
-                        etsy_refresh_token: tokenData.refresh_token,
+                        etsy_refresh_token: nextRefreshToken,
                         etsy_token_expires_at: newExpiresAt,
-                        last_token_refresh_at: new Date().toISOString()
+                        last_token_refresh_at: new Date().toISOString(),
+                        token_refresh_failed_at: null,
+                        token_refresh_error: null,
+                        etsy_connected: true
                     })
                     .eq('id', shop.id);
 
@@ -98,10 +107,19 @@ export async function GET(req: NextRequest) {
                     error_message: `Token refresh failed: ${errorMessage}`,
                     metadata: {
                         type: 'token_refresh',
+                        mode,
                         expires_at: shop.etsy_token_expires_at
                     },
                     created_at: new Date().toISOString()
                 });
+
+                await supabase
+                    .from('shops')
+                    .update({
+                        token_refresh_failed_at: new Date().toISOString(),
+                        token_refresh_error: errorMessage
+                    })
+                    .eq('id', shop.id);
 
                 await createNotification(
                     supabase,
@@ -148,13 +166,15 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        console.log(`${logPrefix} Done. Refreshed: ${refreshed}, Failed: ${failed}`);
+        console.log(`${logPrefix} Done. Mode=${mode}. Refreshed: ${refreshed}, Failed: ${failed}, Skipped: ${skipped}`);
 
         return NextResponse.json({
             status: 'ok',
+            mode,
             total_shops: shops.length,
             refreshed,
-            failed
+            failed,
+            skipped
         });
 
     } catch (err: unknown) {

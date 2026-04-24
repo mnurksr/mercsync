@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient, getValidatedUserContext } from '@/utils/supabase/admin'
 import { getPlanConfig, PLAN_CONFIG } from '@/config/plans'
 import { getShop } from '@/app/api/sync/lib/etsy'
+import { syncShopPlanWithBilling } from '@/app/api/billing/lib/subscription'
 
 export type ShopConnection = {
     connected: boolean
@@ -84,13 +85,29 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
                 }
                 
                 const isConnected = !!coreData.access_token && !!coreData.shop_domain;
+                let resolvedPlanType = coreData.plan_type;
+
+                if (isConnected && coreData.shop_domain && coreData.access_token) {
+                    try {
+                        const billingState = await syncShopPlanWithBilling(
+                            createAdminClient(),
+                            coreData.shop_domain,
+                            coreData.access_token,
+                            coreData.plan_type
+                        );
+                        resolvedPlanType = billingState.planType || (billingState.status === 'inactive' ? 'guest' : coreData.plan_type);
+                    } catch (billingError) {
+                        console.warn('[getConnectedShop] Failed to sync Shopify billing state (fallback path):', billingError);
+                    }
+                }
+
                 return {
                     connected: isConnected,
                     shop_domain: coreData.shop_domain,
                     last_sync: coreData.created_at ? new Date(coreData.created_at).toLocaleString() : 'Just now',
                     platform: 'shopify',
                     owner_id: coreData.owner_id,
-                    plan_type: coreData.plan_type,
+                    plan_type: resolvedPlanType,
                     shopify_currency: 'USD',
                     etsy_currency: 'USD',
                     debugMessage: `Fallback: ${isConnected}`
@@ -102,13 +119,29 @@ export async function getConnectedShop(platform: string = 'shopify', testShopDom
             }
 
             const isConnected = !!data.access_token && !!data.shop_domain;
+            let resolvedPlanType = data.plan_type;
+
+            if (isConnected && data.shop_domain && data.access_token) {
+                try {
+                    const billingState = await syncShopPlanWithBilling(
+                        createAdminClient(),
+                        data.shop_domain,
+                        data.access_token,
+                        data.plan_type
+                    );
+                    resolvedPlanType = billingState.planType || (billingState.status === 'inactive' ? 'guest' : data.plan_type);
+                } catch (billingError) {
+                    console.warn('[getConnectedShop] Failed to sync Shopify billing state:', billingError);
+                }
+            }
+
             return {
                 connected: isConnected,
                 shop_domain: data.shop_domain,
                 last_sync: data.created_at ? new Date(data.created_at).toLocaleString() : 'Just now',
                 platform: 'shopify',
                 owner_id: data.owner_id,
-                plan_type: data.plan_type,
+                plan_type: resolvedPlanType,
                 shopify_currency: 'USD',
                 etsy_currency: 'USD',
                 debugMessage: `Connected (has_token=${!!data.access_token})`

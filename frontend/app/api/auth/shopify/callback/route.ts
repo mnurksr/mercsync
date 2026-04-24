@@ -5,6 +5,7 @@ import * as shopifyApi from '@/app/api/sync/lib/shopify';
 import { createAdminClient } from '@/utils/supabase/admin';
 import crypto from 'crypto';
 import { clearOperationalShopData } from '@/app/api/webhooks/shopify/cleanup';
+import { syncShopPlanWithBilling } from '@/app/api/billing/lib/subscription';
 
 export async function GET(req: NextRequest) {
     const supabase = createAdminClient();
@@ -116,12 +117,20 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        try {
+            const billingState = await syncShopPlanWithBilling(supabase, shop, accessToken, 'guest');
+            console.log(`[Shopify Callback] Billing state after install for ${shop}: ${billingState.status} ${billingState.planType || ''}`);
+        } catch (billingErr) {
+            console.warn('[Shopify Callback] Failed to sync billing state after install:', billingErr);
+        }
+
         // 8. Redirect back to embedded app home using app handle
         const storeHandle = shop.replace('.myshopify.com', '');
         const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
+        const defaultEmbeddedDashboardUrl = `https://admin.shopify.com/store/${storeHandle}/apps/${appHandle}/dashboard?shop=${encodeURIComponent(shop)}`;
         const finalRedirect = return_url
             ? return_url
-            : `https://admin.shopify.com/store/${storeHandle}/apps/${appHandle}`;
+            : defaultEmbeddedDashboardUrl;
 
 
         console.log(`[Shopify Callback] Success for shop ${shop}. Redirecting to ${finalRedirect}`);

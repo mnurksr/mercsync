@@ -21,13 +21,13 @@ export default function PrivacyPage() {
                     <p className="mb-4">MercSync (“we”, “us”, or “our”) welcomes you to our inventory management platform (the “Service”). We are committed to protecting your personal information and your business data. This Privacy Policy explains how we collect, use, and share information when you use our app to sync data between Shopify and Etsy.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">2. INFORMATION WE COLLECT</h2>
-                    <p className="mb-4">We collect two types of information:</p>
+                    <p className="mb-4">We collect two categories of information needed to operate the Service:</p>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
-                        <li><strong>Merchant Information:</strong> When you install MercSync, we collect your name, email address, phone number, and shop URLs (Shopify and Etsy) to create your account and provide customer support.</li>
+                        <li><strong>Merchant Information:</strong> When you install or connect MercSync, we process your Shopify shop domain, Etsy shop identifier, app subscription status, and the contact information you provide to us for support.</li>
                         <li><strong>Platform Data (Shopify & Etsy):</strong> To perform inventory synchronization, we access and process:
                             <ul className="list-disc pl-5 mt-2 space-y-1">
-                                <li>Product Listings (Titles, SKUs, Stock Levels, Prices).</li>
-                                <li>Order Information (Customer shipping details, order status) needed for fulfillment.</li>
+                                <li>Product listings and inventory records such as titles, variant identifiers, SKUs, stock levels, prices, images, and listing status.</li>
+                                <li>Order and transaction records needed for inventory synchronization, such as order identifiers, receipt identifiers, item quantities, and order status.</li>
                             </ul>
                         </li>
                     </ul>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
                     <p className="mb-4">MercSync uses Etsy API data only to provide the inventory synchronization, product matching, product cloning, pricing, and order-processing features selected by the merchant.</p>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
                         <li><strong>Operational Data:</strong> We store product identifiers, listing identifiers, SKUs, titles, prices, quantities, images, and related sync metadata while your Etsy shop remains connected, as needed to operate the Service.</li>
-                        <li><strong>Order Data:</strong> We process Etsy receipt and transaction identifiers and item quantities to synchronize inventory. We do not request or store buyer email addresses for this purpose.</li>
+                        <li><strong>Order Data:</strong> We process Etsy receipt and transaction identifiers, item quantities, and order status to synchronize inventory. We do not request or store buyer email addresses for this purpose.</li>
                         <li><strong>Data Minimization:</strong> We only store Etsy data needed to provide the features you use and troubleshoot synchronization issues.</li>
                         <li><strong>No Unauthorized Use:</strong> We do not sell Etsy data or use it for unrelated advertising or marketing.</li>
                     </ul>
@@ -61,9 +61,10 @@ export default function PrivacyPage() {
                     <p className="mb-4"><strong>Data Breach Notification:</strong> In accordance with Etsy API Terms of Use, if any Etsy Member data accessed via the API is compromised or suspected to be compromised, we will notify Etsy at dpo@etsy.com and the affected Etsy seller within 24 hours of discovery.</p>
 
                     <h2 className="text-xl font-bold text-gray-900 mt-8 mb-4">7. YOUR RIGHTS & DELETION</h2>
-                    <p className="mb-4">You have the right to access, modify, or delete your personal information.</p>
+                    <p className="mb-4">You have the right to access, modify, or request deletion of the information we control.</p>
                     <ul className="list-disc pl-5 mb-4 space-y-2">
                         <li><strong>Uninstall:</strong> When you uninstall MercSync from your Shopify store, access tokens are revoked or removed and shop-scoped operational sync data is removed from active use.</li>
+                        <li><strong>Etsy Disconnect or Revocation:</strong> When you disconnect Etsy from MercSync, or when Etsy access tokens are revoked or become invalid, MercSync removes stored Etsy tokens and disconnects Etsy-specific operational links from active use.</li>
                         <li><strong>Platform Deletion Requests:</strong> When Shopify or Etsy sends an applicable deletion or redaction request, we delete the related shop-scoped records according to that platform request.</li>
                         <li><strong>Request:</strong> You may contact us at any time to request immediate deletion of your data.</li>
                     </ul>
