@@ -36,6 +36,15 @@ async function deleteShopRows(
     return errors;
 }
 
+export async function clearOperationalShopData(
+    supabase: SupabaseClient,
+    shopId: string,
+    logPrefix = '[Shopify Cleanup]'
+): Promise<CleanupResult> {
+    const errors = await deleteShopRows(supabase, shopId, logPrefix);
+    return { ok: errors.length === 0, errors };
+}
+
 /**
  * app/uninstalled should immediately disable the integration and remove tokens.
  * We keep the shop row so billing/support history and later shop/redact lookup still work.
@@ -72,8 +81,7 @@ export async function scrubShopAfterUninstall(
         return { ok: true, errors: [] };
     }
 
-    const errors = await deleteShopRows(supabase, shop.id, logPrefix);
-    return { ok: errors.length === 0, errors };
+    return clearOperationalShopData(supabase, shop.id, logPrefix);
 }
 
 /**

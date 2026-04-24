@@ -4,6 +4,7 @@ import { decodeState, validateHMAC } from '../utils';
 import * as shopifyApi from '@/app/api/sync/lib/shopify';
 import { createAdminClient } from '@/utils/supabase/admin';
 import crypto from 'crypto';
+import { clearOperationalShopData } from '@/app/api/webhooks/shopify/cleanup';
 
 export async function GET(req: NextRequest) {
     const supabase = createAdminClient();
@@ -54,6 +55,20 @@ export async function GET(req: NextRequest) {
 
         const creds = { shopDomain: shop, accessToken };
 
+        const { data: existingShop } = await supabase
+            .from('shops')
+            .select('id, is_active, shopify_connected, access_token')
+            .eq('shop_domain', shop)
+            .maybeSingle();
+
+        if (existingShop && (!existingShop.is_active || !existingShop.shopify_connected || !existingShop.access_token)) {
+            console.log(`[Shopify Callback] Found stale disconnected shop state for ${shop}. Clearing old operational data before reinstall.`);
+            const cleanupResult = await clearOperationalShopData(supabase, existingShop.id, '[Shopify Callback]');
+            if (!cleanupResult.ok) {
+                console.warn(`[Shopify Callback] Failed to fully clear stale shop data for ${shop}:`, cleanupResult.errors);
+            }
+        }
+
         // 5. Fetch Initial Counts and Shop Details (Async)
         const [counts, shopDetails] = await Promise.all([
             shopifyApi.getListingCounts(creds),
@@ -101,9 +116,12 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // 8. Redirect back to Shopify Admin App (Strictly match working n8n structure)
-        const clientId = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
-        const finalRedirect = `https://${shop}/admin/apps/${clientId}`;
+        // 8. Redirect back to embedded app home using app handle
+        const storeHandle = shop.replace('.myshopify.com', '');
+        const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
+        const finalRedirect = return_url
+            ? return_url
+            : `https://admin.shopify.com/store/${storeHandle}/apps/${appHandle}`;
 
 
         console.log(`[Shopify Callback] Success for shop ${shop}. Redirecting to ${finalRedirect}`);

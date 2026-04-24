@@ -111,6 +111,40 @@ export async function GET(req: NextRequest) {
                     `MercSync could not refresh your Etsy connection. Please reconnect Etsy. Error: ${errorMessage}`,
                     '/dashboard/settings'
                 );
+
+                const normalizedMessage = errorMessage.toLowerCase();
+                const looksRevoked = normalizedMessage.includes('invalid_grant')
+                    || normalizedMessage.includes('invalid token')
+                    || normalizedMessage.includes('unauthorized')
+                    || normalizedMessage.includes('forbidden')
+                    || normalizedMessage.includes('revoked');
+
+                if (looksRevoked) {
+                    console.warn(`${logPrefix} Etsy token appears revoked for shop ${shop.id}. Disconnecting Etsy integration.`);
+                    await supabase
+                        .from('staging_etsy_products')
+                        .delete()
+                        .eq('shop_id', shop.id);
+
+                    await supabase
+                        .from('inventory_items')
+                        .update({
+                            etsy_variant_id: null,
+                            etsy_listing_id: null,
+                            etsy_stock_snapshot: 0
+                        })
+                        .eq('shop_id', shop.id);
+
+                    await supabase
+                        .from('shops')
+                        .update({
+                            etsy_connected: false,
+                            etsy_access_token: null,
+                            etsy_refresh_token: null,
+                            etsy_token_expires_at: null
+                        })
+                        .eq('id', shop.id);
+                }
             }
         }
 
