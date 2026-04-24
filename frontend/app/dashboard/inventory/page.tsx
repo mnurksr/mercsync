@@ -799,18 +799,18 @@ export default function InventoryPage() {
                                             <td className="px-2 py-4">
                                                 <div className="flex items-center justify-center gap-2">
                                                     {item.shopify_product_id ? (
-                                                        <a href={`https://${item.shop_domain || 'admin.shopify.com'}/admin/products/${item.shopify_product_id}`} target="_blank" rel="noreferrer" title="Edit on Shopify" className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center hover:bg-blue-100 hover:text-blue-600 transition-colors border border-blue-100 shadow-sm">
+                                                        <a href={`https://${item.shop_domain || 'admin.shopify.com'}/admin/products/${item.shopify_product_id}`} target="_blank" rel="noreferrer" title="Edit on Shopify" className="w-8 h-8 rounded-lg bg-white flex items-center justify-center hover:bg-gray-50 transition-colors border border-gray-200 shadow-sm">
                                                             <ShopifyIcon size={16} />
                                                         </a>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><ShopifyIcon size={16} /></div>
+                                                        <div className="w-8 h-8 rounded-lg bg-white opacity-40 flex items-center justify-center border border-gray-100"><ShopifyIcon size={16} /></div>
                                                     )}
                                                     {item.etsy_listing_id ? (
-                                                        <a href={`https://www.etsy.com/your/shops/me/tools/listings/${item.etsy_listing_id}`} target="_blank" rel="noreferrer" title="Edit on Etsy" className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center hover:bg-orange-100 hover:text-orange-600 transition-colors border border-orange-100 shadow-sm">
+                                                        <a href={`https://www.etsy.com/your/shops/me/tools/listings/${item.etsy_listing_id}`} target="_blank" rel="noreferrer" title="Edit on Etsy" className="w-8 h-8 rounded-lg bg-white flex items-center justify-center hover:bg-gray-50 transition-colors border border-gray-200 shadow-sm">
                                                             <EtsyIcon size={16} />
                                                         </a>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-300 flex items-center justify-center border border-gray-100"><EtsyIcon size={16} /></div>
+                                                        <div className="w-8 h-8 rounded-lg bg-white opacity-40 flex items-center justify-center border border-gray-100"><EtsyIcon size={16} /></div>
                                                     )}
                                                 </div>
                                             </td>

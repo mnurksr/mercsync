@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import EmbeddedAdminRedirect from '@/components/EmbeddedAdminRedirect';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
     // RUNS ON THE SERVER = NO FLASHING OR JANK IN THE UI
@@ -9,6 +10,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         getConnectedShop('shopify'),
         getSetupStatus()
     ]);
+
+    if (!shopify.shop_domain) {
+        redirect('/login');
+    }
 
     // Security / Routing Guard 1: Not fully set up? Go to setup.
     if (!wizardStatus.isComplete) {
@@ -22,8 +27,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
     // Passed all guards -> Render dashboard UI
     return (
-        <DashboardShell>
-            {children}
-        </DashboardShell>
+        <>
+            <EmbeddedAdminRedirect shopDomain={shopify.shop_domain} />
+            <DashboardShell>
+                {children}
+            </DashboardShell>
+        </>
     );
 }

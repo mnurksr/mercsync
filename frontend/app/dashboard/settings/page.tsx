@@ -64,7 +64,7 @@ export default function SettingsPage() {
     // Settings state
     const [settings, setSettings] = useState<ShopSettings>({
         sync_direction: 'bidirectional',
-        auto_sync_enabled: false,
+        auto_sync_enabled: true,
         low_stock_threshold: 5,
         auto_create_products: false,
         auto_update_products: false,
@@ -1330,10 +1330,7 @@ function StoreCard({ name, icon, color, connected, domain, currency, onConnect, 
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all hover:shadow-md">
             <div className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-5 w-full md:w-auto">
-                    <div
-                        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0"
-                        style={{ backgroundColor: color }}
-                    >
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border border-gray-100 bg-white shadow-sm">
                         {icon}
                     </div>
                     <div className="min-w-0">

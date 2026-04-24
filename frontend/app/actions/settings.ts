@@ -56,7 +56,7 @@ export type ShopSettings = {
 
 const DEFAULT_SETTINGS: ShopSettings = {
     sync_direction: 'bidirectional',
-    auto_sync_enabled: false,
+    auto_sync_enabled: true,
     low_stock_threshold: 5,
     auto_create_products: false,
     auto_update_products: false,

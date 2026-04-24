@@ -73,24 +73,24 @@ export default function HistoryPage() {
         if (direction === 'shopify_to_etsy') {
             return (
                 <div className="flex items-center gap-1.5">
-                    <div className="p-1 bg-blue-50 rounded-md"><ShopifyIcon size={12} /></div>
+                    <ShopifyIcon size={14} />
                     <ArrowRight className="w-3 h-3 text-gray-300" />
-                    <div className="p-1 bg-orange-50 rounded-md"><EtsyIcon size={12} /></div>
+                    <EtsyIcon size={14} />
                 </div>
             );
         }
         if (direction === 'etsy_to_shopify') {
             return (
                 <div className="flex items-center gap-1.5">
-                    <div className="p-1 bg-orange-50 rounded-md"><EtsyIcon size={12} /></div>
+                    <EtsyIcon size={14} />
                     <ArrowRight className="w-3 h-3 text-gray-300" />
-                    <div className="p-1 bg-blue-50 rounded-md"><ShopifyIcon size={12} /></div>
+                    <ShopifyIcon size={14} />
                 </div>
             );
         }
         // Fallback based on source
-        if (source === 'shopify') return <div className="p-1 bg-blue-50 rounded-md"><ShopifyIcon size={12} /></div>;
-        if (source === 'etsy') return <div className="p-1 bg-orange-50 rounded-md"><EtsyIcon size={12} /></div>;
+        if (source === 'shopify') return <ShopifyIcon size={14} />;
+        if (source === 'etsy') return <EtsyIcon size={14} />;
         return <div className="p-1 bg-gray-50 rounded-md"><Zap className="w-3 h-3 text-gray-400" /></div>;
     };
 
