@@ -825,12 +825,12 @@ export default function ProductsPage() {
                                     const isQueued = !!queuedItem;
                                     const variants = Array.isArray(item.variants) ? item.variants : [];
                                     const primaryVariant = variants[0];
+                                    const displayVariantCount = item.variantsCount || variants.length;
                                     const displayTitle = formatDisplayTitle(
                                         queuedItem?.title || item.title,
                                         displayVariantCount,
                                         variants
                                     );
-                                    const displayVariantCount = item.variantsCount || variants.length;
 
                                     return (
                                         <React.Fragment key={item.id}>
