@@ -273,6 +273,32 @@ export default function ProductsPage() {
             crossListing.to_etsy.find(i => i.source_id === sourceId);
     };
 
+    const formatDisplayTitle = (title?: string, variantsCount?: number, variants?: { title?: string }[]) => {
+        const raw = (title || '').replace(/\s+/g, ' ').trim();
+        if (!raw) return 'Unnamed Product';
+
+        if ((variantsCount || 0) <= 1) return raw;
+
+        const parts = raw.split(' - ').map(part => part.trim()).filter(Boolean);
+        if (parts.length <= 1) return raw;
+
+        const variantTitles = new Set(
+            (variants || [])
+                .map(v => (v.title || '').replace(/\s+/g, ' ').trim().toLowerCase())
+                .filter(Boolean)
+        );
+
+        const candidate = parts.find(part => {
+            const lower = part.toLowerCase();
+            return !variantTitles.has(lower) && !Array.from(variantTitles).some(variant => lower === variant || lower.endsWith(` ${variant}`));
+        });
+
+        if (candidate) return candidate;
+
+        const shortestPart = [...parts].sort((a, b) => a.length - b.length)[0];
+        return shortestPart || raw;
+    };
+
     const handleCloneClick = (item: ListingItem, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         if (!canCloneProducts) {
@@ -799,7 +825,11 @@ export default function ProductsPage() {
                                     const isQueued = !!queuedItem;
                                     const variants = Array.isArray(item.variants) ? item.variants : [];
                                     const primaryVariant = variants[0];
-                                    const displayTitle = queuedItem?.title || item.title || 'Unnamed Product';
+                                    const displayTitle = formatDisplayTitle(
+                                        queuedItem?.title || item.title,
+                                        displayVariantCount,
+                                        variants
+                                    );
                                     const displayVariantCount = item.variantsCount || variants.length;
 
                                     return (
