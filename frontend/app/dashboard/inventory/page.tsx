@@ -176,6 +176,19 @@ export default function InventoryPage() {
         });
     }, [items, searchQuery]);
 
+    const matchedProductCount = useMemo(() => {
+        const uniqueProductIds = new Set<string>();
+
+        items
+            .filter(i => i.shopify_variant_id && i.etsy_variant_id)
+            .forEach(item => {
+                const productId = item.shopify_product_id || item.etsy_listing_id || item.id;
+                uniqueProductIds.add(String(productId));
+            });
+
+        return uniqueProductIds.size;
+    }, [items]);
+
     const totalPages = Math.max(1, Math.ceil(filteredAndSortedItems.length / PAGE_SIZE));
     const safeCurrentPage = Math.min(currentPage, totalPages);
     const paginatedItems = filteredAndSortedItems.slice((safeCurrentPage - 1) * PAGE_SIZE, safeCurrentPage * PAGE_SIZE);
@@ -651,8 +664,8 @@ export default function InventoryPage() {
                         <EtsyIcon size={14} />
                     </div>
                     <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Matched Inventory</p>
-                        <p className="text-sm font-black text-gray-900">{filteredAndSortedItems.length} linked items</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Matched Products</p>
+                        <p className="text-sm font-black text-gray-900">{matchedProductCount} linked products</p>
                     </div>
                 </div>
             </div>
