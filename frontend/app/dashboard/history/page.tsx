@@ -163,12 +163,7 @@ export default function HistoryPage() {
     return (
         <div className="w-full pb-16">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
-                <div>
-                    <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">Sync History</h1>
-                    <p className="text-gray-500 font-medium">Monitor all background sync events in real-time.</p>
-                </div>
-
+            <div className="flex flex-col md:flex-row justify-end items-start md:items-end gap-6 mb-10">
                 <button
                     onClick={loadData}
                     disabled={isLoading}

@@ -190,11 +190,7 @@ export default function Dashboard() {
     return (
         <div className="space-y-8 pb-20">
             {/* ═══ Header with Refresh ═══ */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Overview</h1>
-                    <p className="text-sm text-gray-500 font-medium capitalize">Real-time store synchronization overview</p>
-                </div>
+            <div className="flex items-center justify-end">
                 <button 
                     onClick={handleRefresh}
                     disabled={isRefreshing}

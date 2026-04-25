@@ -524,13 +524,7 @@ export default function ProductsPage() {
     return (
         <div className="max-w-6xl mx-auto w-full pb-32">
             {/* Header Area */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-8">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Catalog</h1>
-                    <p className="text-gray-500">View your products, their status, and variant mappings.</p>
-                </div>
-
-                {/* Platform Toggle */}
+            <div className="flex flex-col md:flex-row justify-end items-start md:items-end gap-6 mb-8">
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row items-end sm:items-center gap-4">
                     <button
