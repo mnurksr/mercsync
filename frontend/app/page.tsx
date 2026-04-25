@@ -50,7 +50,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
       <header className="fixed w-full bg-white/90 backdrop-blur-md border-b border-gray-100 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="MercSync" width={32} height={32} className="rounded-lg mix-blend-multiply" />
+            <img src="/logo.png" alt="MercSync" width={32} height={32} className="rounded-lg" />
             <span className="text-xl font-bold tracking-tight">MercSync</span>
           </Link>
 
@@ -240,7 +240,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
           <div className="flex flex-col md:flex-row justify-between items-start gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src="/logo.png" alt="MercSync" width={24} height={24} className="rounded mix-blend-multiply" />
+                <img src="/logo.png" alt="MercSync" width={24} height={24} className="rounded" />
                 <span className="text-lg font-bold text-gray-900">MercSync</span>
               </div>
               <p className="text-sm text-gray-500 max-w-xs">

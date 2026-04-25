@@ -59,7 +59,7 @@ export default function ShopifyCallbackPage() {
                 {/* Logo */}
                 <div className="mb-8">
                     <Link href="/" className="inline-flex items-center gap-2">
-                        <img src="/logo.png" alt="MercSync" width={40} height={40} className="rounded-lg mix-blend-multiply" />
+                        <img src="/logo.png" alt="MercSync" width={40} height={40} className="rounded-lg" />
                         <span className="text-2xl font-bold text-gray-900 tracking-tight">MercSync</span>
                     </Link>
                 </div>
