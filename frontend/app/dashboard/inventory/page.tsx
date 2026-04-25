@@ -34,29 +34,33 @@ function formatInventoryDisplayName(name?: string | null) {
 
     const parts = raw.split(' - ').map(part => part.trim()).filter(Boolean);
     if (parts.length <= 1) return raw;
+    const base = parts[0];
+    const normalizedBase = base.toLowerCase();
 
-    const deduped: string[] = [];
+    const cleanedExtras = parts
+        .slice(1)
+        .map(part => {
+            const lowerPart = part.toLowerCase();
+            if (lowerPart === normalizedBase) return '';
 
-    for (const part of parts) {
-        const lowerPart = part.toLowerCase();
+            const withoutBaseAtEnd = lowerPart.endsWith(normalizedBase)
+                ? part.slice(0, part.length - base.length).trim()
+                : part;
+            const withoutBaseAtStart = withoutBaseAtEnd.toLowerCase().startsWith(normalizedBase)
+                ? withoutBaseAtEnd.slice(base.length).trim()
+                : withoutBaseAtEnd;
 
-        if (deduped.some(existing => existing.toLowerCase() === lowerPart)) {
-            continue;
-        }
+            return withoutBaseAtStart.replace(/^[-:|/\\\s]+|[-:|/\\\s]+$/g, '').trim();
+        })
+        .filter(Boolean);
 
-        const repeatedPrefix = deduped.find(existing => lowerPart.startsWith(`${existing.toLowerCase()} `));
-        if (repeatedPrefix) {
-            const remainder = part.slice(repeatedPrefix.length).trim();
-            if (remainder) {
-                deduped.push(remainder);
-            }
-            continue;
-        }
+    const uniqueExtras = Array.from(new Set(cleanedExtras.map(extra => extra.toLowerCase())))
+        .map(lower => cleanedExtras.find(extra => extra.toLowerCase() === lower)!)
+        .filter(Boolean);
 
-        deduped.push(part);
-    }
+    if (uniqueExtras.length === 0) return base;
 
-    return deduped.join(' - ');
+    return `${base} - ${uniqueExtras[uniqueExtras.length - 1]}`;
 }
 
 

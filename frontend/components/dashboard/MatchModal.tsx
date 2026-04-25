@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { unmatchProduct, matchProducts, getUnmatchedProducts } from '@/app/actions/matching'
 import type { ListingItem } from '@/app/actions/inventory'
+import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons'
 
 type MatchModalProps = {
     isOpen: boolean

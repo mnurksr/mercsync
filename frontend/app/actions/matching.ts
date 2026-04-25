@@ -623,6 +623,20 @@ export async function getUnmatchedProducts(
 
     if (!shop) return []
 
+    const matchedParentField = platform === 'shopify' ? 'shopify_product_id' : 'etsy_listing_id'
+    const { data: matchedInventoryItems } = await adminSupabase
+        .from('inventory_items')
+        .select('shopify_product_id, etsy_listing_id, shopify_variant_id, etsy_variant_id')
+        .eq('shop_id', shop.id)
+        .not('shopify_variant_id', 'is', null)
+        .not('etsy_variant_id', 'is', null)
+
+    const matchedParentIds = new Set(
+        (matchedInventoryItems || [])
+            .map((item: any) => item[matchedParentField] ? String(item[matchedParentField]) : null)
+            .filter(Boolean)
+    )
+
     if (platform === 'shopify') {
         const { data: rows } = await adminSupabase
             .from('staging_shopify_products')
@@ -634,7 +648,7 @@ export async function getUnmatchedProducts(
         // Group by product, filter to only fully unmatched products
         const groups: Record<string, { title: string; imageUrl: string | null; variants: number; sku: string | null; hasMatch: boolean }> = {}
         for (const r of rows) {
-            const gid = r.shopify_product_id
+            const gid = String(r.shopify_product_id)
             if (!groups[gid]) {
                 groups[gid] = { title: r.product_title, imageUrl: r.image_url, variants: 0, sku: r.sku, hasMatch: false }
             }
@@ -643,7 +657,7 @@ export async function getUnmatchedProducts(
         }
 
         return Object.entries(groups)
-            .filter(([_, g]) => !g.hasMatch)
+            .filter(([id, g]) => !g.hasMatch && !matchedParentIds.has(id))
             .map(([id, g]) => ({
                 parentId: id,
                 title: g.title,
@@ -661,7 +675,7 @@ export async function getUnmatchedProducts(
 
         const groups: Record<string, { title: string; imageUrl: string | null; variants: number; sku: string | null; hasMatch: boolean }> = {}
         for (const r of rows) {
-            const gid = r.etsy_listing_id
+            const gid = String(r.etsy_listing_id)
             if (!groups[gid]) {
                 groups[gid] = { title: r.product_title, imageUrl: r.image_url, variants: 0, sku: r.sku, hasMatch: false }
             }
@@ -670,7 +684,7 @@ export async function getUnmatchedProducts(
         }
 
         return Object.entries(groups)
-            .filter(([_, g]) => !g.hasMatch)
+            .filter(([id, g]) => !g.hasMatch && !matchedParentIds.has(id))
             .map(([id, g]) => ({
                 parentId: id,
                 title: g.title,

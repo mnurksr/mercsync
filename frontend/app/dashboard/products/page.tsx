@@ -280,6 +280,8 @@ export default function ProductsPage() {
             return;
         }
 
+        const variants = Array.isArray(item.variants) ? item.variants : [];
+
         const sourcePlatform = activePlatform;
         const targetPlatform = sourcePlatform === 'shopify' ? 'etsy' : 'shopify';
         const listKey = targetPlatform === 'shopify' ? 'to_shopify' : 'to_etsy';
@@ -291,11 +293,11 @@ export default function ProductsPage() {
             platform: sourcePlatform,
             sourceId: item.id,
             imageUrl: item.imageUrl || '',
-            sku: item.variants?.[0]?.sku || '',
-            price: item.variants?.[0]?.price || 0,
+            sku: variants[0]?.sku || '',
+            price: variants[0]?.price || 0,
             stock: item.totalStock,
             description: item.description || '', // Now populated from staging table
-            variants: item.variants.map(v => ({
+            variants: variants.map(v => ({
                 platformId: v.shopifyVariantId || v.id, // Ensure we use 47... if available
                 variantTitle: v.title,
                 sku: v.sku || '',
@@ -395,14 +397,15 @@ export default function ProductsPage() {
 
             selectedListings.forEach(item => {
                 if (!newList.some(i => i.source_id === item.id)) {
+                    const variants = Array.isArray(item.variants) ? item.variants : [];
                     newList.push({
                         source_id: item.id,
                         title: item.title,
-                        sku: item.variants?.[0]?.sku || '',
-                        price: item.variants?.[0]?.price || 0,
+                        sku: variants[0]?.sku || '',
+                        price: variants[0]?.price || 0,
                         stock: item.totalStock,
                         image: item.imageUrl || '',
-                        variants: item.variants.map(v => ({
+                        variants: variants.map(v => ({
                             source_variant_id: v.shopifyVariantId || v.id, // Ensure we use 47... if available
                             title: v.title,
                             sku: v.sku || '',

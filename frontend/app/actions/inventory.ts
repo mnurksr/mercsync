@@ -102,6 +102,8 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     const tableName = platform === 'shopify' ? 'staging_shopify_products' : 'staging_etsy_products'
     const otherTableName = platform === 'shopify' ? 'staging_etsy_products' : 'staging_shopify_products'
     const parentIdField = platform === 'shopify' ? 'shopify_product_id' : 'etsy_listing_id'
+    const matchedParentField = platform === 'shopify' ? 'shopify_product_id' : 'etsy_listing_id'
+    const crossParentField = platform === 'shopify' ? 'etsy_listing_id' : 'shopify_product_id'
 
     let query = supabase
         .from(tableName)
@@ -118,6 +120,30 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     if (error) {
         console.error(`Error fetching listings for ${platform}:`, error)
         return []
+    }
+
+    const matchedParentIds = new Set<string>()
+    const crossParentMap: { [key: string]: string } = {}
+
+    const { data: matchedInventoryItems } = await supabase
+        .from('inventory_items')
+        .select('shopify_product_id, etsy_listing_id, shopify_variant_id, etsy_variant_id')
+        .eq('shop_id', shop.id)
+        .not('shopify_variant_id', 'is', null)
+        .not('etsy_variant_id', 'is', null)
+
+    if (matchedInventoryItems) {
+        matchedInventoryItems.forEach((inv: any) => {
+            const parentId = inv[matchedParentField] ? String(inv[matchedParentField]) : null
+            const crossParentId = inv[crossParentField] ? String(inv[crossParentField]) : null
+
+            if (parentId) {
+                matchedParentIds.add(parentId)
+                if (crossParentId) {
+                    crossParentMap[parentId] = crossParentId
+                }
+            }
+        })
     }
 
     // 1. Collect IDs for bidirectional lookup
@@ -211,13 +237,14 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
     const groups: { [key: string]: ListingItem } = {};
 
     (items || []).forEach(item => {
-        const groupId = item[parentIdField] || item.id;
+        const groupId = String(item[parentIdField] || item.id);
         const otherVariantId = platform === 'shopify' ? item.etsy_variant_id : item.shopify_variant_id;
         const linkedBackVariantId = matchedBackMap[platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id];
         
         // Product is matched if either side has a pointer
         const finalOtherVariantId = otherVariantId || linkedBackVariantId;
-        const isMatched = !!finalOtherVariantId;
+        const productMatchedInInventory = matchedParentIds.has(groupId);
+        const isMatched = !!finalOtherVariantId || productMatchedInInventory;
         const otherStock = isMatched ? (otherStocksMap[finalOtherVariantId!] || 0) : undefined;
 
         if (!groups[groupId]) {
@@ -233,9 +260,9 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
                 matchStatus: 'synced',
                 platform,
                 variants: [],
-                shopDomain: shop.shop_domain,
-                etsyShopId: shop.etsy_shop_id
-            };
+            shopDomain: shop.shop_domain,
+            etsyShopId: shop.etsy_shop_id
+        };
         }
 
         const myVariantIdForCross = platform === 'shopify' ? item.shopify_variant_id : item.etsy_variant_id;
@@ -250,10 +277,10 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
             otherStock,
             imageUrl: item.image_url,
             isMatched,
-            shopifyProductId: item.shopify_product_id || crossShopifyProductMap[myVariantIdForCross],
+            shopifyProductId: item.shopify_product_id || crossShopifyProductMap[myVariantIdForCross] || (platform === 'etsy' ? crossParentMap[groupId] : item.shopify_product_id),
             shopifyVariantId: item.shopify_variant_id, // Explicit 47...
             shopifyInventoryItemId: item.shopify_inventory_item_id, // Explicit 49...
-            etsyListingId: item.etsy_listing_id || crossEtsyListingMap[myVariantIdForCross],
+            etsyListingId: item.etsy_listing_id || crossEtsyListingMap[myVariantIdForCross] || (platform === 'shopify' ? crossParentMap[groupId] : item.etsy_listing_id),
             etsyVariantId: item.etsy_variant_id
         });
 
@@ -268,6 +295,10 @@ export async function getPlatformListings(platform: 'shopify' | 'etsy', searchQu
 
     // Compute derived match status
     results.forEach(r => {
+        if (matchedParentIds.has(r.id)) {
+            r.matchStatus = 'synced';
+            return;
+        }
         const matchedVariants = r.variants.filter(v => v.isMatched).length;
         if (matchedVariants === 0) {
             r.matchStatus = 'unmatched';
