@@ -78,29 +78,40 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         .eq('event_type', 'order')
         .gte('created_at', monthStart.toISOString())
 
-    // 2. Count Unique Products and Collect Alerts
+    const { data: shopifyStaging } = await supabase
+        .from('staging_shopify_products')
+        .select('shopify_product_id')
+        .in('shop_id', shopIds)
+
+    const { data: etsyStaging } = await supabase
+        .from('staging_etsy_products')
+        .select('etsy_listing_id')
+        .in('shop_id', shopIds)
+
+    // 2. Count matched items and collect alerts from inventory master table
     const { data: productStats } = await supabase
         .from('inventory_items')
         .select('id, name, sku, image_url, shopify_product_id, etsy_listing_id, status, master_stock, shopify_stock_snapshot, etsy_stock_snapshot')
         .in('shop_id', shopIds)
 
-    let uniqueProducts = new Set<string>()
     let shopifyProducts = new Set<string>()
     let etsyProducts = new Set<string>()
     let matchedProductsSet = new Set<string>()
     let mismatchItems: any[] = []
     let actionRequiredItems: any[] = []
 
+    ;(shopifyStaging || []).forEach((item: any) => {
+        if (item.shopify_product_id) shopifyProducts.add(String(item.shopify_product_id))
+    })
+
+    ;(etsyStaging || []).forEach((item: any) => {
+        if (item.etsy_listing_id) etsyProducts.add(String(item.etsy_listing_id))
+    })
+
     if (productStats) {
         productStats.forEach((item: any) => {
-            const productKey = item.shopify_product_id || item.etsy_listing_id
-            if (productKey) uniqueProducts.add(productKey)
-
-            if (item.shopify_product_id) shopifyProducts.add(item.shopify_product_id)
-            if (item.etsy_listing_id) etsyProducts.add(item.etsy_listing_id)
-
             if (item.shopify_product_id && item.etsy_listing_id) {
-                matchedProductsSet.add(productKey!)
+                matchedProductsSet.add(String(item.shopify_product_id))
             }
 
             const itemState = classifyInventoryState({
@@ -135,7 +146,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
     }
 
     return {
-        totalProducts: uniqueProducts.size,
+        totalProducts: Math.max(shopifyProducts.size, etsyProducts.size),
         shopifyProductCount: shopifyProducts.size,
         etsyProductCount: etsyProducts.size,
         matchedProducts: matchedProductsSet.size,

@@ -14,7 +14,7 @@ import {
     type InventoryItem
 } from '../../actions/inventory';
 import {
-    Search, Package, Layers, RefreshCw,
+    Search, Package, RefreshCw,
     AlertTriangle, Check, Loader2,
     Box, Pencil, X,
     ChevronRight, History, Zap, CheckSquare, Square,
@@ -71,8 +71,6 @@ export default function InventoryPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [items, setItems] = useState<InventoryItem[]>([]);
-    const [platformFilter, setPlatformFilter] = useState<'all' | 'shopify' | 'etsy'>('all');
-    const [isSyncing, setIsSyncing] = useState(false);
     const [shopLocations, setShopLocations] = useState<{ id: string, name: string, active: boolean }[]>([]);
     const [shopSelectedLocIds, setShopSelectedLocIds] = useState<string[]>([]);
     const [shopPlanType, setShopPlanType] = useState<string | null>(null);
@@ -116,7 +114,7 @@ export default function InventoryPage() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, platformFilter, items.length]);
+    }, [searchQuery, items.length]);
 
     const loadData = async () => {
         setIsLoading(true);
@@ -136,8 +134,6 @@ export default function InventoryPage() {
         { key: 'in_sync', label: 'In Sync', color: 'bg-emerald-100 text-emerald-700' },
         { key: 'mismatch', label: 'Mismatch', color: 'bg-amber-100 text-amber-700' },
         { key: 'action_required', label: 'Action Required', color: 'bg-red-100 text-red-700' },
-        { key: 'shopify_only', label: 'Shopify Only', color: 'bg-blue-100 text-blue-700' },
-        { key: 'etsy_only', label: 'Etsy Only', color: 'bg-orange-100 text-orange-700' },
         { key: 'digital', label: 'Digital', color: 'bg-purple-100 text-purple-700' },
     ], []);
 
@@ -156,13 +152,7 @@ export default function InventoryPage() {
 
     // --- Filter & Sort Logic ---
     const filteredAndSortedItems = useMemo(() => {
-        let result = items;
-
-        if (platformFilter === 'shopify') {
-            result = result.filter(i => i.shopify_variant_id && !i.etsy_variant_id);
-        } else if (platformFilter === 'etsy') {
-            result = result.filter(i => i.etsy_variant_id && !i.shopify_variant_id);
-        }
+        let result = items.filter(i => i.shopify_variant_id && i.etsy_variant_id);
 
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -184,7 +174,7 @@ export default function InventoryPage() {
             }
             return (a.name || '').localeCompare(b.name || '');
         });
-    }, [items, platformFilter, searchQuery]);
+    }, [items, searchQuery]);
 
     const totalPages = Math.max(1, Math.ceil(filteredAndSortedItems.length / PAGE_SIZE));
     const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -269,8 +259,6 @@ export default function InventoryPage() {
     const getStockStatus = (item: InventoryItem) => {
         const state = getStockState(item);
         if (state === 'digital') return { label: 'Digital', color: 'bg-purple-50 text-purple-600 ring-purple-500/20' };
-        if (state === 'shopify_only') return { label: 'Shopify Only', color: 'bg-blue-50 text-blue-600 ring-blue-500/20' };
-        if (state === 'etsy_only') return { label: 'Etsy Only', color: 'bg-orange-50 text-orange-600 ring-orange-500/20' };
         if (state === 'unlinked') return { label: 'Unlinked', color: 'bg-gray-50 text-gray-500 ring-gray-500/20 border-dashed' };
         if (state === 'mismatch') return { label: 'Mismatch', color: 'bg-amber-50 text-amber-600 ring-amber-500/20' };
         if (state === 'action_required') return { label: 'Action Required', color: 'bg-red-50 text-red-600 ring-red-500/20' };
@@ -612,7 +600,7 @@ export default function InventoryPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10">
                 <div>
                     <h1 className="text-4xl font-black tracking-tight text-gray-900 mb-2">Inventory Control</h1>
-                    <p className="text-gray-500 font-medium">Review stock discrepancies and sync across Etsy & Shopify.</p>
+                    <p className="text-gray-500 font-medium">Review matched inventory discrepancies and sync across Etsy & Shopify.</p>
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
@@ -662,40 +650,15 @@ export default function InventoryPage() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-1.5 flex items-center gap-1 shrink-0">
-                    <button
-                        onClick={() => setPlatformFilter('all')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
-                            platformFilter === 'all'
-                                ? 'bg-gray-900 text-white shadow-lg'
-                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                        }`}
-                    >
-                        <Layers className={`w-3.5 h-3.5 ${platformFilter === 'all' ? 'text-indigo-400' : 'text-gray-300'}`} />
-                        All Listings
-                    </button>
-                    <button
-                        onClick={() => setPlatformFilter('shopify')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
-                            platformFilter === 'shopify'
-                                ? 'bg-gray-900 text-white shadow-lg'
-                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                        }`}
-                    >
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-3 flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400">
                         <ShopifyIcon size={14} />
-                        Shopify Only
-                    </button>
-                    <button
-                        onClick={() => setPlatformFilter('etsy')}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all ${
-                            platformFilter === 'etsy'
-                                ? 'bg-gray-900 text-white shadow-lg'
-                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                        }`}
-                    >
                         <EtsyIcon size={14} />
-                        Etsy Only
-                    </button>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Matched Inventory</p>
+                        <p className="text-sm font-black text-gray-900">{filteredAndSortedItems.length} linked items</p>
+                    </div>
                 </div>
             </div>
 
