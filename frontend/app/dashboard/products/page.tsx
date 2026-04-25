@@ -824,7 +824,7 @@ export default function ProductsPage() {
                                                             )}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-1 break-all pr-4">
+                                                            <p className="text-sm font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-2 whitespace-normal break-words leading-snug pr-4 max-w-[320px]">
                                                                 {displayTitle}
                                                             </p>
                                                             <div className="flex items-center gap-2 mt-1">
@@ -841,7 +841,7 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className="text-xs font-mono text-gray-600 bg-gray-50 px-2 py-1 rounded-md">
-                                                        {primaryVariant?.sku || 'NO-SKU'}
+                                                        {displayVariantCount > 1 ? 'VARIANT SKUS' : (primaryVariant?.sku || 'NO-SKU')}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3">
