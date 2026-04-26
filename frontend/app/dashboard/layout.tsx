@@ -15,6 +15,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         redirect('/login');
     }
 
+    if (!shopify.connected) {
+        redirect(`/login?shop=${encodeURIComponent(shopify.shop_domain)}`);
+    }
+
     // Security / Routing Guard 1: Not fully set up? Go to setup.
     if (!wizardStatus.isComplete) {
         redirect('/setup');

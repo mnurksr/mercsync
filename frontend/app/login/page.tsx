@@ -6,6 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { ShopifyIcon } from '@/components/PlatformIcons';
 import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default function AuthPage() {
     const [shopName, setShopName] = useState('');
@@ -15,8 +16,8 @@ export default function AuthPage() {
 
     const redirectToShopifyAuth = (cleanShopName: string) => {
         const shop = encodeURIComponent(cleanShopName);
-        const returnUrl = encodeURIComponent(`${window.location.origin}/dashboard`);
-        const authPath = `/api/auth/shopify/start?shop=${shop}&return_url=${returnUrl}`;
+        const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(cleanShopName, '/dashboard'));
+        const authPath = `${buildAppOriginUrl('/api/auth/shopify/start')}?shop=${shop}&return_url=${returnUrl}`;
 
         try {
             if (window.top && window.top !== window.self) {

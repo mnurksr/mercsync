@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { decodeState } from '../utils';
 import * as etsyApi from '@/app/api/sync/lib/etsy';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export async function GET(req: NextRequest) {
     const supabase = createAdminClient();
@@ -183,9 +184,9 @@ export async function GET(req: NextRequest) {
         // Construct redirection URL
         let finalRedirect = return_url;
         if (shopDomain && !finalRedirect) {
-            const shopName = shopDomain.replace('.myshopify.com', '');
-            const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
-            finalRedirect = `https://admin.shopify.com/store/${shopName}/apps/${appHandle}`;
+            finalRedirect = buildEmbeddedAppUrl(shopDomain, '/dashboard');
+        } else if (shopDomain && finalRedirect && !finalRedirect.startsWith('https://admin.shopify.com/store/')) {
+            finalRedirect = buildEmbeddedAppUrl(shopDomain, '/dashboard');
         } else if (!finalRedirect) {
             finalRedirect = `${new URL(req.url).origin}/setup`;
         }

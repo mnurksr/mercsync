@@ -26,6 +26,7 @@ import {
 } from '../../actions/settings';
 import { wipeAllAppData } from '../../actions/advanced';
 import { getPlanConfig, PLAN_CONFIG, PLAN_ORDER, type PlanId, type PlanConfig } from '@/config/plans';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 // ─── Tab definitions ─────────────────────────
 
@@ -239,20 +240,20 @@ export default function SettingsPage() {
     const handleConnectShopify = () => {
         if (!shopName.trim()) { toast.warning('Please enter the shop name'); return; }
         if (!user?.id) { toast.error('User session not found.'); return; }
-        const returnUrl = encodeURIComponent(`${window.location.origin}/auth/shopify/callback`);
         let cleanShopName = shopName.trim();
         if (!cleanShopName.includes('.')) cleanShopName += '.myshopify.com';
-        window.location.href = `/api/auth/shopify/start?user_id=${user.id}&shop=${encodeURIComponent(cleanShopName)}&return_url=${returnUrl}`;
+        const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(cleanShopName, '/dashboard/settings'));
+        const authUrl = `${buildAppOriginUrl('/api/auth/shopify/start')}?user_id=${encodeURIComponent(user.id)}&shop=${encodeURIComponent(cleanShopName)}&return_url=${returnUrl}`;
+        window.location.href = authUrl;
     };
 
     const handleConnectEtsy = () => {
         const shopDomain = stores.shopify?.domain;
-        const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
         const returnUrl = shopDomain
-            ? encodeURIComponent(`https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/apps/${appHandle}/dashboard/settings?shop=${encodeURIComponent(shopDomain)}`)
+            ? encodeURIComponent(buildEmbeddedAppUrl(shopDomain, '/dashboard/settings'))
             : '';
         const maybeUserId = user?.id ? `user_id=${encodeURIComponent(user.id)}&` : '';
-        window.location.href = `/api/auth/etsy/start?${maybeUserId}return_url=${returnUrl}`;
+        window.location.href = `${buildAppOriginUrl('/api/auth/etsy/start')}?${maybeUserId}return_url=${returnUrl}`;
     };
 
     const executeDisconnect = async () => {

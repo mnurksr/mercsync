@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Loader2, XCircle, ArrowRight } from 'lucide-react';
 import { ShopifyIcon } from '@/components/PlatformIcons';
 import Link from 'next/link';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default function ShopifyCallbackPage() {
     const router = useRouter();
@@ -36,6 +37,10 @@ export default function ShopifyCallbackPage() {
 
             // Auto-redirect to products after 3 seconds
             setTimeout(() => {
+                if (shop) {
+                    window.location.href = buildEmbeddedAppUrl(shop, '/dashboard/products');
+                    return;
+                }
                 router.push('/dashboard/products?shopify_connected=true');
             }, 3000);
         } else {
@@ -99,7 +104,7 @@ export default function ShopifyCallbackPage() {
                         </div>
 
                         <Link
-                            href="/dashboard/products?shopify_connected=true"
+                            href={shop ? buildEmbeddedAppUrl(shop, '/dashboard/products') : '/dashboard/products?shopify_connected=true'}
                             className="inline-flex items-center gap-2 px-6 py-3 bg-[#95BF47] hover:bg-[#7ea23d] text-white font-semibold rounded-xl transition-colors"
                         >
                             Go to Products Now
@@ -130,8 +135,11 @@ export default function ShopifyCallbackPage() {
                             </Link>
                             <button
                                 onClick={() => {
-                                    const returnUrl = encodeURIComponent(`${window.location.origin}/auth/shopify/callback`);
-                                    window.location.href = `/api/auth/shopify/start?return_url=${returnUrl}`;
+                                    const returnUrl = encodeURIComponent(
+                                        shop ? buildEmbeddedAppUrl(shop, '/dashboard') : buildAppOriginUrl('/auth/shopify/callback')
+                                    );
+                                    const retryUrl = `${buildAppOriginUrl('/api/auth/shopify/start')}?${shop ? `shop=${encodeURIComponent(shop)}&` : ''}return_url=${returnUrl}`;
+                                    window.location.href = retryUrl;
                                 }}
                                 className="px-6 py-3 bg-[#95BF47] hover:bg-[#7ea23d] text-white font-semibold rounded-xl transition-colors"
                             >

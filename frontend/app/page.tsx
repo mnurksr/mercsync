@@ -15,7 +15,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
     const supabase = createAdminClient();
     const { data: shopData } = await supabase
       .from('shops')
-      .select('is_active, plan_type')
+      .select('is_active, plan_type, shopify_connected, access_token')
       .eq('shop_domain', shop)
       .single();
 
@@ -29,6 +29,10 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
     const queryString = params.toString() ? `?${params.toString()}` : '';
 
     if (shopData) {
+      if (!shopData.is_active || !shopData.shopify_connected || !shopData.access_token) {
+        redirect(`/login${queryString}`);
+      }
+
       const setupStatus = await getSetupStatus(shop);
 
       if (!setupStatus.isComplete) {

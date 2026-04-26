@@ -18,6 +18,13 @@ export default async function SetupLayout({ children }: { children: React.ReactN
         redirect('/login');
     }
 
+    if (!shopify.connected) {
+        if (shopify.shop_domain) {
+            redirect(`/login?shop=${encodeURIComponent(shopify.shop_domain)}`);
+        }
+        redirect('/login');
+    }
+
     if (!shopify.plan_type || ['guest', 'none', 'pending', 'basic'].includes(shopify.plan_type.toLowerCase())) {
         redirect('/billing');
     }

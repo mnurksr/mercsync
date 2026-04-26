@@ -13,6 +13,7 @@ import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
 import StagingInterface from '@/components/staging/StagingInterface';
 import { setShopDomain } from '@/utils/shopDomain';
+import { buildAppOriginUrl } from '@/utils/shopifyApp';
 
 export default function SetupPage() {
     const { user } = useAuth();
@@ -132,12 +133,13 @@ export default function SetupPage() {
             toast.error('User not authenticated. Please log in first.');
             return;
         }
+        const authUrl = `${buildAppOriginUrl('/api/auth/etsy/start')}?user_id=${encodeURIComponent(resolvedUserId)}`;
         // Use window.top.location.href to break out of Shopify iframe for Etsy OAuth
         // This prevents the 403 Forbidden error caused by iframe blocking.
         if (window.top) {
-            window.top.location.href = `/api/auth/etsy/start?user_id=${resolvedUserId}`;
+            window.top.location.href = authUrl;
         } else {
-            window.location.href = `/api/auth/etsy/start?user_id=${resolvedUserId}`;
+            window.location.href = authUrl;
         }
     };
 

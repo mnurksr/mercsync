@@ -6,6 +6,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import crypto from 'crypto';
 import { clearOperationalShopData } from '@/app/api/webhooks/shopify/cleanup';
 import { syncShopPlanWithBilling } from '@/app/api/billing/lib/subscription';
+import { buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export async function GET(req: NextRequest) {
     const supabase = createAdminClient();
@@ -136,10 +137,8 @@ export async function GET(req: NextRequest) {
         }
 
         // 8. Redirect back to embedded app home using app handle
-        const storeHandle = shop.replace('.myshopify.com', '');
-        const appHandle = process.env.NEXT_PUBLIC_SHOPIFY_APP_HANDLE || 'mercsync-1';
-        const defaultEmbeddedDashboardUrl = `https://admin.shopify.com/store/${storeHandle}/apps/${appHandle}/dashboard?shop=${encodeURIComponent(shop)}`;
-        const finalRedirect = return_url
+        const defaultEmbeddedDashboardUrl = buildEmbeddedAppUrl(shop, '/dashboard');
+        const finalRedirect = return_url && return_url.startsWith('https://admin.shopify.com/store/')
             ? return_url
             : defaultEmbeddedDashboardUrl;
 
