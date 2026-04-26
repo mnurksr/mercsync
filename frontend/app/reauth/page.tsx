@@ -3,49 +3,31 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { buildEmbeddedAppUrl, buildShopifyAuthorizeUrl } from '@/utils/shopifyApp';
-import { getShopDomain } from '@/utils/shopDomain';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default function ReauthPage() {
     const searchParams = useSearchParams();
 
     useEffect(() => {
+        const shop = searchParams.get('shop');
         const target = searchParams.get('target') || '/dashboard';
-        const startReauth = async () => {
-            let shop = searchParams.get('shop');
 
-            if (!shop) {
-                shop = getShopDomain() || null;
-            }
+        if (!shop) {
+            window.location.href = '/login';
+            return;
+        }
 
-            if (!shop) {
-                try {
-                    const response = await fetch('/api/shop/current', { credentials: 'include' });
-                    const data = await response.json();
-                    if (data?.shopDomain) {
-                        shop = data.shopDomain;
-                    }
-                } catch (error) {
-                    console.error('[Reauth] Failed to resolve current shop:', error);
-                }
-            }
+        const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(shop, target));
+        const authUrl = `${buildAppOriginUrl('/api/auth/shopify/start')}?shop=${encodeURIComponent(shop)}&return_url=${returnUrl}`;
 
-            if (!shop) {
-                window.location.href = '/login';
+        try {
+            if (window.top && window.top !== window.self) {
+                window.top.location.href = authUrl;
                 return;
             }
+        } catch {}
 
-            const returnUrl = buildEmbeddedAppUrl(shop, target);
-            const authUrl = buildShopifyAuthorizeUrl(shop, returnUrl);
-            const form = document.createElement('form');
-            form.method = 'GET';
-            form.action = authUrl;
-            form.target = '_top';
-            document.body.appendChild(form);
-            form.submit();
-        };
-
-        startReauth();
+        window.location.href = authUrl;
     }, [searchParams]);
 
     return (

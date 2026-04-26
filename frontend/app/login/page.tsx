@@ -6,7 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { ShopifyIcon } from '@/components/PlatformIcons';
 import { useToast } from '@/components/ui/useToast';
 import Link from 'next/link';
-import { buildEmbeddedAppUrl, buildShopifyAuthorizeUrl } from '@/utils/shopifyApp';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default function AuthPage() {
     const [shopName, setShopName] = useState('');
@@ -15,14 +15,18 @@ export default function AuthPage() {
     const searchParams = useSearchParams();
 
     const redirectToShopifyAuth = (cleanShopName: string) => {
-        const returnUrl = buildEmbeddedAppUrl(cleanShopName, '/dashboard');
-        const authPath = buildShopifyAuthorizeUrl(cleanShopName, returnUrl);
-        const form = document.createElement('form');
-        form.method = 'GET';
-        form.action = authPath;
-        form.target = '_top';
-        document.body.appendChild(form);
-        form.submit();
+        const shop = encodeURIComponent(cleanShopName);
+        const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(cleanShopName, '/dashboard'));
+        const authPath = `${buildAppOriginUrl('/api/auth/shopify/start')}?shop=${shop}&return_url=${returnUrl}`;
+
+        try {
+            if (window.top && window.top !== window.self) {
+                window.top.location.href = authPath;
+                return;
+            }
+        } catch {}
+
+        window.location.href = authPath;
     };
 
     useEffect(() => {

@@ -4,15 +4,12 @@ import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
 import { getSetupStatus } from '@/app/actions/staging';
-import { cookies } from 'next/headers';
 export default async function LandingPage(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const searchParams = await props.searchParams;
-  const cookieStore = await cookies();
-  const cookieShop = cookieStore.get('mercsync_shop')?.value;
-  const shop = typeof searchParams?.shop === 'string' ? searchParams.shop : cookieShop;
+  const shop = searchParams?.shop;
 
   // Akıllı Yönlendirme & Tanıtım Sayfasını Gizleme
-  if (typeof shop === 'string' && shop) {
+  if (typeof shop === 'string') {
     // RLS bypass via Admin client for unauthenticated but cookie-verified requests
     const supabase = createAdminClient();
     const { data: shopData } = await supabase
@@ -45,7 +42,7 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
         redirect(`/dashboard${queryString}`);
       }
     } else {
-      redirect(`/reauth?shop=${encodeURIComponent(shop)}&target=${encodeURIComponent('/dashboard')}`);
+      redirect(`/setup${queryString}`);
     }
   }
 
