@@ -2,21 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { encodeState } from '../utils';
 
-function topLevelRedirectHtml(url: string) {
-    const safeUrl = JSON.stringify(url);
-    return `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="referrer" content="origin" />
-  <script>window.top.location.href = ${safeUrl};</script>
-</head>
-<body>
-  <p>Redirecting to Shopify...</p>
-</body>
-</html>`;
-}
-
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
@@ -64,10 +49,7 @@ export async function GET(req: NextRequest) {
 
         console.log(`[Shopify Auth] Initiating flow for shop ${shop}, redirecting to: ${authUrl.toString()}`);
 
-        return new NextResponse(topLevelRedirectHtml(authUrl.toString()), {
-            status: 200,
-            headers: { 'content-type': 'text/html; charset=utf-8' }
-        });
+        return NextResponse.redirect(authUrl.toString(), { status: 302 });
 
     } catch (err: any) {
         console.error('[Shopify Auth Start] Error:', err);
