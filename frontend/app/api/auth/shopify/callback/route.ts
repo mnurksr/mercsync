@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
             .from('shops')
             .select(`
                 id,
+                owner_id,
                 is_active,
                 shopify_connected,
                 access_token,
@@ -81,6 +82,10 @@ export async function GET(req: NextRequest) {
             if (!cleanupResult.ok) {
                 console.warn(`[Shopify Callback] Failed to fully clear stale shop data for ${shop}:`, cleanupResult.errors);
             }
+        }
+
+        if (!owner_id && existingShop?.owner_id) {
+            owner_id = existingShop.owner_id;
         }
 
         // 5. Fetch Initial Counts and Shop Details (Async)
