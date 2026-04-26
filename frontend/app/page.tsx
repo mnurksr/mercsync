@@ -4,6 +4,7 @@ import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
 import { getSetupStatus } from '@/app/actions/staging';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default async function LandingPage(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const searchParams = await props.searchParams;
@@ -30,7 +31,8 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
 
     if (shopData) {
       if (!shopData.is_active || !shopData.shopify_connected || !shopData.access_token) {
-        redirect(`/login${queryString}`);
+        const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(shop, '/dashboard'));
+        redirect(`${buildAppOriginUrl('/api/auth/shopify/start')}?shop=${encodeURIComponent(shop)}&return_url=${returnUrl}`);
       }
 
       const setupStatus = await getSetupStatus(shop);

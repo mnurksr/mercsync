@@ -3,6 +3,7 @@ import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import EmbeddedAdminRedirect from '@/components/EmbeddedAdminRedirect';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
     // RUNS ON THE SERVER = NO FLASHING OR JANK IN THE UI
@@ -16,7 +17,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
 
     if (!shopify.connected) {
-        redirect(`/login?shop=${encodeURIComponent(shopify.shop_domain)}`);
+        const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(shopify.shop_domain, '/dashboard'));
+        redirect(`${buildAppOriginUrl('/api/auth/shopify/start')}?shop=${encodeURIComponent(shopify.shop_domain)}&return_url=${returnUrl}`);
     }
 
     // Security / Routing Guard 1: Not fully set up? Go to setup.

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getConnectedShop } from '../actions/shop';
 import { getSetupStatus } from '../actions/staging';
 import EmbeddedAdminRedirect from '@/components/EmbeddedAdminRedirect';
+import { buildAppOriginUrl, buildEmbeddedAppUrl } from '@/utils/shopifyApp';
 
 export default async function SetupLayout({ children }: { children: React.ReactNode }) {
     // RUNS ON THE SERVER = NO FLASHING OR JANK IN THE UI
@@ -20,7 +21,8 @@ export default async function SetupLayout({ children }: { children: React.ReactN
 
     if (!shopify.connected) {
         if (shopify.shop_domain) {
-            redirect(`/login?shop=${encodeURIComponent(shopify.shop_domain)}`);
+            const returnUrl = encodeURIComponent(buildEmbeddedAppUrl(shopify.shop_domain, '/setup'));
+            redirect(`${buildAppOriginUrl('/api/auth/shopify/start')}?shop=${encodeURIComponent(shopify.shop_domain)}&return_url=${returnUrl}`);
         }
         redirect('/login');
     }
