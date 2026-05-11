@@ -26,7 +26,11 @@ body {
 }
 
 /* Prevent overscroll bounce effect globally */
-html, body {
+html {
+  overscroll-behavior: none;
+}
+
+body {
   overscroll-behavior: none;
   overflow-x: hidden;
 }
