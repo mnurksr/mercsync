@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Check, Zap, ShieldCheck, Activity, BarChart3 } from 'lucide-react';
+import { ArrowRight, Check, Zap, Copy, Activity, BarChart3 } from 'lucide-react';
 import { EtsyIcon, ShopifyIcon } from '@/components/PlatformIcons';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { redirect } from 'next/navigation';
@@ -191,9 +191,9 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
                 description="Stock levels update across Shopify and Etsy automatically when orders are placed, items restocked, or quantities adjusted."
               />
               <FeatureItem
-                icon={<ShieldCheck className="w-5 h-5 text-green-600" />}
-                title="Overselling Protection"
-                description="Automatic stock deduction prevents selling products you don't have. Save on refunds and protect your seller reputation."
+                icon={<Copy className="w-5 h-5 text-green-600" />}
+                title="Product Cloning"
+                description="Clone your Shopify products to Etsy in one click. Titles, descriptions, images, variants, and pricing are automatically transferred — saving hours of manual listing work."
               />
               <FeatureItem
                 icon={<Zap className="w-5 h-5 text-yellow-600" />}
@@ -256,7 +256,6 @@ export default async function LandingPage(props: { searchParams?: Promise<{ [key
                 <h4 className="font-semibold text-gray-900 mb-3 text-sm">Product</h4>
                 <ul className="space-y-2">
                   <li><Link href="/pricing" className="text-sm text-gray-500 hover:text-gray-900">Pricing</Link></li>
-                  <li><Link href="/login" className="text-sm text-gray-500 hover:text-gray-900">Dashboard</Link></li>
                 </ul>
               </div>
               <div>
