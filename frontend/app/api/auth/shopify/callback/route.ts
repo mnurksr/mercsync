@@ -136,6 +136,30 @@ export async function GET(req: NextRequest) {
             console.warn('[Shopify Callback] Failed to sync billing state after install:', billingErr);
         }
 
+        // 7.5. Ensure shop_settings exists with auto_sync_enabled = true
+        const { data: shopRow } = await supabase
+            .from('shops')
+            .select('id')
+            .eq('shop_domain', shop)
+            .maybeSingle();
+
+        if (shopRow) {
+            const { error: settingsErr } = await supabase
+                .from('shop_settings')
+                .upsert({
+                    shop_id: shopRow.id,
+                    auto_sync_enabled: true,
+                    sync_direction: 'bidirectional',
+                    low_stock_threshold: 5,
+                }, { onConflict: 'shop_id', ignoreDuplicates: true });
+
+            if (settingsErr) {
+                console.warn('[Shopify Callback] Failed to create default shop_settings:', settingsErr.message);
+            } else {
+                console.log(`[Shopify Callback] shop_settings ensured for shop ${shopRow.id} (auto_sync=true)`);
+            }
+        }
+
         // 8. Redirect back to embedded app home using app handle
         const defaultEmbeddedDashboardUrl = buildEmbeddedAppUrl(shop, '/dashboard');
         const finalRedirect = return_url && return_url.startsWith('https://admin.shopify.com/store/')
