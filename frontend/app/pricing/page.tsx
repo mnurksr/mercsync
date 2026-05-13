@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Zap, Crown, Shield, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
+import { Check, Zap, Crown, Shield, ArrowRight, Sparkles, Loader2, Tag, X, Gift } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ui/useToast';
@@ -28,6 +28,11 @@ export default function PricingPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = useState<string | null>(null);
+    const [promoCode, setPromoCode] = useState('');
+    const [promoStatus, setPromoStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+    const [promoData, setPromoData] = useState<{ trial_days: number; label: string; code: string } | null>(null);
+    const [promoError, setPromoError] = useState<string | null>(null);
+    const [showPromo, setShowPromo] = useState(false);
 
     // Get shop domain — checks URL params first, then sessionStorage
     const shopDomain = getShopDomain(searchParams);
@@ -48,7 +53,8 @@ export default function PricingPage() {
                 body: JSON.stringify({
                     plan: planId,
                     user_id: user?.id || undefined,
-                    shop_domain: shopDomain
+                    shop_domain: shopDomain,
+                    promo_code: promoData?.code || undefined
                 })
             });
 
@@ -85,6 +91,41 @@ export default function PricingPage() {
     const handlePlanClick = (plan: typeof plans[0]) => {
         if (isLoading) return;
         initiateSubscription(plan.id);
+    };
+
+    const validatePromo = async () => {
+        if (!promoCode.trim()) return;
+        setPromoStatus('validating');
+        setPromoError(null);
+
+        try {
+            const res = await fetch('/api/promo/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: promoCode.trim() })
+            });
+            const data = await res.json();
+
+            if (data.valid) {
+                setPromoStatus('valid');
+                setPromoData(data);
+            } else {
+                setPromoStatus('invalid');
+                setPromoError(data.error || 'Invalid promo code');
+                setPromoData(null);
+            }
+        } catch {
+            setPromoStatus('invalid');
+            setPromoError('Failed to validate code');
+            setPromoData(null);
+        }
+    };
+
+    const clearPromo = () => {
+        setPromoCode('');
+        setPromoStatus('idle');
+        setPromoData(null);
+        setPromoError(null);
     };
 
     return (
@@ -124,7 +165,7 @@ export default function PricingPage() {
                     >
                         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-sm font-semibold mb-6 border border-blue-100">
                             <Sparkles className="w-4 h-4" />
-                            7-day free trial • Shopify Billing
+                            {promoData ? `${promoData.trial_days}-day free trial` : '7-day free trial'} • Shopify Billing
                         </div>
 
                         <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-gray-900 mb-6">
@@ -138,6 +179,94 @@ export default function PricingPage() {
                             Choose a plan that fits your business. All plans include our core sync technology that prevents costly overselling mistakes.
                         </p>
                     </motion.div>
+                </div>
+
+                {/* Promo Code Section */}
+                <div className="max-w-md mx-auto px-4 mb-16">
+                    {!showPromo ? (
+                        <button
+                            onClick={() => setShowPromo(true)}
+                            className="mx-auto flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                        >
+                            <Tag className="w-4 h-4" />
+                            Have a promo code?
+                        </button>
+                    ) : (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-3"
+                        >
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <input
+                                        type="text"
+                                        value={promoCode}
+                                        onChange={(e) => {
+                                            setPromoCode(e.target.value.toUpperCase());
+                                            if (promoStatus !== 'idle') {
+                                                setPromoStatus('idle');
+                                                setPromoError(null);
+                                            }
+                                        }}
+                                        onKeyDown={(e) => e.key === 'Enter' && validatePromo()}
+                                        placeholder="Enter promo code"
+                                        className={`w-full px-4 py-3 rounded-xl border-2 text-sm font-mono tracking-wider bg-white transition-colors outline-none ${
+                                            promoStatus === 'valid'
+                                                ? 'border-emerald-400 bg-emerald-50/50'
+                                                : promoStatus === 'invalid'
+                                                    ? 'border-red-300 bg-red-50/50'
+                                                    : 'border-gray-200 focus:border-blue-400'
+                                        }`}
+                                        disabled={promoStatus === 'valid'}
+                                    />
+                                    {promoStatus === 'valid' && (
+                                        <button
+                                            onClick={clearPromo}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                {promoStatus !== 'valid' && (
+                                    <button
+                                        onClick={validatePromo}
+                                        disabled={promoStatus === 'validating' || !promoCode.trim()}
+                                        className="px-5 py-3 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                    >
+                                        {promoStatus === 'validating' ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            'Apply'
+                                        )}
+                                    </button>
+                                )}
+                            </div>
+
+                            {promoStatus === 'valid' && promoData && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200"
+                                >
+                                    <Gift className="w-5 h-5 text-emerald-600 shrink-0" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-emerald-800">
+                                            {promoData.trial_days}-day free trial unlocked!
+                                        </p>
+                                        <p className="text-xs text-emerald-600">
+                                            Code <span className="font-mono font-bold">{promoData.code}</span> applied successfully
+                                        </p>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {promoStatus === 'invalid' && promoError && (
+                                <p className="text-sm text-red-500 px-1">{promoError}</p>
+                            )}
+                        </motion.div>
+                    )}
                 </div>
 
                 {/* Pricing Cards */}

@@ -15,7 +15,7 @@ const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-10';
 
 export async function POST(req: NextRequest) {
     try {
-        const { plan, user_id, shop_domain } = await req.json();
+        const { plan, user_id, shop_domain, promo_code } = await req.json();
 
         if (!plan || (!user_id && !shop_domain)) {
             return NextResponse.json(
@@ -76,11 +76,36 @@ export async function POST(req: NextRequest) {
             }
         `;
 
+        // Check for valid promo code to override trial days
+        let effectiveTrialDays = planConfig.trialDays;
+        let validPromoId: string | null = null;
+
+        if (promo_code) {
+            const normalizedCode = promo_code.trim().toUpperCase();
+            const { data: promo } = await supabase
+                .from('promo_codes')
+                .select('id, trial_days, max_uses, current_uses, expires_at, is_active')
+                .eq('code', normalizedCode)
+                .eq('is_active', true)
+                .maybeSingle();
+
+            if (promo) {
+                const notExpired = !promo.expires_at || new Date(promo.expires_at) > new Date();
+                const withinLimit = !promo.max_uses || promo.current_uses < promo.max_uses;
+
+                if (notExpired && withinLimit) {
+                    effectiveTrialDays = promo.trial_days;
+                    validPromoId = promo.id;
+                    console.log(`[Billing] Promo code ${normalizedCode} applied: ${promo.trial_days} trial days`);
+                }
+            }
+        }
+
         const variables = {
             name: `MercSync ${planConfig.name}`,
             returnUrl,
             test: true,
-            trialDays: planConfig.trialDays,
+            trialDays: effectiveTrialDays,
             lineItems: [
                 {
                     plan: {
@@ -141,10 +166,16 @@ export async function POST(req: NextRequest) {
         // The plan_type will be updated to the chosen plan in the /verify-subscription route 
         // after the user approves the charge and returns to the dashboard.
 
+        // Increment promo code usage
+        if (validPromoId) {
+            await supabase.rpc('increment_promo_usage', { promo_id: validPromoId });
+        }
+
         return NextResponse.json({
             confirmationUrl,
             plan: planConfig.name,
-            price: planConfig.price
+            price: planConfig.price,
+            trialDays: effectiveTrialDays
         });
 
     } catch (err: unknown) {
