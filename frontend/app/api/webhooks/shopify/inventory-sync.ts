@@ -213,7 +213,7 @@ async function processShopifyRestockEvent(
         };
 
         let pushedToEtsy = false;
-        if (canPushToEtsy && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
+        if (itemStateBeforeSync !== 'action_required' && canPushToEtsy) {
             try {
                 pushedToEtsy = await pushStockToEtsy(shop, item, sourceShopifyStock);
                 if (pushedToEtsy) {
@@ -564,7 +564,9 @@ export async function handleShopifyOrder(
 
             let pushedToEtsy = false;
 
-            if (canPushToEtsy && canUseOrderQuota && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
+            if (itemStateBeforeOrder === 'action_required') {
+                skippedItems++;
+            } else if (canPushToEtsy && canUseOrderQuota && item.etsy_listing_id && item.etsy_variant_id && shop.etsy_access_token) {
                 try {
                     await pushStockToEtsy(shop, item, newStock);
                     updatePayload.etsy_stock_snapshot = newStock;
@@ -572,7 +574,6 @@ export async function handleShopifyOrder(
                     pushedToEtsy = true;
                 } catch (err: any) {
                     failedItems++;
-                    console.error(`${logPrefix} Failed to push variant ${variantId} to Etsy: ${err.message}`);
                     await createNotification(
                         supabase,
                         shop.id,
@@ -583,10 +584,6 @@ export async function handleShopifyOrder(
                     );
                 }
             } else if (!canPushToEtsy || !canUseOrderQuota) {
-                console.log(`${logPrefix} Variant ${variantId} skipped: canPush=${canPushToEtsy}, canQuota=${canUseOrderQuota}`);
-                skippedItems++;
-            } else {
-                console.log(`${logPrefix} Variant ${variantId} skipped: missing etsy_listing_id or etsy_variant_id`);
                 skippedItems++;
             }
 
@@ -644,10 +641,8 @@ export async function handleShopifyOrder(
                 ? 'Auto-sync disabled or direction blocks Shopify -> Etsy order sync.'
                 : !canUseOrderQuota
                     ? quota?.message || 'Monthly order sync limit reached.'
-                    : `Items evaluated: ${touchedItems + skippedItems}. Synced: ${syncedItems}. Matched items were blocked by action-required state or missing Etsy links.`
+                    : 'Matched items were blocked by action-required state or missing Etsy links.'
             : null;
-
-        console.log(`${logPrefix} Sync Summary - Synced: ${syncedItems}, Failed: ${failedItems}, Skipped (internal): ${skippedItems}, Touched: ${touchedItems}. Final Status: ${status}`);
         const errorMessage = !canUseOrderQuota && quota?.message
             ? quota.message
             : failedItems > 0
