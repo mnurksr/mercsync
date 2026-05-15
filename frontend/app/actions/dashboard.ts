@@ -146,7 +146,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
     }
 
     return {
-        totalProducts: Math.max(shopifyProducts.size, etsyProducts.size),
+        totalProducts: matchedProductsSet.size,
         shopifyProductCount: shopifyProducts.size,
         etsyProductCount: etsyProducts.size,
         matchedProducts: matchedProductsSet.size,
