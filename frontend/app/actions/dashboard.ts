@@ -76,6 +76,7 @@ export async function getDashboardStats(ownerId?: string): Promise<DashboardStat
         .select('id', { count: 'exact', head: true })
         .in('shop_id', shopIds)
         .eq('event_type', 'order')
+        .neq('status', 'skipped')
         .gte('created_at', monthStart.toISOString())
 
     const { data: shopifyStaging } = await supabase
