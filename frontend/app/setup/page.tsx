@@ -530,9 +530,11 @@ export default function SetupPage() {
                                             Connect Etsy
                                         </button>
                                     )}
-                                    <p className="text-center text-[10px] text-gray-400 mt-2">
-                                        Click to establish connection
-                                    </p>
+                                    {!stores.etsy.connected && (
+                                        <p className="text-center text-[10px] text-gray-400 mt-2">
+                                            Click to establish connection
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
