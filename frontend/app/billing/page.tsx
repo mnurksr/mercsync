@@ -429,9 +429,7 @@ export default function PlansPage() {
                                     ) : (
                                         <>
                                             <ArrowRight className="w-4 h-4" />
-                                            {promoData
-                                                ? `Start ${effectiveTrialDays}-Day Free Trial`
-                                                : 'Get Started'}
+                                            Start {effectiveTrialDays}-Day Free Trial
                                         </>
                                     )}
                                 </button>
